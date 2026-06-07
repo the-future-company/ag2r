@@ -287,13 +287,21 @@ body {
 
 /* Per-session hover action strip — force visible on mobile (no hover available).
    The strip contains 3 buttons: three-dot menu, pin, archive.
-   Only show the three-dot menu (aria-haspopup); hide pin and archive (data-tooltip-id). */
-#left-sidebar-content .group-hover\:visible,
-#left-sidebar-content .group-hover\/section\:visible {
+   Only show the three-dot menu; hide pin and archive for now. */
+#left-sidebar-content .group-hover\:visible {
   visibility: visible !important;
 }
 
-#left-sidebar-content button[data-tooltip-id] {
+/* Hide pin and archive buttons (2nd and 3rd in the action strip) */
+#left-sidebar-content .group-hover\:visible button:nth-child(n+2) {
+  display: none !important;
+}
+
+/* Hide the default horizontal three-dots icon (shown when NOT hovered).
+   It overlaps with the hover action strip that we forced visible above.
+   AG uses a small "..." indicator that becomes redundant. */
+#left-sidebar-content .group .group-hover\:visible ~ *,
+#left-sidebar-content .group > [role="button"] .shrink-0 > .relative > svg.lucide {
   display: none !important;
 }
 
