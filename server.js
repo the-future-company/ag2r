@@ -565,7 +565,45 @@ const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Artifact tab detection error:', e.message);
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, activeArtifactUri };
+  // -- 10. Detect and capture permission/approval banner --
+  let permissionHtml = null;
+  try {
+    const radioGroup = document.querySelector('[role="radiogroup"]');
+    if (radioGroup) {
+      // Walk up to find the full banner container
+      let banner = radioGroup;
+      for (let i = 0; i < 10; i++) {
+        if (!banner.parentElement || banner.parentElement === document.body) break;
+        banner = banner.parentElement;
+        if (/allow|permission/i.test(banner.textContent) && banner.querySelectorAll('button').length >= 1) break;
+      }
+      // Tag interactive elements: radio labels and buttons
+      let permIdx = 0;
+      const permTagged = [];
+      banner.querySelectorAll('[role="radiogroup"] label').forEach(el => {
+        el.setAttribute('data-ag-click-id', 'perm:' + permIdx);
+        el.setAttribute('data-ag-click-label', (el.textContent || '').trim().substring(0, 50));
+        permIdx++;
+        permTagged.push(el);
+      });
+      banner.querySelectorAll('button').forEach(el => {
+        el.setAttribute('data-ag-click-id', 'perm:' + permIdx);
+        el.setAttribute('data-ag-click-label', (el.textContent || '').trim().substring(0, 50));
+        permIdx++;
+        permTagged.push(el);
+      });
+      const permClone = banner.cloneNode(true);
+      permTagged.forEach(el => {
+        el.removeAttribute('data-ag-click-id');
+        el.removeAttribute('data-ag-click-label');
+      });
+      permissionHtml = permClone.outerHTML;
+    }
+  } catch (e) {
+    console.debug('[AG2R] Permission banner capture error:', e.message);
+  }
+
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, activeArtifactUri, permissionHtml };
 })()
 `;
 
@@ -730,7 +768,10 @@ function startPolling() {
         const hash = hashString(
           snapshot.html +
           (snapshot.leftSidebarHtml || '') +
-          (snapshot.rightSidebarHtml || '')
+          (snapshot.rightSidebarHtml || '') +
+          (snapshot.dropdownHtml || '') +
+          (snapshot.dialogHtml || '') +
+          (snapshot.permissionHtml || '')
         );
 
         // Only broadcast and update cache when content actually changes
@@ -903,6 +944,7 @@ app.get('/snapshot', (req, res) => {
     dropdownHtml: cachedSnapshot.dropdownHtml || null,
     dialogHtml: cachedSnapshot.dialogHtml || null,
     activeArtifactUri: cachedSnapshot.activeArtifactUri || null,
+    permissionHtml: cachedSnapshot.permissionHtml || null,
   });
 });
 
@@ -975,6 +1017,29 @@ app.post('/click', async (req, res) => {
             break;
           }
         }
+      } else if (source === 'perm') {
+        // Permission banner: find radiogroup document-wide (it's outside the scroll container)
+        const radioGroup = document.querySelector('[role="radiogroup"]');
+        if (radioGroup) {
+          let banner = radioGroup;
+          for (let i = 0; i < 10; i++) {
+            if (!banner.parentElement || banner.parentElement === document.body) break;
+            banner = banner.parentElement;
+            if (/allow|permission/i.test(banner.textContent) && banner.querySelectorAll('button').length >= 1) break;
+          }
+          // Build list: labels first, then buttons (same order as capture tagging)
+          const permEls = [];
+          banner.querySelectorAll('[role="radiogroup"] label').forEach(el => permEls.push(el));
+          banner.querySelectorAll('button').forEach(el => permEls.push(el));
+          if (idx >= 0 && idx < permEls.length) {
+            const target = permEls[idx];
+            const actualLabel = (target.textContent || '').trim().substring(0, 50);
+            target.click();
+            return { ok: true, label: actualLabel, source: 'perm' };
+          }
+          return { ok: false, reason: 'perm_index_out_of_range', total: permEls.length };
+        }
+        return { ok: false, reason: 'no_permission_banner' };
       }
 
       if (!root) return { ok: false, reason: 'no_root_for_' + source };
@@ -1013,6 +1078,14 @@ app.post('/click', async (req, res) => {
     log('Click', `Error: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
+});
+
+// --- Temp eval for debugging ---
+app.post('/eval', async (req, res) => {
+  try {
+    const result = await evaluateInBrowser(`${req.body.script}`);
+    res.json({ result });
+  } catch (e) { res.json({ error: e.message }); }
 });
 
 // --- Send Message ---

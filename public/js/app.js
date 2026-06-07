@@ -49,6 +49,10 @@ const commentSelectionPreview = document.getElementById('comment-selection-previ
 const commentInput = document.getElementById('comment-input');
 const commentCancel = document.getElementById('comment-cancel');
 const commentSubmit = document.getElementById('comment-submit');
+// Permission overlay
+const permissionOverlay = document.getElementById('permission-overlay');
+const permissionBackdrop = document.getElementById('permission-backdrop');
+const permissionContent = document.getElementById('permission-content');
 
 // ─────────────────────────────────────────────
 // Fetch Wrapper (redirects to login on 401)
@@ -275,6 +279,156 @@ async function loadSnapshot() {
         addClickProxyHandlers(dropdownContent);
         dropdownOverlay.classList.remove('hidden');
       }
+    }
+
+    // Render permission banner if AG is asking for approval
+    if (data.permissionHtml) {
+      // Skip re-render if permission HTML hasn't changed (preserves selected option)
+      if (data.permissionHtml === permissionContent.dataset.lastHtml) {
+        // Already rendered, don't rebuild
+      } else {
+      permissionContent.dataset.lastHtml = data.permissionHtml;
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = data.permissionHtml;
+
+      // Extract command text from textarea
+      const commandEl = tempDiv.querySelector('textarea[aria-label]');
+      const commandText = commandEl ? commandEl.value || commandEl.textContent : '';
+
+      // Extract title
+      const titleEl = tempDiv.querySelector('.text-foreground');
+      const title = titleEl ? titleEl.textContent.trim() : 'Permission Required';
+
+      // Extract radio options
+       const labels = tempDiv.querySelectorAll('[data-ag-click-id]');
+      const options = [];
+      const buttons = [];
+      labels.forEach(el => {
+        const clickId = el.dataset.agClickId;
+        const text = el.textContent.trim();
+        if (el.tagName === 'LABEL') {
+          const numEl = el.querySelector('.font-mono');
+          const num = numEl ? numEl.textContent.trim() : '';
+          const labelText = text.replace(/^\d+/, '').trim();
+          const isSelected = el.classList.contains('bg-secondary');
+          const hasWriteIn = !!el.querySelector('textarea');
+          // Clean up labelText for write-in (remove placeholder text)
+          const cleanLabel = hasWriteIn ? 'No' : labelText;
+          options.push({ clickId, num, labelText: cleanLabel, isSelected, hasWriteIn });
+        } else if (el.tagName === 'BUTTON') {
+          buttons.push({ clickId, text: text.replace('↵', '').trim() });
+        }
+      });
+
+      let optionsHtml = options.map(o => {
+        const writeInHtml = o.hasWriteIn
+          ? `<input type="text" class="permission-writein" placeholder="tell the agent what to do instead" />`
+          : '';
+        return `
+        <button class="permission-option${o.isSelected ? ' selected' : ''}${o.hasWriteIn ? ' has-writein' : ''}"
+                data-ag-click-id="${o.clickId}" data-ag-click-label="${o.num}${o.labelText}">
+          <span class="permission-option-num">${o.num}</span>
+          <span>${o.labelText}</span>
+          ${writeInHtml}
+        </button>
+        `;
+      }).join('');
+
+      let actionsHtml = buttons.map(b => {
+        const cls = b.text === 'Skip' ? 'perm-skip' : 'perm-submit';
+        return `<button class="${cls}" data-ag-click-id="${b.clickId}" data-ag-click-label="${b.text}">${b.text}</button>`;
+      }).join('');
+
+      permissionContent.innerHTML = `
+        <div class="permission-header">
+          <span class="material-symbols-rounded" style="font-size:20px;color:var(--accent)">terminal</span>
+          ${title}
+        </div>
+        <code class="permission-command">${commandText.replace(/</g, '&lt;')}</code>
+        <div class="permission-options">${optionsHtml}</div>
+        <div class="permission-actions">${actionsHtml}</div>
+      `;
+
+      // Wire option clicks: select visually + proxy to AG
+      permissionContent.querySelectorAll('.permission-option').forEach(btn => {
+        // Remove data-ag-click-id so addClickProxyHandlers won't double-wire these
+        const clickId = btn.dataset.agClickId;
+        const clickLabel = btn.dataset.agClickLabel;
+        btn.removeAttribute('data-ag-click-id');
+        btn.addEventListener('click', async (e) => {
+          // Don't trigger option select when clicking inside the write-in input
+          if (e.target.classList.contains('permission-writein')) return;
+          permissionContent.querySelectorAll('.permission-option').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          // Focus write-in input if this is the No option
+          const writeIn = btn.querySelector('.permission-writein');
+          if (writeIn) setTimeout(() => writeIn.focus(), 100);
+          try {
+            await fetchAPI('/click', {
+              method: 'POST',
+              body: JSON.stringify({ clickId, label: clickLabel }),
+            });
+          } catch {}
+        });
+      });
+
+      // Prevent write-in input clicks from bubbling to option button
+      permissionContent.querySelectorAll('.permission-writein').forEach(input => {
+        input.addEventListener('click', (e) => e.stopPropagation());
+      });
+
+      // Wire action buttons (Submit/Skip) manually — NOT via addClickProxyHandlers
+      // so we can inject write-in text BEFORE sending the Submit click
+      permissionContent.querySelectorAll('.permission-actions button').forEach(btn => {
+        const clickId = btn.dataset.agClickId;
+        const clickLabel = btn.dataset.agClickLabel;
+        btn.addEventListener('click', async () => {
+          // If submitting with No/write-in selected, inject text first
+          if (clickLabel !== 'Skip') {
+            const selectedOption = permissionContent.querySelector('.permission-option.selected');
+            const writeIn = selectedOption?.querySelector('.permission-writein');
+            if (writeIn && writeIn.value.trim()) {
+              try {
+                await fetchAPI('/eval', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    script: `(() => {
+                      const rg = document.querySelector('[role="radiogroup"]');
+                      if (!rg) return { ok: false, reason: 'no_radiogroup' };
+                      const ta = rg.querySelector('textarea');
+                      if (!ta) return { ok: false, reason: 'no_textarea' };
+                      ta.focus();
+                      // React-compatible: use native setter to bypass React's synthetic value tracking
+                      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+                      nativeSetter.call(ta, ${JSON.stringify(writeIn.value)});
+                      ta.dispatchEvent(new Event('input', { bubbles: true }));
+                      ta.dispatchEvent(new Event('change', { bubbles: true }));
+                      return { ok: true, text: ta.value };
+                    })()`
+                  }),
+                });
+              } catch {}
+              // Small delay to let AG process the text
+              await new Promise(r => setTimeout(r, 200));
+            }
+          }
+          // Now send the actual Submit/Skip click to AG
+          try {
+            await fetchAPI('/click', {
+              method: 'POST',
+              body: JSON.stringify({ clickId, label: clickLabel }),
+            });
+          } catch {}
+          permissionOverlay.classList.add('hidden');
+          permissionContent.dataset.lastHtml = '';
+        });
+      });
+
+      } // end cache-check else
+      permissionOverlay.classList.remove('hidden');
+    } else {
+      permissionOverlay.classList.add('hidden');
+      permissionContent.dataset.lastHtml = '';
     }
 
     // Track active artifact URI for commenting
@@ -627,6 +781,14 @@ dropdownBackdrop.addEventListener('click', () => {
   dropdownOverlay.classList.add('hidden');
   // Clicking body in AG should dismiss the dropdown
   loadSnapshot();
+});
+
+// Permission backdrop: click Skip when dismissing
+permissionBackdrop.addEventListener('click', async () => {
+  // Find and click the Skip button in AG
+  const skipBtn = permissionContent.querySelector('.perm-skip');
+  if (skipBtn) skipBtn.click();
+  else permissionOverlay.classList.add('hidden');
 });
 
 // ─────────────────────────────────────────────
