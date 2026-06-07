@@ -267,18 +267,18 @@ const CAPTURE_SCRIPT = `
   function tagInteractives(root, prefix, skipVisibilityCheck, includeCursorPointer, maxTextLength) {
     let idx = 0;
     const tagged = [];
+    // Semantic interactive elements — always tag, no text-length filter
     root.querySelectorAll('button, a, [role="button"]').forEach(el => {
       if (skipVisibilityCheck || el.offsetParent !== null) {
-        // Skip content blocks in chat — only tag short-text action buttons
         const text = (el.textContent || '').trim();
-        if (maxTextLength && text.length > maxTextLength) return;
         el.setAttribute('data-ag-click-id', prefix + ':' + idx);
         el.setAttribute('data-ag-click-label', text.substring(0, 50));
         idx++;
         tagged.push(el);
       }
     });
-    // Only tag cursor-pointer elements for sidebars (not chat content)
+    // cursor-pointer elements are ambiguous — could be content containers.
+    // Apply maxTextLength to skip large content blocks (code blocks, paragraphs).
     if (includeCursorPointer) {
       root.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
         if ((skipVisibilityCheck || el.offsetParent !== null) && !el.hasAttribute('data-ag-click-id')) {
@@ -1059,13 +1059,22 @@ app.post('/click', async (req, res) => {
       if (!root) return { ok: false, reason: 'no_root_for_' + source };
 
       // Build the same interactive element list as capture
-      const skipVis = (source === 'right' || source === 'left'); // Sidebars have hover-only hidden buttons
+      const skipVis = (source === 'right' || source === 'left');
+      // maxTextLength only applies to cursor-pointer elements (content vs action ambiguity)
+      const maxLen = (source === 'chat') ? 80 : 0;
       const visible = [];
+      // Semantic interactive elements — always include, no text-length filter
       root.querySelectorAll('button, a, [role="button"]').forEach(el => {
-        if (skipVis || el.offsetParent !== null) visible.push(el);
+        if (skipVis || el.offsetParent !== null) {
+          visible.push(el);
+        }
       });
+      // cursor-pointer elements — filter by text length to skip content containers
       root.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
-        if ((skipVis || el.offsetParent !== null) && !visible.includes(el)) visible.push(el);
+        if ((skipVis || el.offsetParent !== null) && !visible.includes(el)) {
+          if (maxLen && (el.textContent || '').trim().length > maxLen) return;
+          visible.push(el);
+        }
       });
 
       if (idx < 0 || idx >= visible.length) {
@@ -1075,13 +1084,21 @@ app.post('/click', async (req, res) => {
       const target = visible[idx];
       const actualLabel = (target.textContent || '').trim().substring(0, 50);
 
+      // Debug: dump elements around the target index to diagnose index drift
+      const debugNearby = [];
+      for (let d = Math.max(0, idx - 3); d <= Math.min(visible.length - 1, idx + 3); d++) {
+        const el = visible[d];
+        const txt = (el.textContent || '').trim().substring(0, 60);
+        debugNearby.push(d + ':' + el.tagName + ' "' + txt + '"');
+      }
+
       // Validate label matches (if provided) to prevent stale clicks
       if (expectedLabel && actualLabel !== expectedLabel) {
-        return { ok: false, reason: 'label_mismatch', expected: expectedLabel, actual: actualLabel };
+        return { ok: false, reason: 'label_mismatch', expected: expectedLabel, actual: actualLabel, total: visible.length, debugNearby };
       }
 
       target.click();
-      return { ok: true, label: actualLabel, source };
+      return { ok: true, label: actualLabel, source, debugNearby };
     })()
     `;
 
