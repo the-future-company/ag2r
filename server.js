@@ -188,6 +188,12 @@ async function connectCDP() {
   });
 
   cdpClient = client;
+
+  // Force AG's page to think it's focused even when in background.
+  // Without this, the browser defers rendering and React batches updates,
+  // causing expanded sections to appear empty until the user focuses the window.
+  try { await client.Emulation.setFocusEmulationEnabled({ enabled: true }); } catch {}
+
   log('CDP', `Connected. ${cdpContexts.length} execution context(s) available.`);
   broadcastStatus();
   return client;

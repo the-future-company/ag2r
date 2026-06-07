@@ -52,6 +52,8 @@
 - **Local network auth bypass.** Requests from 127.x/192.168.x/10.x are auto-authenticated, but only if no proxy headers (X-Forwarded-For, CF-Connecting-IP) are present.
 - **Right sidebar selector is fragile.** The AG right panel is found via position-based heuristic (elements right of viewport midpoint containing "Overview" + "Review" text). There are no stable IDs or data-testids. If AG's layout changes, the sidebar capture may fail silently (returns null). Use `GET /discover` to debug.
 - **Click proxy indices are ephemeral.** `data-ag-click-id` is assigned per snapshot by iterating visible `button/a/[role=button]` elements in DOM order. If the DOM changes between snapshot capture and click proxy execution (e.g., streaming content), the index can point to the wrong element. The label validation in `POST /click` catches most mismatches.
+- **Focus emulation (fragile).** `Emulation.setFocusEmulationEnabled({enabled: true})` is called on CDP connect to force AG's page to render while in the background. Without this, collapsible sections ("Worked for", "Thought for") expand structurally but React defers rendering their content, producing empty space. This is a CDP-level hack — if Electron or Chrome changes this API's behavior, it could cause side effects (e.g., cursor blinks, focus stealing). If strange behavior appears, disabling this is the first thing to try.
+- **Theme CSS variables extracted from DOM, not stylesheets.** AG defines `--foreground`, `--background`, `--sidebar`, etc. on DOM elements (theme provider), not in stylesheets. The capture script reads these via `getComputedStyle(document.documentElement)` and injects them as a `:root{}` rule. If AG changes how/where it sets theme vars, captured content text could become invisible.
 
 ---
 

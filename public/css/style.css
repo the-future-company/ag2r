@@ -276,6 +276,24 @@ body {
   background-color: var(--color-bg-muted, #161b22) !important;
 }
 
+/* ── Collapsed Section Fix (Worked for / Thought for) ── */
+/* AG uses mask-image gradients on thinking content for a fade effect.
+   This makes text invisible in our context. Remove masks and height caps
+   so expanded content is fully visible. */
+#chat-content [style*="mask-image"] {
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+#chat-content [style*="max-height: 200px"] {
+  max-height: none !important;
+}
+
+/* Container query height (100cqh) resolves to 0 without query context */
+#chat-content [style*="100cqh"] {
+  min-height: auto !important;
+}
+
 /* ── Streaming Span Fix ── */
 /* During streaming, AG wraps each word in <span> inside animate-markdown
    with display:inline-flex. This smushes words together and stacks inline
