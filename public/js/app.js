@@ -26,7 +26,7 @@ const actionIcon = document.getElementById('action-icon');
 const connectionDot = document.getElementById('connection-status');
 const sidebarToggle = document.getElementById('sidebar-toggle');
 const reviewToggle = document.getElementById('review-toggle');
-const reviewBadge = document.getElementById('review-badge');
+
 // Left sidebar (AG's chat list)
 const leftSidebar = document.getElementById('left-sidebar');
 const leftSidebarContent = document.getElementById('left-sidebar-content');
@@ -204,7 +204,7 @@ async function loadSnapshot() {
     addClickProxyHandlers(rightSidebarContent);
 
     // Update review badge
-    reviewBadge.classList.toggle('hidden', !data.rightSidebarHtml);
+
 
     // Sync scroll position from AG's DOM state.
     // AG handles scroll-to-bottom on send and auto-scroll during streaming.
