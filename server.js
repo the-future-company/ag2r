@@ -1097,8 +1097,52 @@ app.post('/click', async (req, res) => {
         return { ok: false, reason: 'label_mismatch', expected: expectedLabel, actual: actualLabel, total: visible.length, debugNearby };
       }
 
+      // Track active right-sidebar tab before click
+      const getActiveTab = () => {
+        for (const t of document.querySelectorAll('[data-tab-id]')) {
+          if ((t.className || '').includes('bg-secondary')) return t.getAttribute('data-tab-id');
+        }
+        return null;
+      };
+      const tabBefore = getActiveTab();
+
       target.click();
-      return { ok: true, label: actualLabel, source, debugNearby };
+
+      // Detect if this click navigated to a file view.
+      // Let AG handle all navigation natively — we just detect it happened.
+      let navigatedToFile = false;
+      if (source === 'chat') {
+        // Wait for React state updates from target.click()
+        await new Promise(r => setTimeout(r, 300));
+        const tabAfter = getActiveTab();
+        if (tabAfter && tabAfter !== tabBefore) {
+          // AG switched tabs (e.g. "Edited file.js" buttons)
+          navigatedToFile = true;
+        } else {
+          // Check if element looks file-related — AG may update Review panel content
+          // without switching tabs (e.g. file rows in expanded dropdown, stat spans)
+          const text = (target.textContent || '').trim();
+          const dotIdx = text.indexOf('.');
+          if (dotIdx > 0 && dotIdx < text.length - 1) {
+            // Has "word.ext" pattern — likely a file reference
+            const beforeDot = text.substring(0, dotIdx);
+            if (beforeDot.length < 30 && !beforeDot.includes(' ')) {
+              navigatedToFile = true;
+            }
+          }
+          // Diff stat pattern: "+N-M" (e.g. "+18-27") — opens turn-scoped diff
+          if (!navigatedToFile && text.charAt(0) === '+' && text.includes('-')) {
+            var isDiffStat = true;
+            for (var ci = 0; ci < text.length; ci++) {
+              var ch = text.charAt(ci);
+              if (ch !== '+' && ch !== '-' && (ch < '0' || ch > '9')) { isDiffStat = false; break; }
+            }
+            if (isDiffStat) navigatedToFile = true;
+          }
+        }
+      }
+
+      return { ok: true, label: actualLabel, source, navigatedToFile, debugNearby };
     })()
     `;
 

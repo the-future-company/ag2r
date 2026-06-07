@@ -1079,12 +1079,13 @@ function addClickProxyHandlers(container) {
 
       console.debug('[Click] id=' + clickId, 'label="' + label + '"', 'tag=' + el.tagName, 'class=' + (el.className || '').substring(0, 80));
       el.classList.add('ag-clicking');
+      let result = null;
       try {
         const res = await fetchAPI('/click', {
           method: 'POST',
           body: JSON.stringify({ clickId, label }),
         });
-        const result = await res.json();
+        result = await res.json();
 
       } catch (err) {
         console.debug('[Click] Error:', err.message);
@@ -1107,6 +1108,11 @@ function addClickProxyHandlers(container) {
 
       // Only open right sidebar for explicit "Review" button clicks
       if (/^Review$/i.test(label.trim())) {
+        openRightSidebar();
+      }
+
+      // Open right sidebar when a file row click navigated to a file tab
+      if (result?.navigatedToFile) {
         openRightSidebar();
       }
 
