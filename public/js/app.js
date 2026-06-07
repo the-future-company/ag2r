@@ -167,13 +167,29 @@ async function loadSnapshot() {
       rightSidebarCdpStyles.textContent = data.css;
     }
 
-    // Check if near bottom before rendering (for auto-scroll decision)
-    const wasNearBottom = isNearBottom();
+
+    // Don't re-render if the user is actively using the new session input
+    const newSessionInput = document.getElementById('ag2r-new-session-input');
+    if (data.isNewSessionPage && newSessionInput && document.activeElement === newSessionInput) {
+      // Still update sidebars, just don't wipe the chat area
+      isRendering = true;
+      renderSidebar(leftSidebarContent, data.leftSidebarHtml);
+      renderSidebar(rightSidebarContent, data.rightSidebarHtml);
+      addClickProxyHandlers(leftSidebarContent);
+      addClickProxyHandlers(rightSidebarContent);
+      isRendering = false;
+      return;
+    }
 
     // Render HTML
     isRendering = true;
     chatContent.innerHTML = data.html;
     hideEmptyState();
+
+    // If this is the new session page, replace captured content with a functional input
+    if (data.isNewSessionPage) {
+      renderNewSessionPage(chatContent, data.html);
+    }
 
     // Add mobile copy buttons to code blocks
     addMobileCopyButtons();
@@ -190,13 +206,23 @@ async function loadSnapshot() {
     // Update review badge
     reviewBadge.classList.toggle('hidden', !data.rightSidebarHtml);
 
-    // Auto-scroll: only if user was already near the bottom
+    // Sync scroll position from AG's DOM state.
+    // AG handles scroll-to-bottom on send and auto-scroll during streaming.
+    // We mirror: if AG is near bottom, scroll our container to bottom too.
     requestAnimationFrame(() => {
-      isRendering = false;
-      if (wasNearBottom && Date.now() > userScrollLockUntil) {
-        scrollToBottom();
+      if (data.scrollInfo && Date.now() > userScrollLockUntil) {
+        const agAtBottom = data.scrollInfo.scrollHeight - data.scrollInfo.scrollTop - data.scrollInfo.clientHeight < 50;
+        if (agAtBottom) {
+          chatArea.scrollTop = chatArea.scrollHeight;
+        }
       }
-      updateScrollFab();
+      // Clear isRendering AFTER scroll is set — the scroll listener skips
+      // events while isRendering is true, preventing our programmatic scroll
+      // from triggering the 3-second user lock.
+      requestAnimationFrame(() => {
+        isRendering = false;
+        updateScrollFab();
+      });
     });
 
   } catch (e) {
@@ -311,6 +337,9 @@ async function sendMessage() {
       console.debug('[Send] Failed:', result.reason);
     }
 
+    // Reset scroll lock so AG's scroll position syncs immediately on next render
+    userScrollLockUntil = 0;
+
     // Schedule snapshot reloads to pick up the sent message
     setTimeout(loadSnapshot, 300);
     setTimeout(loadSnapshot, 800);
@@ -409,6 +438,95 @@ messageInput.addEventListener('keydown', (e) => {
 });
 
 // ─────────────────────────────────────────────
+// Voice Input (Web Speech API)
+// ─────────────────────────────────────────────
+const micBtn = document.getElementById('mic-btn');
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+  micBtn.classList.add('unsupported');
+} else {
+  let recognition = null;
+  let isRecording = false;
+  // Text that was in the input before recording started
+  let preRecordingText = '';
+
+  function startRecording() {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+
+    preRecordingText = messageInput.value;
+    isRecording = true;
+    micBtn.classList.add('recording');
+    micBtn.setAttribute('aria-label', 'Stop recording');
+
+    recognition.onresult = (event) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Append finalized text permanently, show interim as preview
+      if (finalTranscript) {
+        preRecordingText += (preRecordingText ? ' ' : '') + finalTranscript.trim();
+      }
+      messageInput.value = preRecordingText + (interimTranscript ? ' ' + interimTranscript : '');
+
+      // Trigger auto-resize
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+      updateActionButton();
+    };
+
+    recognition.onerror = (event) => {
+      console.debug('[Voice] Error:', event.error);
+      stopRecording();
+    };
+
+    recognition.onend = () => {
+      // Auto-restart if still in recording mode (browser may stop after silence)
+      if (isRecording) {
+        try { recognition.start(); } catch {}
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.debug('[Voice] Start error:', err);
+      stopRecording();
+    }
+  }
+
+  function stopRecording() {
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    micBtn.setAttribute('aria-label', 'Voice input');
+    if (recognition) {
+      try { recognition.stop(); } catch {}
+      recognition = null;
+    }
+  }
+
+  micBtn.addEventListener('click', () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
 // Left Sidebar (AG's captured chat list)
 // ─────────────────────────────────────────────
 function openLeftSidebar() {
@@ -452,6 +570,164 @@ rightSidebarOverlay.addEventListener('click', closeRightSidebar);
 // ─────────────────────────────────────────────
 // Sidebar Content Rendering
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// New Session Page — functional input overlay
+// ─────────────────────────────────────────────
+function renderNewSessionPage(container, capturedHtml) {
+  // Extract project name from the captured HTML (look for the project dropdown button label)
+  let projectName = '';
+  const tmpDiv = document.createElement('div');
+  tmpDiv.innerHTML = capturedHtml;
+  const projectBtn = tmpDiv.querySelector('[aria-haspopup="dialog"] .truncate');
+  if (projectBtn) projectName = projectBtn.textContent.trim();
+
+  // Extract model name
+  let modelName = '';
+  const modelBtn = tmpDiv.querySelector('[aria-label*="Select model"]');
+  if (modelBtn) {
+    const span = modelBtn.querySelector('span');
+    if (span) modelName = span.textContent.trim();
+  }
+
+  // Build our own functional UI
+  container.innerHTML = `
+    <div class="ag2r-new-session">
+      <div class="ag2r-new-session-header">
+        ${projectName ? `<div class="ag2r-new-session-project">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor">
+            <path d="M172.31-180Q142-180 121-201t-21-51.31V-707.69Q100-738 121-759t51.31-21H391.92l80,80H787.69Q818-700 839-679t21,51.31v375.38Q860-222 839-201t-51.31,21H172.31Z"/>
+          </svg>
+          <span>${projectName}</span>
+        </div>` : ''}
+        ${modelName ? `<div class="ag2r-new-session-model">${modelName}</div>` : ''}
+      </div>
+      <form id="ag2r-new-session-form" class="ag2r-new-session-form">
+        <textarea
+          id="ag2r-new-session-input"
+          placeholder="Ask anything, @ to mention, / for actions"
+          rows="3"
+          autofocus
+        ></textarea>
+        <div class="ag2r-new-session-buttons">
+          <button type="button" id="ag2r-new-session-mic" class="mic-btn" aria-label="Voice input">
+            <span class="material-symbols-rounded mic-icon">mic</span>
+          </button>
+          <button type="submit" id="ag2r-new-session-send" aria-label="Send">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 -960 960 960" fill="currentColor">
+              <path d="M120-160v-640l760,320-760,320Zm60-93 544-227-544-230v168l242,62-242,60v167Zm0,0v-457,457Z"/>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  const form = container.querySelector('#ag2r-new-session-form');
+  const input = container.querySelector('#ag2r-new-session-input');
+  const sendBtn = container.querySelector('#ag2r-new-session-send');
+
+  // Prevent snapshot refresh from wiping the input while user is typing
+  let userIsTyping = false;
+  input.addEventListener('input', () => { userIsTyping = true; });
+  input.addEventListener('blur', () => { userIsTyping = false; });
+
+  // Handle form submission
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+
+    // Disable input
+    input.disabled = true;
+    sendBtn.disabled = true;
+    sendBtn.classList.add('sending');
+
+    try {
+      const res = await fetchAPI('/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      });
+      const result = await res.json();
+      console.debug('[NewSession] Send result:', result);
+      if (result.ok) {
+        input.value = '';
+        // AG will navigate to the new session — next snapshot refresh will pick it up
+      }
+    } catch (err) {
+      console.debug('[NewSession] Send error:', err);
+    } finally {
+      input.disabled = false;
+      sendBtn.disabled = false;
+      sendBtn.classList.remove('sending');
+    }
+  });
+
+  // Also submit on Enter (without Shift)
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  // Wire up mic button for new session page
+  const nsMicBtn = container.querySelector('#ag2r-new-session-mic');
+  if (nsMicBtn && SpeechRecognition) {
+    let nsRecognition = null;
+    let nsIsRecording = false;
+    let nsPreText = '';
+
+    function nsStartRecording() {
+      nsRecognition = new SpeechRecognition();
+      nsRecognition.continuous = true;
+      nsRecognition.interimResults = true;
+      nsRecognition.lang = navigator.language || 'en-US';
+
+      nsPreText = input.value;
+      nsIsRecording = true;
+      nsMicBtn.classList.add('recording');
+
+      nsRecognition.onresult = (event) => {
+        let interim = '', final = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) final += t;
+          else interim += t;
+        }
+        if (final) nsPreText += (nsPreText ? ' ' : '') + final.trim();
+        input.value = nsPreText + (interim ? ' ' + interim : '');
+      };
+
+      nsRecognition.onerror = () => nsStopRecording();
+      nsRecognition.onend = () => {
+        if (nsIsRecording) try { nsRecognition.start(); } catch {}
+      };
+
+      try { nsRecognition.start(); } catch { nsStopRecording(); }
+    }
+
+    function nsStopRecording() {
+      nsIsRecording = false;
+      nsMicBtn.classList.remove('recording');
+      if (nsRecognition) { try { nsRecognition.stop(); } catch {} nsRecognition = null; }
+    }
+
+    nsMicBtn.addEventListener('click', () => {
+      if (nsIsRecording) nsStopRecording();
+      else nsStartRecording();
+    });
+  } else if (nsMicBtn) {
+    nsMicBtn.classList.add('unsupported');
+  }
+
+  // Focus the input
+  requestAnimationFrame(() => input.focus());
+}
+
+// ─────────────────────────────────────────────
+// Sidebar Rendering
+// ─────────────────────────────────────────────
 function renderSidebar(container, html) {
   if (html) {
     // Fix invalid nested <button> elements: AG nests close-buttons inside tab buttons.
@@ -477,6 +753,44 @@ function renderSidebar(container, html) {
     if (scrollableBar) {
       scrollableBar.style.flexWrap = 'nowrap';
     }
+
+    // ── Sidebar cleanup: remove desktop-only structural elements ──
+    // The top header bar (sidebar toggle + back/forward nav) — AG2R has its own
+    const topBar = container.querySelector('[style*="app-region: drag"]');
+    if (topBar) topBar.remove();
+
+    // The wrapper div for the 3 hidden actions (New Conversation, History, Scheduled)
+    // It's a div.px-2 that is a direct child of the sidebar nav, containing the action buttons
+    const actionBtns = container.querySelectorAll('[data-ag-click-label="New Conversation"], [data-ag-click-label="Conversation History"], [data-ag-click-label="Scheduled Tasks"]');
+    if (actionBtns.length > 0) {
+      // Walk up to the px-2 wrapper and remove it entirely
+      const wrapper = actionBtns[0].closest('.px-2');
+      if (wrapper) wrapper.remove();
+    }
+
+    // The separator line between actions and project list
+    // It's a div with mt-3 mx-2 h-px (transparent background divider)
+    container.querySelectorAll('.mt-3.mx-2.h-px').forEach(el => el.remove());
+
+    // ── Force hover-only action buttons visible on mobile ──
+    // AG uses Tailwind hover patterns to show action buttons only on hover.
+    // Mobile has no hover, so force them visible.
+    container.querySelectorAll('*').forEach(el => {
+      const cls = el.className;
+      if (typeof cls !== 'string') return;
+
+      // Project-level: "hidden group-hover/section:flex" → force flex
+      if (cls.includes('hidden') && cls.includes('group-hover/section:flex')) {
+        el.classList.remove('hidden');
+        el.style.display = 'flex';
+      }
+
+      // Per-session: "invisible group-hover:visible" → force visible
+      if (cls.includes('invisible') && cls.includes('group-hover:visible')) {
+        el.classList.remove('invisible');
+        el.style.visibility = 'visible';
+      }
+    });
   }
 }
 
@@ -497,7 +811,7 @@ function addClickProxyHandlers(container) {
       const clickId = el.dataset.agClickId; // e.g. "chat:5", "right:2"
       const label = el.dataset.agClickLabel || '';
 
-
+      console.debug('[Click] id=' + clickId, 'label="' + label + '"', 'tag=' + el.tagName, 'class=' + (el.className || '').substring(0, 80));
       el.classList.add('ag-clicking');
       try {
         const res = await fetchAPI('/click', {
@@ -511,14 +825,15 @@ function addClickProxyHandlers(container) {
       }
       el.classList.remove('ag-clicking');
 
-      // If this was a Review or artifact-related click, also open right sidebar
-      if (/^Review$/i.test(label.trim()) || clickId.startsWith('chat:')) {
-        // Artifact cards and Review buttons in chat should open the review panel
-        const isReview = /^Review$/i.test(label.trim());
-        const isArtifact = el.closest('[class*="cursor-pointer"]') && !el.matches('button, a');
-        if (isReview || isArtifact) {
-          openRightSidebar();
-        }
+      // Auto-close left sidebar on any click — user tapped a session or action,
+      // dismiss sidebar so they see the result
+      if (clickId.startsWith('left:')) {
+        closeLeftSidebar();
+      }
+
+      // Only open right sidebar for explicit "Review" button clicks
+      if (/^Review$/i.test(label.trim())) {
+        openRightSidebar();
       }
 
       // Refresh snapshots to pick up changes

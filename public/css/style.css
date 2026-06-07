@@ -266,6 +266,43 @@ body {
   display: none !important;
 }
 
+/* ── Hidden Sidebar Elements (desktop-only, re-enable by removing this block) ──
+   These are captured from AG's sidebar but not useful on mobile.
+   To re-enable: comment out or remove the rules below.
+   See ONBOARDING.md gotcha: "Sidebar hidden elements" */
+
+/* Task 1: Hide top 3 action buttons (New Conversation, History, Scheduled Tasks) */
+[data-ag-click-label="New Conversation"],
+[data-ag-click-label="Conversation History"],
+[data-ag-click-label="Scheduled Tasks"] {
+  display: none !important;
+}
+
+/* Hide the Go Back / Go Forward nav buttons (desktop-only) */
+[aria-label="Go Back"],
+[aria-label="Go Forward"] {
+  display: none !important;
+}
+
+/* Task 2: Hide "Add new project" button (folder+ icon next to Projects heading) */
+#left-sidebar-content .flex.items-center.gap-1 > button[aria-haspopup="dialog"]:last-child {
+  display: none !important;
+}
+
+/* ── Force hover-only action buttons to always show on mobile ──
+   AG uses Tailwind hover patterns (hidden group-hover:flex, invisible group-hover:visible)
+   to reveal action buttons only on hover. Mobile has no hover, so force them visible. */
+
+/* Project-level action buttons (settings gear, + new chat) */
+#left-sidebar-content .group-hover\/section\:flex {
+  display: flex !important;
+}
+
+/* Per-session action buttons (three-dot menu, pin, archive) */
+#left-sidebar-content .group-hover\:visible {
+  visibility: visible !important;
+}
+
 /* Fix +NNN more lines buttons — the horizontal rule (collapsed-line indicator)
    passes through the button text. Pull button above the line with z-index
    and ensure opaque background so the line doesn't show through.
@@ -431,6 +468,45 @@ body {
 
 .message-input::placeholder {
   color: var(--text-muted);
+}
+
+/* ── Mic Button (Voice Input) ── */
+.mic-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.mic-btn:active {
+  background: var(--bg-hover);
+}
+
+.mic-btn.recording {
+  color: #ef4444;
+  animation: mic-pulse 1.5s ease-in-out infinite;
+}
+
+.mic-btn.recording .mic-icon {
+  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.5));
+}
+
+@keyframes mic-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* Hide mic button when Web Speech API isn't supported */
+.mic-btn.unsupported {
+  display: none;
 }
 
 /* ── Action Button (Send / Stop) ── */
@@ -613,5 +689,116 @@ body {
   color: var(--green);
 }
 
+/* ── New Session Page ── */
+.ag2r-new-session {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 24px 16px;
+  gap: 20px;
+}
 
+.ag2r-new-session-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
 
+.ag2r-new-session-project {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ag2r-new-session-project svg {
+  opacity: 0.7;
+}
+
+.ag2r-new-session-model {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ag2r-new-session-form {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 500px;
+  gap: 8px;
+  position: relative;
+}
+
+.ag2r-new-session-form textarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 200px;
+  padding: 14px 48px 14px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+  line-height: 1.5;
+}
+
+.ag2r-new-session-form textarea:focus {
+  border-color: var(--accent);
+}
+
+.ag2r-new-session-form textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.ag2r-new-session-buttons {
+  position: absolute;
+  right: 8px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ag2r-new-session-form button[type="submit"] {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.ag2r-new-session-form button[type="submit"]:active {
+  transform: scale(0.92);
+}
+
+.ag2r-new-session-form button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ag2r-new-session-form button[type="submit"].sending {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

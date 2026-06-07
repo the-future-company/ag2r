@@ -264,25 +264,33 @@ async function evaluateInBrowser(expression, opts = {}) {
 const CAPTURE_SCRIPT = `
 (async () => {
   // -- Helper: tag interactive elements for click proxying --
-  function tagInteractives(root, prefix, skipVisibilityCheck) {
+  function tagInteractives(root, prefix, skipVisibilityCheck, includeCursorPointer, maxTextLength) {
     let idx = 0;
     const tagged = [];
     root.querySelectorAll('button, a, [role="button"]').forEach(el => {
       if (skipVisibilityCheck || el.offsetParent !== null) {
+        // Skip content blocks in chat — only tag short-text action buttons
+        const text = (el.textContent || '').trim();
+        if (maxTextLength && text.length > maxTextLength) return;
         el.setAttribute('data-ag-click-id', prefix + ':' + idx);
-        el.setAttribute('data-ag-click-label', (el.textContent || '').trim().substring(0, 50));
+        el.setAttribute('data-ag-click-label', text.substring(0, 50));
         idx++;
         tagged.push(el);
       }
     });
-    root.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
-      if ((skipVisibilityCheck || el.offsetParent !== null) && !el.hasAttribute('data-ag-click-id')) {
-        el.setAttribute('data-ag-click-id', prefix + ':' + idx);
-        el.setAttribute('data-ag-click-label', (el.textContent || '').trim().substring(0, 50));
-        idx++;
-        tagged.push(el);
-      }
-    });
+    // Only tag cursor-pointer elements for sidebars (not chat content)
+    if (includeCursorPointer) {
+      root.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
+        if ((skipVisibilityCheck || el.offsetParent !== null) && !el.hasAttribute('data-ag-click-id')) {
+          const text = (el.textContent || '').trim();
+          if (maxTextLength && text.length > maxTextLength) return;
+          el.setAttribute('data-ag-click-id', prefix + ':' + idx);
+          el.setAttribute('data-ag-click-label', text.substring(0, 50));
+          idx++;
+          tagged.push(el);
+        }
+      });
+    }
     return tagged;
   }
 
@@ -294,12 +302,34 @@ const CAPTURE_SCRIPT = `
   }
 
   // -- 1. Find the chat container --
-  const container =
+  // First try the normal chat container
+  let container =
     document.querySelector('.scrollbar-hide[class*="overflow-y-auto"]') ||
     document.querySelector('[data-testid="conversation-view"]') ||
     document.getElementById('conversation') ||
     document.getElementById('chat') ||
     document.getElementById('cascade');
+
+  // Detect "new session" page: either the scrollbar-hide container has zero height,
+  // or no container was found at all (AG removes it from DOM when switching views).
+  // In both cases, capture the new session page content area instead.
+  let isNewSessionPage = false;
+  if (!container || container.clientHeight === 0) {
+    const inputBox = document.getElementById('antigravity.agentSidePanelInputBox');
+    if (inputBox) {
+      // Walk up from inputBox to find the new session page root.
+      // It has class "animate-fade-in" and contains the full session setup UI.
+      let newSessionRoot = inputBox;
+      for (let i = 0; i < 10; i++) {
+        if (!newSessionRoot.parentElement) break;
+        newSessionRoot = newSessionRoot.parentElement;
+        const cls = newSessionRoot.className?.toString() || '';
+        if (cls.includes('animate-fade-in')) break;
+      }
+      container = newSessionRoot;
+      isNewSessionPage = true;
+    }
+  }
 
   if (!container) return null;
 
@@ -331,7 +361,7 @@ const CAPTURE_SCRIPT = `
       }
     } catch {}
   });
-  const chatTagged = tagInteractives(container, 'chat');
+  const chatTagged = tagInteractives(container, 'chat', false, false, 80);
 
   // -- 5. Clone chat container --
   const clone = container.cloneNode(true);
@@ -343,19 +373,21 @@ const CAPTURE_SCRIPT = `
   });
   untagAll(chatTagged);
 
-  // -- 7. Clean clone: remove editor/input --
-  ['[contenteditable="true"]', '[data-lexical-editor]', '[role="textbox"]', 'form'].forEach(sel => {
-    clone.querySelectorAll(sel).forEach(el => {
-      let target = el;
-      while (target.parentElement && target.parentElement !== clone) {
-        const btn = target.parentElement.querySelector('button, [role="button"]');
-        if (/^(Allow|Deny|Review|Run|Confirm|Accept|Reject)/i.test(btn?.textContent?.trim() || '')) break;
-        target = target.parentElement;
-      }
-      if (target.parentElement === clone) target.remove();
-      else el.remove();
+  // -- 7. Clean clone: remove editor/input (skip on new session page — it IS the input) --
+  if (!isNewSessionPage) {
+    ['[contenteditable="true"]', '[data-lexical-editor]', '[role="textbox"]', 'form'].forEach(sel => {
+      clone.querySelectorAll(sel).forEach(el => {
+        let target = el;
+        while (target.parentElement && target.parentElement !== clone) {
+          const btn = target.parentElement.querySelector('button, [role="button"]');
+          if (/^(Allow|Deny|Review|Run|Confirm|Accept|Reject)/i.test(btn?.textContent?.trim() || '')) break;
+          target = target.parentElement;
+        }
+        if (target.parentElement === clone) target.remove();
+        else el.remove();
+      });
     });
-  });
+  }
 
   // -- 8. Remove fixed/absolute overlays (protect action bars) --
   clone.querySelectorAll('[data-ag-remove]').forEach(el => {
@@ -433,7 +465,7 @@ const CAPTURE_SCRIPT = `
   try {
     const leftRoot = document.querySelector('[class*="bg-sidebar"]');
     if (leftRoot && leftRoot.offsetParent !== null) {
-      const leftTagged = tagInteractives(leftRoot, 'left');
+      const leftTagged = tagInteractives(leftRoot, 'left', true, true);
       const leftClone = leftRoot.cloneNode(true);
       untagAll(leftTagged);
       leftSidebarHtml = leftClone.outerHTML;
@@ -483,7 +515,7 @@ const CAPTURE_SCRIPT = `
     }
 
     if (sidebarRoot) {
-      const rightTagged = tagInteractives(sidebarRoot, 'right', true);
+      const rightTagged = tagInteractives(sidebarRoot, 'right', true, true);
       const rightClone = sidebarRoot.cloneNode(true);
       untagAll(rightTagged);
       rightSidebarHtml = rightClone.outerHTML;
@@ -492,7 +524,7 @@ const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Right sidebar capture error:', e.message);
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage };
 })()
 `;
 
@@ -820,6 +852,7 @@ app.get('/snapshot', (req, res) => {
     scrollInfo: cachedSnapshot.scrollInfo,
     leftSidebarHtml: cachedSnapshot.leftSidebarHtml || null,
     rightSidebarHtml: cachedSnapshot.rightSidebarHtml || null,
+    isNewSessionPage: cachedSnapshot.isNewSessionPage || false,
   });
 });
 
@@ -880,7 +913,7 @@ app.post('/click', async (req, res) => {
       if (!root) return { ok: false, reason: 'no_root_for_' + source };
 
       // Build the same interactive element list as capture
-      const skipVis = (source === 'right'); // Right sidebar may be hidden on desktop
+      const skipVis = (source === 'right' || source === 'left'); // Sidebars have hover-only hidden buttons
       const visible = [];
       root.querySelectorAll('button, a, [role="button"]').forEach(el => {
         if (skipVis || el.offsetParent !== null) visible.push(el);
