@@ -445,6 +445,40 @@ body {
   background: var(--bg-hover);
 }
 
+/* ── Quick Action Chips ── */
+.quick-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 6px 12px 0;
+  background: var(--bg-panel);
+  z-index: 100;
+}
+
+.quick-action-chip {
+  padding: 5px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+
+.quick-action-chip:active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  transform: scale(0.95);
+}
+
+.quick-actions.hidden {
+  display: none;
+}
+
 /* ── Input Bar ── */
 .input-bar {
   flex-shrink: 0;

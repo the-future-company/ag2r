@@ -632,6 +632,12 @@ function updateActionButton() {
       actionBtn.classList.add('disabled');
     }
   }
+
+  // Show quick-action chips only when agent is idle
+  const quickActions = document.getElementById('quick-actions');
+  if (quickActions) {
+    quickActions.classList.toggle('hidden', agentRunning);
+  }
 }
 
 actionBtn.addEventListener('click', () => {
@@ -641,6 +647,19 @@ actionBtn.addEventListener('click', () => {
   } else if (action === 'send') {
     sendMessage();
   }
+});
+
+// ─────────────────────────────────────────────
+// Quick Action Chips
+// ─────────────────────────────────────────────
+document.querySelectorAll('.quick-action-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const msg = chip.dataset.message;
+    if (msg) {
+      messageInput.value = msg;
+      sendMessage();
+    }
+  });
 });
 
 // ─────────────────────────────────────────────
