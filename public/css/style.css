@@ -207,6 +207,18 @@ body {
   color: var(--text-primary);
 }
 
+/* Suppress iOS/Android "callout" menu on long-press of links/images
+   in the right sidebar. The primary selection toolbar is unaffected. */
+#right-sidebar-content {
+  -webkit-touch-callout: none;
+}
+
+/* Consistent selection highlight for the right sidebar (dark theme) */
+#right-sidebar-content ::selection {
+  background: rgba(99, 102, 241, 0.35);
+  color: inherit;
+}
+
 /* Ensure captured AG content inherits visible colors */
 .sidebar-fill > * {
   color: inherit;

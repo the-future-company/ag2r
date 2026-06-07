@@ -58,6 +58,7 @@
 - **Theme CSS variables extracted from DOM, not stylesheets.** AG defines `--foreground`, `--background`, `--sidebar`, etc. on DOM elements (theme provider), not in stylesheets. The capture script reads these via `getComputedStyle(document.documentElement)` and injects them as a `:root{}` rule. If AG changes how/where it sets theme vars, captured content text could become invisible.
 - **Sidebar elements hidden for mobile.** The top 3 actions (New Conversation, History, Scheduled Tasks), the add-project button, and back/forward nav are hidden via CSS attribute selectors in `style.css` (search "Hidden Sidebar Elements") + DOM removal in `app.js` `renderSidebar()`. To re-enable, remove/comment those CSS rules and JS cleanup code.
 - **Permission banner lives OUTSIDE the scroll container.** AG renders the permission/approval radiogroup in a `flex-shrink-0` section below the scrollable chat area. Both capture and click proxy must search `document`-wide, not inside `container`. The `input[checked]` HTML attribute is the initial default, not current state — use `bg-secondary` class to detect the selected option.
+- **Android selection coexistence.** Android's native text selection toolbar cannot be disabled independently of text selection itself. The comment FAB uses `selectionchange` (not `touchend`) to detect selections on mobile — `touchend` fires before Android finalizes the selection. The FAB dismiss handler is scoped to `pointerdown` on the right sidebar only (not global `mousedown`/`touchstart`) so Android's native toolbar interactions don't accidentally dismiss it.
 
 ---
 
@@ -79,6 +80,12 @@ git fetch origin main && git rebase origin/main
 **Step 3 — Install dependencies:**
 ```bash
 npm ci
+```
+
+**Step 4 — Copy environment config:**
+`.env` is gitignored and does not carry over to new worktrees. Copy it from the main checkout:
+```bash
+cp /Users/omercan/.gemini/antigravity/worktrees/ag2r/main/.env .env 2>/dev/null || echo "No .env in main — copy .env.example and configure"
 ```
 
 ### Phase 2: Implement
@@ -138,6 +145,26 @@ Current state — what works.
 ## Context
 Gotchas or decisions the next session should know.
 ````
+
+---
+
+## 🧪 Testing Across Worktrees
+
+> Multiple worktrees may be active simultaneously. Each worktree runs its own `server.js`. Future: a hub/proxy on a single port (see [#22](https://github.com/the-future-company/ag2r/issues/22)). For now, follow this process:
+
+1. **Pick an available port.** Start from 3000, increment if in use:
+   ```bash
+   PORT=3000 node server.js
+   # If EADDRINUSE, try PORT=3001, PORT=3002, etc.
+   ```
+
+2. **Give the user the test link.** After the server starts, tell the user:
+   ```
+   Server running at https://localhost:<PORT>
+   Open this on your phone (same network) at https://<local-ip>:<PORT>
+   ```
+
+3. **If the user needs remote access** (i.e. they're testing from `ag2r.omercanyy.com` and not on the same network), the agent must tunnel the chosen port. The tunnel must point to the port the server is actually running on. Ask the user for their tunnel setup command if you don't know it.
 
 ---
 

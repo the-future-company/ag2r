@@ -1200,45 +1200,70 @@ function updateActiveArtifact(data) {
 }
 
 
-// Listen for text selection in the right sidebar
-rightSidebarContent.addEventListener('mouseup', handleTextSelection);
-rightSidebarContent.addEventListener('touchend', handleTextSelection);
+// ── Selection Detection (Android-optimized) ──
+// Android's native selection toolbar appears on long-press. We coexist with it
+// by using `selectionchange` (fires AFTER Android finalizes selection) instead
+// of `touchend` (fires BEFORE selection is ready). Desktop uses `mouseup` for
+// fast response. See ONBOARDING.md gotcha: "Android selection coexistence".
 
-function handleTextSelection() {
-  // Delay to let the browser finalize the selection
-  setTimeout(() => {
-    const sel = window.getSelection();
-    const text = sel ? sel.toString().trim() : '';
+// Show/position FAB for the current selection, if valid
+function showCommentFabForSelection() {
+  const sel = window.getSelection();
+  const text = sel ? sel.toString().trim() : '';
 
-    if (!text || text.length < 2) {
-      commentFab.classList.add('hidden');
-      return;
-    }
+  if (!text || text.length < 2) {
+    commentFab.classList.add('hidden');
+    return;
+  }
 
-    if (!activeArtifactUri) {
-      commentFab.classList.add('hidden');
-      return;
-    }
+  // Selection must be inside the right sidebar
+  const anchor = sel.anchorNode;
+  if (!anchor || !rightSidebarContent.contains(anchor)) {
+    commentFab.classList.add('hidden');
+    return;
+  }
 
-    pendingCommentSelection = text;
-    pendingCommentUri = activeArtifactUri;
+  if (!activeArtifactUri) {
+    commentFab.classList.add('hidden');
+    return;
+  }
 
-    // Position FAB near the selection
-    const range = sel.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    commentFab.style.top = `${rect.bottom + window.scrollY + 8}px`;
-    commentFab.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
-    commentFab.classList.remove('hidden');
-  }, 100);
+  pendingCommentSelection = text;
+  pendingCommentUri = activeArtifactUri;
+
+  // Position FAB near the selection
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  commentFab.style.top = `${rect.bottom + window.scrollY + 8}px`;
+  commentFab.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
+  commentFab.classList.remove('hidden');
 }
 
-// Hide FAB when tapping elsewhere (but not when tapping FAB itself)
-document.addEventListener('mousedown', (e) => {
-  if (!commentFab.contains(e.target) && !commentModal.contains(e.target)) {
-    commentFab.classList.add('hidden');
-  }
+// Desktop: mouseup gives instant feedback
+rightSidebarContent.addEventListener('mouseup', () => {
+  setTimeout(showCommentFabForSelection, 50);
 });
-document.addEventListener('touchstart', (e) => {
+
+// Mobile (Android/iOS): selectionchange fires when the OS finalizes selection.
+// Debounced to avoid rapid-fire calls while the user drags selection handles.
+let selectionChangeTimer = null;
+document.addEventListener('selectionchange', () => {
+  clearTimeout(selectionChangeTimer);
+  selectionChangeTimer = setTimeout(showCommentFabForSelection, 300);
+});
+
+// Suppress secondary context menu on right sidebar (prevents the extra
+// long-press menu on some Android browsers while keeping the primary
+// selection toolbar intact).
+rightSidebarContent.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+});
+
+// Dismiss FAB on pointerdown — but only when the tap is inside the right
+// sidebar content area (not on the FAB/modal themselves). This prevents
+// Android's native toolbar interactions (which are OUTSIDE our DOM) from
+// accidentally dismissing the FAB.
+rightSidebarContent.addEventListener('pointerdown', (e) => {
   if (!commentFab.contains(e.target) && !commentModal.contains(e.target)) {
     commentFab.classList.add('hidden');
   }
@@ -1374,11 +1399,6 @@ function closeReviewModal() {
   reviewModal.classList.add('hidden');
 }
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
 
 function renderReviewList() {
   if (queuedComments.length === 0) {
