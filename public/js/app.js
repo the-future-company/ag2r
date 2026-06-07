@@ -37,6 +37,10 @@ const rightSidebar = document.getElementById('right-sidebar');
 const rightSidebarContent = document.getElementById('right-sidebar-content');
 const rightSidebarCdpStyles = document.getElementById('right-sidebar-cdp-styles');
 const rightSidebarOverlay = document.getElementById('right-sidebar-overlay');
+// Dropdown overlay (AG portal menus)
+const dropdownOverlay = document.getElementById('dropdown-overlay');
+const dropdownBackdrop = document.getElementById('dropdown-backdrop');
+const dropdownContent = document.getElementById('dropdown-content');
 
 // ─────────────────────────────────────────────
 // Fetch Wrapper (redirects to login on 401)
@@ -170,7 +174,10 @@ async function loadSnapshot() {
 
     // Don't re-render if the user is actively using the new session input
     const newSessionInput = document.getElementById('ag2r-new-session-input');
-    if (data.isNewSessionPage && newSessionInput && document.activeElement === newSessionInput) {
+    const newSessionMic = document.getElementById('ag2r-new-session-mic');
+    const micRecording = newSessionMic && newSessionMic.classList.contains('recording');
+    const inputHasText = newSessionInput && newSessionInput.value.trim().length > 0;
+    if (data.isNewSessionPage && newSessionInput && (document.activeElement === newSessionInput || micRecording || inputHasText)) {
       // Still update sidebars, just don't wipe the chat area
       isRendering = true;
       renderSidebar(leftSidebarContent, data.leftSidebarHtml);
@@ -203,8 +210,58 @@ async function loadSnapshot() {
     addClickProxyHandlers(leftSidebarContent);
     addClickProxyHandlers(rightSidebarContent);
 
-    // Update review badge
+    // Render dropdown overlay if AG has a portal menu open
+    if (data.dropdownHtml) {
+      // Parse the dropdown to find the Delete button's click ID
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = data.dropdownHtml;
+      const deleteBtn = Array.from(tempDiv.querySelectorAll('[data-ag-click-id]')).find(
+        el => el.textContent.trim() === 'Delete Conversation'
+      );
+      if (deleteBtn) {
+        const deleteClickId = deleteBtn.dataset.agClickId;
+        dropdownContent.innerHTML = `
+          <button class="destructive" data-ag-click-id="${deleteClickId}" data-ag-click-label="Delete Conversation">
+            <span class="material-symbols-rounded" style="font-size:20px">delete</span>
+            Delete Conversation
+          </button>
+        `;
+        addClickProxyHandlers(dropdownContent);
+        dropdownOverlay.classList.remove('hidden');
+      }
+    } else {
+      dropdownOverlay.classList.add('hidden');
+    }
 
+    // Render dialog modal if AG has one open (e.g., delete confirmation)
+    if (data.dialogHtml) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = data.dialogHtml;
+      // Extract buttons with click IDs
+      const dialogBtns = tempDiv.querySelectorAll('[data-ag-click-id]');
+      if (dialogBtns.length > 0) {
+        // Extract title and message from the dialog text
+        const allText = tempDiv.textContent.trim();
+        // Build our own confirmation modal
+        let buttonsHtml = '';
+        dialogBtns.forEach(btn => {
+          const text = btn.textContent.trim();
+          const id = btn.dataset.agClickId;
+          const label = btn.dataset.agClickLabel || text;
+          const isDestructive = text.toLowerCase().includes('delete');
+          const isCancel = text.toLowerCase().includes('cancel');
+          const cls = isDestructive ? 'destructive' : (isCancel ? 'cancel' : '');
+          buttonsHtml += `<button class="${cls}" data-ag-click-id="${id}" data-ag-click-label="${label}">${text}</button>`;
+        });
+        dropdownContent.innerHTML = `
+          <div class="dialog-title">Delete Conversation</div>
+          <div class="dialog-message">Are you sure? This action cannot be undone.</div>
+          <div class="dialog-buttons">${buttonsHtml}</div>
+        `;
+        addClickProxyHandlers(dropdownContent);
+        dropdownOverlay.classList.remove('hidden');
+      }
+    }
 
     // Sync scroll position from AG's DOM state.
     // AG handles scroll-to-bottom on send and auto-scroll during streaming.
@@ -544,6 +601,13 @@ function closeLeftSidebar() {
 sidebarToggle.addEventListener('click', openLeftSidebar);
 leftSidebarOverlay.addEventListener('click', closeLeftSidebar);
 
+// Dropdown backdrop dismiss — also close the dropdown in AG
+dropdownBackdrop.addEventListener('click', () => {
+  dropdownOverlay.classList.add('hidden');
+  // Clicking body in AG should dismiss the dropdown
+  loadSnapshot();
+});
+
 // ─────────────────────────────────────────────
 // Right Sidebar (AG's captured review panel)
 // ─────────────────────────────────────────────
@@ -825,9 +889,16 @@ function addClickProxyHandlers(container) {
       }
       el.classList.remove('ag-clicking');
 
-      // Auto-close left sidebar on any click — user tapped a session or action,
-      // dismiss sidebar so they see the result
-      if (clickId.startsWith('left:')) {
+      // Auto-close left sidebar on session/action clicks.
+      // Don't close for menu buttons (aria-haspopup) — they open dropdowns
+      // that need the sidebar to stay visible.
+      if (clickId.startsWith('left:') && !el.hasAttribute('aria-haspopup')) {
+        closeLeftSidebar();
+      }
+
+      // Close dropdown overlay after any dropdown/dialog action
+      if (clickId.startsWith('dropdown:') || clickId.startsWith('dialog:')) {
+        dropdownOverlay.classList.add('hidden');
         closeLeftSidebar();
       }
 

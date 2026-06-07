@@ -523,8 +523,38 @@ const CAPTURE_SCRIPT = `
   } catch (e) {
     console.debug('[AG2R] Right sidebar capture error:', e.message);
   }
+  // -- 8. Capture portal elements (dropdowns, dialogs) from body --
+  // AG renders these outside #root as direct body children.
+  let dropdownHtml = null;
+  let dialogHtml = null;
+  try {
+    for (const child of document.body.children) {
+      if (child.id || child.tagName === 'SCRIPT' || child.tagName === 'STYLE') continue;
+      const text = child.textContent.trim();
+      if (!text) continue;
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage };
+      // Dropdown menu (role="listbox")
+      if (!dropdownHtml && child.getAttribute('role') === 'listbox') {
+        const tagged = tagInteractives(child, 'dropdown', true, false);
+        const clone = child.cloneNode(true);
+        untagAll(tagged);
+        dropdownHtml = clone.outerHTML;
+      }
+
+      // Dialog/modal (fixed overlay with buttons)
+      const cls = child.className || '';
+      if (!dialogHtml && cls.includes('fixed') && cls.includes('inset-0')) {
+        const tagged = tagInteractives(child, 'dialog', true, false);
+        const clone = child.cloneNode(true);
+        untagAll(tagged);
+        dialogHtml = clone.outerHTML;
+      }
+    }
+  } catch (e) {
+    console.debug('[AG2R] Portal capture error:', e.message);
+  }
+
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml };
 })()
 `;
 
@@ -853,6 +883,8 @@ app.get('/snapshot', (req, res) => {
     leftSidebarHtml: cachedSnapshot.leftSidebarHtml || null,
     rightSidebarHtml: cachedSnapshot.rightSidebarHtml || null,
     isNewSessionPage: cachedSnapshot.isNewSessionPage || false,
+    dropdownHtml: cachedSnapshot.dropdownHtml || null,
+    dialogHtml: cachedSnapshot.dialogHtml || null,
   });
 });
 
@@ -906,6 +938,23 @@ app.post('/click', async (req, res) => {
               root = el;
               break;
             }
+          }
+        }
+      } else if (source === 'dropdown') {
+        // Portal dropdown: body > div[role="listbox"]
+        for (const child of document.body.children) {
+          if (child.getAttribute('role') === 'listbox' && child.textContent.trim()) {
+            root = child;
+            break;
+          }
+        }
+      } else if (source === 'dialog') {
+        // Portal dialog: body > div.fixed.inset-0
+        for (const child of document.body.children) {
+          const cls = child.className || '';
+          if (cls.includes('fixed') && cls.includes('inset-0')) {
+            root = child;
+            break;
           }
         }
       }
