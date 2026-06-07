@@ -363,7 +363,7 @@ const CAPTURE_SCRIPT = `
 
   // -- 9. Force sticky backgrounds --
   clone.querySelectorAll('[data-ag-sticky]').forEach(el => {
-    el.style.backgroundColor = '#0f172a';
+    el.style.backgroundColor = '#101010';
   });
 
   // -- 10. Fix inline div-inside-span/p --
@@ -395,6 +395,29 @@ const CAPTURE_SCRIPT = `
     try {
       for (const rule of sheet.cssRules) { css += rule.cssText + '\\n'; }
     } catch {}
+  }
+
+  // -- 13b. Extract theme CSS variables from DOM --
+  // AG defines critical vars (--foreground, --background, etc.) on DOM elements,
+  // not in stylesheets. Extract them so they resolve in our context.
+  const themeVars = [
+    'foreground', 'background', 'border', 'muted', 'muted-foreground',
+    'primary', 'primary-foreground', 'secondary', 'secondary-foreground',
+    'accent', 'accent-foreground', 'card', 'card-foreground', 'card-border',
+    'popover', 'popover-foreground', 'destructive', 'destructive-foreground',
+    'input', 'ring', 'code-background', 'code-foreground',
+    'sidebar', 'sidebar-background', 'sidebar-foreground', 'sidebar-border',
+    'sidebar-muted', 'sidebar-muted-foreground', 'sidebar-accent',
+    'sidebar-secondary', 'sidebar-ring',
+  ];
+  const rootStyle = getComputedStyle(document.documentElement);
+  const themeRules = [];
+  for (const v of themeVars) {
+    const val = rootStyle.getPropertyValue('--' + v).trim();
+    if (val) themeRules.push('--' + v + ':' + val);
+  }
+  if (themeRules.length > 0) {
+    css = ':root{' + themeRules.join(';') + '}\\n' + css;
   }
 
   // -- 14. Capture LEFT sidebar (bg-sidebar) --

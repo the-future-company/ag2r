@@ -1,26 +1,30 @@
 /* ═══════════════════════════════════════════════
    AG2R — Mobile-First Styles
-   Mimics Antigravity 2.0 dark theme
+   Matches Antigravity 2.0 dark theme
    ═══════════════════════════════════════════════ */
 
-/* ── Design Tokens ── */
+/* ── Design Tokens (from AG's resolved theme) ── */
 :root {
-  --bg-app: #090e17;
-  --bg-panel: #111827;
-  --bg-surface: #1e293b;
-  --bg-hover: #253247;
-  --bg-input: #1a2332;
+  /* Core — matches AG's --background / --foreground */
+  --bg-app: #101010;
+  --bg-panel: #161616;      /* AG --sidebar / --muted */
+  --bg-surface: #1c1c1c;    /* AG --card / --sidebar-muted */
+  --bg-hover: #2d2d2d;      /* AG --secondary */
+  --bg-input: #1c1c1c;      /* AG --card */
 
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  /* Text — matches AG's text color scale */
+  --text-primary: #cccccc;   /* AG --foreground */
+  --text-secondary: #9d9d9d; /* AG --secondary-foreground */
+  --text-muted: #6e6e6e;     /* AG --muted-foreground */
 
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-dim: rgba(99, 102, 241, 0.15);
+  /* Accent — AG's --primary */
+  --accent: #007acc;
+  --accent-hover: #1a8ad4;
+  --accent-dim: rgba(0, 122, 204, 0.15);
 
-  --border: #1e293b;
-  --border-subtle: rgba(255, 255, 255, 0.06);
+  /* Borders — AG's --border / --card-border */
+  --border: #252525;          /* AG --card-border */
+  --border-subtle: rgba(255, 255, 255, 0.05); /* AG --border */
 
   --red: #ef4444;
   --green: #22c55e;
