@@ -36,6 +36,7 @@
 | Environment config template (SSoT for config) | `.env.example` |
 | Project dependencies (SSoT for versions) | `package.json` |
 | Self-signed SSL certs (auto-generated, gitignored) | `certs/` |
+| README screenshots (product showcase) | `docs/` |
 
 ---
 

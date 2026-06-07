@@ -1072,11 +1072,12 @@ function addClickProxyHandlers(container) {
       }
       el.classList.remove('ag-clicking');
 
-      // Auto-close left sidebar on session/action clicks.
-      // Don't close for menu buttons (aria-haspopup) — they open dropdowns
-      // that need the sidebar to stay visible.
-      if (clickId.startsWith('left:') && !el.hasAttribute('aria-haspopup')) {
-        closeLeftSidebar();
+      // Left sidebar stays open — user closes it by tapping the overlay (outside).
+      // Only close for explicit session navigation (conversation links).
+      if (clickId.startsWith('left:')) {
+        // Check if clicked element is a conversation link (navigates away)
+        const isConversationLink = el.closest('a[href]') !== null;
+        if (isConversationLink) closeLeftSidebar();
       }
 
       // Close dropdown overlay after any dropdown/dialog action

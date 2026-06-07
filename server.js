@@ -361,7 +361,7 @@ const CAPTURE_SCRIPT = `
       }
     } catch {}
   });
-  const chatTagged = tagInteractives(container, 'chat', false, false, 80);
+  const chatTagged = tagInteractives(container, 'chat', false, true, 80);
 
   // -- 5. Clone chat container --
   const clone = container.cloneNode(true);
