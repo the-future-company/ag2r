@@ -170,7 +170,10 @@ async function loadSnapshot() {
 
     // Don't re-render if the user is actively using the new session input
     const newSessionInput = document.getElementById('ag2r-new-session-input');
-    if (data.isNewSessionPage && newSessionInput && document.activeElement === newSessionInput) {
+    const newSessionMic = document.getElementById('ag2r-new-session-mic');
+    const micRecording = newSessionMic && newSessionMic.classList.contains('recording');
+    const inputHasText = newSessionInput && newSessionInput.value.trim().length > 0;
+    if (data.isNewSessionPage && newSessionInput && (document.activeElement === newSessionInput || micRecording || inputHasText)) {
       // Still update sidebars, just don't wipe the chat area
       isRendering = true;
       renderSidebar(leftSidebarContent, data.leftSidebarHtml);
