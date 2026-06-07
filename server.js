@@ -417,9 +417,11 @@ const CAPTURE_SCRIPT = `
     'sidebar-secondary', 'sidebar-ring',
   ];
   const rootStyle = getComputedStyle(document.documentElement);
+  const bodyStyle = document.body ? getComputedStyle(document.body) : null;
   const themeRules = [];
   for (const v of themeVars) {
-    const val = rootStyle.getPropertyValue('--' + v).trim();
+    const val = rootStyle.getPropertyValue('--' + v).trim()
+              || (bodyStyle ? bodyStyle.getPropertyValue('--' + v).trim() : '');
     if (val) themeRules.push('--' + v + ':' + val);
   }
   if (themeRules.length > 0) {

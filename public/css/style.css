@@ -5,8 +5,8 @@
 
 /* ── Design Tokens (from AG's resolved theme) ── */
 :root {
-  /* Core — matches AG's --background / --foreground */
-  --bg-app: #101010;
+  /* Core — matches AG's body background: rgb(14, 19, 24) */
+  --bg-app: #0e1318;
   --bg-panel: #161616;      /* AG --sidebar / --muted */
   --bg-surface: #1c1c1c;    /* AG --card / --sidebar-muted */
   --bg-hover: #2d2d2d;      /* AG --secondary */
@@ -63,7 +63,7 @@ body {
   font-size: 15px;
   line-height: 1.5;
   color: var(--text-primary);
-  background: var(--bg-app);
+  background: var(--bg-app) !important;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
