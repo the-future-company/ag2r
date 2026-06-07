@@ -553,8 +553,19 @@ const CAPTURE_SCRIPT = `
   } catch (e) {
     console.debug('[AG2R] Portal capture error:', e.message);
   }
+  // -- 9. Detect active artifact tab URI for commenting --
+  // Active tab has 'bg-secondary' class; inactive tabs don't.
+  let activeArtifactUri = null;
+  try {
+    const activeTab = document.querySelector('[data-tab-id^="artifact__"].bg-secondary');
+    if (activeTab) {
+      activeArtifactUri = activeTab.getAttribute('data-tab-id').replace('artifact__', '');
+    }
+  } catch (e) {
+    console.debug('[AG2R] Artifact tab detection error:', e.message);
+  }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, activeArtifactUri };
 })()
 `;
 
@@ -598,13 +609,19 @@ function buildInjectScript(text) {
   document.execCommand('selectAll', false, null);
   document.execCommand('delete', false, null);
 
-  // Insert text
-  const inserted = document.execCommand('insertText', false, ${safeText});
-  if (!inserted) {
-    // Fallback: direct textContent + synthetic events
-    editor.textContent = ${safeText};
-    editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${safeText} }));
-    editor.dispatchEvent(new Event('change', { bubbles: true }));
+  // Insert text via clipboard paste to preserve newlines in Lexical editor
+  const textVal = ${safeText};
+  const dt = new DataTransfer();
+  dt.setData('text/plain', textVal);
+  const pasteEvent = new ClipboardEvent('paste', {
+    clipboardData: dt, bubbles: true, cancelable: true,
+  });
+  // dispatchEvent returns false if a handler called preventDefault (= paste was handled).
+  // Returns true if no handler caught it (= need fallback).
+  const notHandled = editor.dispatchEvent(pasteEvent);
+  if (notHandled) {
+    // No paste handler caught it — fall back to insertText (single-line only)
+    document.execCommand('insertText', false, textVal);
   }
 
   // Brief delay for editor to process
@@ -885,6 +902,7 @@ app.get('/snapshot', (req, res) => {
     isNewSessionPage: cachedSnapshot.isNewSessionPage || false,
     dropdownHtml: cachedSnapshot.dropdownHtml || null,
     dialogHtml: cachedSnapshot.dialogHtml || null,
+    activeArtifactUri: cachedSnapshot.activeArtifactUri || null,
   });
 });
 

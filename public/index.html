@@ -86,6 +86,44 @@
       <div id="dropdown-backdrop" class="dropdown-backdrop"></div>
       <div id="dropdown-content" class="dropdown-content"></div>
     </div>
+    <!-- Floating comment button (appears on text selection in right sidebar) -->
+    <button id="comment-fab" class="comment-fab hidden" aria-label="Add comment">
+      <span class="material-symbols-rounded">add_comment</span>
+    </button>
+
+    <!-- Comment input modal -->
+    <div id="comment-modal" class="comment-modal hidden">
+      <div id="comment-modal-backdrop" class="dropdown-backdrop"></div>
+      <div class="comment-modal-content">
+        <div class="comment-modal-header">
+          <span class="material-symbols-rounded" style="font-size:20px;color:var(--accent)">comment</span>
+          <span>Add Comment</span>
+        </div>
+        <div id="comment-selection-preview" class="comment-selection-preview"></div>
+        <textarea id="comment-input" class="comment-input" placeholder="Type your comment..." rows="3"></textarea>
+        <div class="comment-modal-actions">
+          <button id="comment-cancel" class="comment-action-btn cancel">Cancel</button>
+          <button id="comment-submit" class="comment-action-btn submit">Add Comment</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comment review modal (view/edit/delete queued comments) -->
+    <div id="comment-review-modal" class="comment-modal hidden">
+      <div id="comment-review-backdrop" class="dropdown-backdrop"></div>
+      <div class="comment-review-content">
+        <div class="comment-modal-header">
+          <span class="material-symbols-rounded" style="font-size:20px;color:#6366f1">reviews</span>
+          <span>Queued Comments</span>
+        </div>
+        <div id="comment-review-list" class="comment-review-list"></div>
+        <div class="comment-modal-actions">
+          <button id="comment-review-close" class="comment-action-btn cancel">Close</button>
+          <button id="comment-review-clear" class="comment-action-btn cancel" style="color:#f87171">Clear All</button>
+          <button id="comment-review-send" class="comment-action-btn submit">Send All</button>
+        </div>
+      </div>
+    </div>
 
   </div>
 

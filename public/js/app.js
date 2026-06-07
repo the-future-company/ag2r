@@ -41,6 +41,14 @@ const rightSidebarOverlay = document.getElementById('right-sidebar-overlay');
 const dropdownOverlay = document.getElementById('dropdown-overlay');
 const dropdownBackdrop = document.getElementById('dropdown-backdrop');
 const dropdownContent = document.getElementById('dropdown-content');
+// Comment UI
+const commentFab = document.getElementById('comment-fab');
+const commentModal = document.getElementById('comment-modal');
+const commentModalBackdrop = document.getElementById('comment-modal-backdrop');
+const commentSelectionPreview = document.getElementById('comment-selection-preview');
+const commentInput = document.getElementById('comment-input');
+const commentCancel = document.getElementById('comment-cancel');
+const commentSubmit = document.getElementById('comment-submit');
 
 // ─────────────────────────────────────────────
 // Fetch Wrapper (redirects to login on 401)
@@ -181,9 +189,12 @@ async function loadSnapshot() {
       // Still update sidebars, just don't wipe the chat area
       isRendering = true;
       renderSidebar(leftSidebarContent, data.leftSidebarHtml);
-      renderSidebar(rightSidebarContent, data.rightSidebarHtml);
       addClickProxyHandlers(leftSidebarContent);
-      addClickProxyHandlers(rightSidebarContent);
+      // Skip right sidebar re-render if user has active text selection (for commenting)
+      if (!hasActiveSelectionInRightSidebar()) {
+        renderSidebar(rightSidebarContent, data.rightSidebarHtml);
+        addClickProxyHandlers(rightSidebarContent);
+      }
       isRendering = false;
       return;
     }
@@ -206,9 +217,12 @@ async function loadSnapshot() {
 
     // Render both sidebars with AG's captured content
     renderSidebar(leftSidebarContent, data.leftSidebarHtml);
-    renderSidebar(rightSidebarContent, data.rightSidebarHtml);
     addClickProxyHandlers(leftSidebarContent);
-    addClickProxyHandlers(rightSidebarContent);
+    // Skip right sidebar re-render if user has active text selection (for commenting)
+    if (!hasActiveSelectionInRightSidebar()) {
+      renderSidebar(rightSidebarContent, data.rightSidebarHtml);
+      addClickProxyHandlers(rightSidebarContent);
+    }
 
     // Render dropdown overlay if AG has a portal menu open
     if (data.dropdownHtml) {
@@ -262,6 +276,9 @@ async function loadSnapshot() {
         dropdownOverlay.classList.remove('hidden');
       }
     }
+
+    // Track active artifact URI for commenting
+    updateActiveArtifact(data);
 
     // Sync scroll position from AG's DOM state.
     // AG handles scroll-to-bottom on send and auto-scroll during streaming.
@@ -381,10 +398,14 @@ async function sendMessage() {
   messageInput.blur();
   updateActionButton();
 
+  // Prepend any queued artifact comments to the message
+  const commentBlock = drainQueuedComments();
+  const fullMessage = commentBlock ? commentBlock + '\n' + text : text;
+
   try {
     const res = await fetchAPI('/send', {
       method: 'POST',
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: fullMessage }),
     });
 
     const result = await res.json();
@@ -986,6 +1007,304 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+
+
+// ─────────────────────────────────────────────
+// Artifact Commenting
+// ─────────────────────────────────────────────
+// Check if user has an active text selection inside the right sidebar
+function hasActiveSelectionInRightSidebar() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.toString().trim()) return false;
+  const anchor = sel.anchorNode;
+  return anchor && rightSidebarContent.contains(anchor);
+}
+
+let activeArtifactUri = null;
+let pendingCommentSelection = '';
+let pendingCommentUri = '';
+let queuedComments = JSON.parse(localStorage.getItem('ag2r_queued_comments') || '[]');
+
+function saveComments() {
+  localStorage.setItem('ag2r_queued_comments', JSON.stringify(queuedComments));
+}
+
+// Track active artifact URI from snapshots
+function updateActiveArtifact(data) {
+  if (data.activeArtifactUri) {
+    activeArtifactUri = data.activeArtifactUri;
+  }
+}
+
+
+// Listen for text selection in the right sidebar
+rightSidebarContent.addEventListener('mouseup', handleTextSelection);
+rightSidebarContent.addEventListener('touchend', handleTextSelection);
+
+function handleTextSelection() {
+  // Delay to let the browser finalize the selection
+  setTimeout(() => {
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : '';
+
+    if (!text || text.length < 2) {
+      commentFab.classList.add('hidden');
+      return;
+    }
+
+    if (!activeArtifactUri) {
+      commentFab.classList.add('hidden');
+      return;
+    }
+
+    pendingCommentSelection = text;
+    pendingCommentUri = activeArtifactUri;
+
+    // Position FAB near the selection
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    commentFab.style.top = `${rect.bottom + window.scrollY + 8}px`;
+    commentFab.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
+    commentFab.classList.remove('hidden');
+  }, 100);
+}
+
+// Hide FAB when tapping elsewhere (but not when tapping FAB itself)
+document.addEventListener('mousedown', (e) => {
+  if (!commentFab.contains(e.target) && !commentModal.contains(e.target)) {
+    commentFab.classList.add('hidden');
+  }
+});
+document.addEventListener('touchstart', (e) => {
+  if (!commentFab.contains(e.target) && !commentModal.contains(e.target)) {
+    commentFab.classList.add('hidden');
+  }
+});
+
+// Open comment modal when FAB is clicked
+commentFab.addEventListener('click', () => {
+  commentFab.classList.add('hidden');
+  commentSelectionPreview.textContent = pendingCommentSelection;
+  commentInput.value = '';
+  commentModal.classList.remove('hidden');
+  commentInput.focus();
+});
+
+// Close comment modal
+function closeCommentModal() {
+  commentModal.classList.add('hidden');
+  commentInput.value = '';
+  pendingCommentSelection = '';
+}
+
+commentCancel.addEventListener('click', closeCommentModal);
+commentModalBackdrop.addEventListener('click', closeCommentModal);
+
+// Submit comment — queue it as a structured object, don't send immediately
+commentSubmit.addEventListener('click', () => {
+  const commentText = commentInput.value.trim();
+  if (!commentText) return;
+  if (!activeArtifactUri || !pendingCommentSelection) return;
+
+  queuedComments.push({
+    uri: pendingCommentUri || activeArtifactUri,
+    selection: pendingCommentSelection,
+    comment: commentText,
+  });
+  saveComments();
+  console.debug('[Comment] Queued:', queuedComments[queuedComments.length - 1]);
+  closeCommentModal();
+
+  // Clear the text selection to prevent stale selection state
+  window.getSelection()?.removeAllRanges();
+
+  // Show badge to indicate pending comments
+  updateCommentBadge();
+});
+
+// Format queued comments grouped by artifact URI
+function formatQueuedComments() {
+  if (queuedComments.length === 0) return '';
+
+  // Group by URI
+  const grouped = {};
+  for (const c of queuedComments) {
+    if (!grouped[c.uri]) grouped[c.uri] = [];
+    grouped[c.uri].push(c);
+  }
+
+  // Build nested bullet format
+  const lines = ['Review my comments:'];
+  for (const [uri, comments] of Object.entries(grouped)) {
+    lines.push(`* Comments on artifact URI: ${uri}`);
+    for (const c of comments) {
+      lines.push(`  * > ${c.selection}`);
+      lines.push(`    * Comment: ${c.comment}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+// Drain queued comments — returns formatted string and clears queue
+function drainQueuedComments() {
+  if (queuedComments.length === 0) return '';
+  const block = formatQueuedComments();
+  queuedComments = [];
+  saveComments();
+  updateCommentBadge();
+  return block;
+}
+
+// Comment badge — shows pending comment count as a fixed banner with send shortcut
+function updateCommentBadge() {
+  let badge = document.getElementById('comment-badge');
+  if (queuedComments.length === 0) {
+    if (badge) badge.remove();
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'comment-badge';
+    document.getElementById('app').appendChild(badge);
+  }
+  const count = queuedComments.length;
+  badge.innerHTML = `<span>💬 ${count} comment${count > 1 ? 's' : ''} queued</span><button id="comment-send-btn">Send</button>`;
+  // Click badge text → open review modal
+  badge.addEventListener('click', openReviewModal);
+  // Click send button → send (stop propagation so it doesn't also open modal)
+  document.getElementById('comment-send-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    sendQueuedComments();
+  });
+}
+
+async function sendQueuedComments() {
+  const fullMessage = drainQueuedComments();
+  if (!fullMessage) return;
+  try {
+    const resp = await fetchAPI('/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: fullMessage }),
+    });
+    const result = await resp.json();
+    console.debug('[Comment] Send result:', result);
+  } catch (e) {
+    console.error('[Comment] Send failed:', e);
+  }
+}
+
+// ── Comment Review Modal ──
+const reviewModal = document.getElementById('comment-review-modal');
+const reviewList = document.getElementById('comment-review-list');
+const reviewBackdrop = document.getElementById('comment-review-backdrop');
+const reviewClose = document.getElementById('comment-review-close');
+const reviewClear = document.getElementById('comment-review-clear');
+const reviewSend = document.getElementById('comment-review-send');
+
+function openReviewModal() {
+  renderReviewList();
+  reviewModal.classList.remove('hidden');
+}
+
+function closeReviewModal() {
+  reviewModal.classList.add('hidden');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderReviewList() {
+  if (queuedComments.length === 0) {
+    reviewList.innerHTML = '<div style="color:#888;text-align:center;padding:20px">No comments queued</div>';
+    return;
+  }
+
+  // Group by URI preserving order
+  const grouped = {};
+  const uriOrder = [];
+  for (const [i, c] of queuedComments.entries()) {
+    if (!grouped[c.uri]) { grouped[c.uri] = []; uriOrder.push(c.uri); }
+    grouped[c.uri].push({ ...c, index: i });
+  }
+
+  let html = '';
+  for (const uri of uriOrder) {
+    const basename = uri.split('/').pop();
+    html += `<div class="comment-review-file">📄 ${basename}</div>`;
+    for (const c of grouped[uri]) {
+      html += `
+        <div class="comment-review-item" data-idx="${c.index}">
+          <div class="comment-review-selection">» ${escapeHtml(c.selection)}</div>
+          <div class="comment-review-text">${escapeHtml(c.comment)}</div>
+          <div class="comment-review-actions">
+            <button class="edit" title="Edit" data-idx="${c.index}"><span class="material-symbols-rounded" style="font-size:16px">edit</span></button>
+            <button class="delete" title="Delete" data-idx="${c.index}"><span class="material-symbols-rounded" style="font-size:16px">delete</span></button>
+          </div>
+        </div>`;
+    }
+  }
+  reviewList.innerHTML = html;
+
+  // Wire edit/delete
+  reviewList.querySelectorAll('.edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      const item = btn.closest('.comment-review-item');
+      const textEl = item.querySelector('.comment-review-text');
+      // Inline edit: replace text with a textarea
+      const textarea = document.createElement('textarea');
+      textarea.className = 'comment-input';
+      textarea.value = queuedComments[idx].comment;
+      textarea.rows = 2;
+      textEl.replaceWith(textarea);
+      textarea.focus();
+      // Save on blur or Enter
+      const save = () => {
+        const val = textarea.value.trim();
+        if (val) {
+          queuedComments[idx].comment = val;
+          saveComments();
+        }
+        renderReviewList();
+        updateCommentBadge();
+      };
+      textarea.addEventListener('blur', save);
+      textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
+      });
+    });
+  });
+  reviewList.querySelectorAll('.delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      queuedComments.splice(idx, 1);
+      saveComments();
+      renderReviewList();
+      updateCommentBadge();
+      if (queuedComments.length === 0) closeReviewModal();
+    });
+  });
+}
+
+reviewBackdrop.addEventListener('click', closeReviewModal);
+reviewClose.addEventListener('click', closeReviewModal);
+reviewClear.addEventListener('click', () => {
+  queuedComments = [];
+  saveComments();
+  updateCommentBadge();
+  closeReviewModal();
+});
+reviewSend.addEventListener('click', () => {
+  closeReviewModal();
+  sendQueuedComments();
+});
+
+// Show badge on load if there are persisted comments
+if (queuedComments.length > 0) updateCommentBadge();
 
 
 // ─────────────────────────────────────────────
