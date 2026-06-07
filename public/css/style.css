@@ -228,20 +228,7 @@ body {
 }
 
 /* ── Review Toggle Badge ── */
-.review-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 4px rgba(99, 102, 241, 0.6);
-}
 
-.review-badge.hidden {
-  display: none;
-}
 
 /* ── Interactive Elements in Captured Content ── */
 [data-ag-click-id] {
