@@ -496,7 +496,7 @@ function addClickProxyHandlers(container) {
 
       const clickId = el.dataset.agClickId; // e.g. "chat:5", "right:2"
       const label = el.dataset.agClickLabel || '';
-      console.debug('[Click] Firing:', clickId, label);
+
 
       el.classList.add('ag-clicking');
       try {
@@ -505,7 +505,7 @@ function addClickProxyHandlers(container) {
           body: JSON.stringify({ clickId, label }),
         });
         const result = await res.json();
-        console.debug('[Click]', clickId, result);
+
       } catch (err) {
         console.debug('[Click] Error:', err.message);
       }
@@ -527,9 +527,7 @@ function addClickProxyHandlers(container) {
       setTimeout(loadSnapshot, 2000);
     });
   });
-  if (wiredCount > 0) {
-    console.debug('[Click] Wired', wiredCount, 'elements in', container.id);
-  }
+
 }
 
 // ─────────────────────────────────────────────
