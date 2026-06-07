@@ -447,6 +447,9 @@ const CAPTURE_SCRIPT = `
     'sidebar', 'sidebar-background', 'sidebar-foreground', 'sidebar-border',
     'sidebar-muted', 'sidebar-muted-foreground', 'sidebar-accent',
     'sidebar-secondary', 'sidebar-ring',
+    // VS Code diff editor colors — AG's diff viewer references these
+    'vscode-diffEditor-insertedLineBackground', 'vscode-diffEditor-insertedTextBackground',
+    'vscode-diffEditor-removedLineBackground', 'vscode-diffEditor-removedTextBackground',
   ];
   const rootStyle = getComputedStyle(document.documentElement);
   const bodyStyle = document.body ? getComputedStyle(document.body) : null;
@@ -553,16 +556,26 @@ const CAPTURE_SCRIPT = `
   } catch (e) {
     console.debug('[AG2R] Portal capture error:', e.message);
   }
-  // -- 9. Detect active artifact tab URI for commenting --
+  // -- 9. Detect active tab URI for commenting --
   // Active tab has 'bg-secondary' class; inactive tabs don't.
+  // Supports both artifact tabs (artifact__xxx) and code diff file tabs.
   let activeArtifactUri = null;
+  let activeFileUri = null;
   try {
-    const activeTab = document.querySelector('[data-tab-id^="artifact__"].bg-secondary');
+    const activeTab = document.querySelector('[data-tab-id].bg-secondary');
     if (activeTab) {
-      activeArtifactUri = activeTab.getAttribute('data-tab-id').replace('artifact__', '');
+      const tabId = activeTab.getAttribute('data-tab-id');
+      // Skip structural tabs — not commentable content
+      if (tabId !== 'overview' && tabId !== 'review') {
+        if (tabId.startsWith('artifact__')) {
+          activeArtifactUri = tabId.replace('artifact__', '');
+        } else {
+          activeFileUri = tabId;
+        }
+      }
     }
   } catch (e) {
-    console.debug('[AG2R] Artifact tab detection error:', e.message);
+    console.debug('[AG2R] Active tab detection error:', e.message);
   }
 
   // -- 10. Detect and capture permission/approval banner --
@@ -603,7 +616,7 @@ const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Permission banner capture error:', e.message);
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, activeArtifactUri, permissionHtml };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, activeArtifactUri, activeFileUri, permissionHtml };
 })()
 `;
 
@@ -944,6 +957,7 @@ app.get('/snapshot', (req, res) => {
     dropdownHtml: cachedSnapshot.dropdownHtml || null,
     dialogHtml: cachedSnapshot.dialogHtml || null,
     activeArtifactUri: cachedSnapshot.activeArtifactUri || null,
+    activeFileUri: cachedSnapshot.activeFileUri || null,
     permissionHtml: cachedSnapshot.permissionHtml || null,
   });
 });

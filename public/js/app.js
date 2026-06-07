@@ -1184,6 +1184,7 @@ function hasActiveSelectionInRightSidebar() {
 }
 
 let activeArtifactUri = null;
+let activeFileUri = null;
 let pendingCommentSelection = '';
 let pendingCommentUri = '';
 let queuedComments = JSON.parse(localStorage.getItem('ag2r_queued_comments') || '[]');
@@ -1196,6 +1197,10 @@ function saveComments() {
 function updateActiveArtifact(data) {
   if (data.activeArtifactUri) {
     activeArtifactUri = data.activeArtifactUri;
+    activeFileUri = null;
+  } else if (data.activeFileUri) {
+    activeFileUri = data.activeFileUri;
+    activeArtifactUri = null;
   }
 }
 
@@ -1223,13 +1228,14 @@ function showCommentFabForSelection() {
     return;
   }
 
-  if (!activeArtifactUri) {
+  const activeUri = activeArtifactUri || activeFileUri;
+  if (!activeUri) {
     commentFab.classList.add('hidden');
     return;
   }
 
   pendingCommentSelection = text;
-  pendingCommentUri = activeArtifactUri;
+  pendingCommentUri = activeUri;
 
   // Position FAB near the selection
   const range = sel.getRangeAt(0);
@@ -1292,10 +1298,10 @@ commentModalBackdrop.addEventListener('click', closeCommentModal);
 commentSubmit.addEventListener('click', () => {
   const commentText = commentInput.value.trim();
   if (!commentText) return;
-  if (!activeArtifactUri || !pendingCommentSelection) return;
+  if (!(activeArtifactUri || activeFileUri) || !pendingCommentSelection) return;
 
   queuedComments.push({
-    uri: pendingCommentUri || activeArtifactUri,
+    uri: pendingCommentUri || activeArtifactUri || activeFileUri,
     selection: pendingCommentSelection,
     comment: commentText,
   });

@@ -30,6 +30,7 @@
 | Client rendering, WebSocket, stop/send | `public/js/app.js` |
 | Right sidebar toggle, click proxy handlers | `public/js/app.js` — search `openRightSidebar` and `addClickProxyHandlers` |
 | Permission banner capture + click proxy (`perm:` prefix) | `server.js` — search `permissionHtml` and `'perm'` |
+| Commenting on artifacts + code diffs | `public/js/app.js` — search `activeArtifactUri` and `activeFileUri` |
 | Mobile UI structure | `public/index.html` |
 | Login page | `public/login.html` |
 | Mobile-first styles (minimal CDP overrides) | `public/css/style.css` |
