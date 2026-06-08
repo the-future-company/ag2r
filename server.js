@@ -273,11 +273,14 @@ const CAPTURE_SCRIPT = `
     });
     // cursor-pointer elements are ambiguous — could be content containers.
     // Apply maxTextLength to skip large content blocks (code blocks, paragraphs).
+    // Exception: elements with a direct onclick handler are definitively interactive
+    // (e.g. AG artifact cards), so they bypass the text-length filter.
     if (includeCursorPointer) {
       root.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
         if ((skipVisibilityCheck || el.offsetParent !== null) && !el.hasAttribute('data-ag-click-id')) {
           const text = (el.textContent || '').trim();
-          if (maxTextLength && text.length > maxTextLength) return;
+          const hasHandler = typeof el.onclick === 'function';
+          if (maxTextLength && text.length > maxTextLength && !hasHandler) return;
           el.setAttribute('data-ag-click-id', prefix + ':' + idx);
           el.setAttribute('data-ag-click-label', text.substring(0, 50));
           idx++;
@@ -1120,9 +1123,11 @@ app.post('/click', async (req, res) => {
         }
       });
       // cursor-pointer elements — filter by text length to skip content containers
+      // Exception: elements with onclick handler are definitively interactive
       root.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
         if ((skipVis || el.offsetParent !== null) && !visible.includes(el)) {
-          if (maxLen && (el.textContent || '').trim().length > maxLen) return;
+          const hasHandler = typeof el.onclick === 'function';
+          if (maxLen && (el.textContent || '').trim().length > maxLen && !hasHandler) return;
           visible.push(el);
         }
       });

@@ -151,3 +151,5 @@ ONBOARDING.md follows a strict **pointer-based context map** pattern. The princi
    - **Persistent Fix**: The developer's `~/.zshenv` file automatically unsets the dummy token when the agent spawns a shell. This should already be in place — do not prefix `gh` commands with `GITHUB_TOKEN=""`.
 
 5. **Subagent quota is shared.** All subagents share the parent model's quota. Running 3+ research subagents in parallel causes rate limit errors. Use subagents sparingly — prefer sequential over parallel when possible, or limit to 2 concurrent subagents.
+
+6. **Always provide the local IP for test servers.** The user tests on their phone over the local network — `localhost` doesn't work from a phone. When starting a test server, run `ipconfig getifaddr en0` and give the full URL: `https://<ip>:<port>`.
