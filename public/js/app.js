@@ -186,42 +186,60 @@ async function loadSnapshot() {
     }
 
 
-    // Don't re-render if the user is actively using the new session input
+    // Don't re-render the chat area if already on the new session page — our custom
+    // form is already rendered and re-rendering would destroy the textarea (keyboard pop-up).
     const newSessionInput = document.getElementById('ag2r-new-session-input');
-    const newSessionMic = document.getElementById('ag2r-new-session-mic');
-    const micRecording = newSessionMic && newSessionMic.classList.contains('recording');
-    const inputHasText = newSessionInput && newSessionInput.value.trim().length > 0;
-    if (data.isNewSessionPage && newSessionInput && (document.activeElement === newSessionInput || micRecording || inputHasText)) {
-      // Still update sidebars, just don't wipe the chat area
-      isRendering = true;
-      renderSidebar(leftSidebarContent, data.leftSidebarHtml);
-      addClickProxyHandlers(leftSidebarContent);
-      // Skip right sidebar re-render if user has active text selection (for commenting)
-      if (!hasActiveSelectionInRightSidebar()) {
-        renderSidebar(rightSidebarContent, data.rightSidebarHtml);
-        addClickProxyHandlers(rightSidebarContent);
+    const skipChatRender = data.isNewSessionPage && newSessionInput;
+
+    if (skipChatRender) {
+      // Still update env chips with fresh data (user may have changed worktree/branch)
+      const envBar = chatContent.querySelector('.ag2r-new-session-env-bar');
+      if (envBar && (data.environmentName || data.branchName)) {
+        const environmentName = data.environmentName || '';
+        const branchName = data.branchName || '';
+        const envIcon = environmentName === 'Local'
+          ? '<span class="material-symbols-rounded" style="font-size:14px">desktop_windows</span>'
+          : '<span class="material-symbols-rounded" style="font-size:14px">account_tree</span>';
+        let newEnvHtml = '';
+        if (environmentName) {
+          newEnvHtml = `
+            <button type="button" class="ag2r-env-chip" data-ag-click-id="env:0" data-ag-click-label="${environmentName}">
+              ${envIcon}
+              <span>${environmentName}</span>
+              <span class="material-symbols-rounded" style="font-size:12px">expand_more</span>
+            </button>
+            ${branchName ? `
+            <button type="button" class="ag2r-env-chip" data-ag-click-id="env:1" data-ag-click-label="${branchName}">
+              <span class="material-symbols-rounded" style="font-size:14px">fork_right</span>
+              <span>${branchName}</span>
+              <span class="material-symbols-rounded" style="font-size:12px">expand_more</span>
+            </button>` : ''}
+          `;
+        }
+        envBar.innerHTML = newEnvHtml;
+        addClickProxyHandlers(envBar);
       }
-      isRendering = false;
-      return;
+    } else {
+      // Render HTML
+      chatContent.innerHTML = data.html;
+      hideEmptyState();
+
+      // If this is the new session page, replace captured content with a functional input
+      if (data.isNewSessionPage) {
+        renderNewSessionPage(chatContent, data);
+        // Close sidebar when transitioning to new session page (+ button)
+        closeLeftSidebar();
+      }
+
+      // Add mobile copy buttons to code blocks
+      addMobileCopyButtons();
+
+      // Wire up click proxying for interactive elements
+      addClickProxyHandlers(chatContent);
     }
 
-    // Render HTML
+    // Render both sidebars with AG's captured content (always, even when skipping chat)
     isRendering = true;
-    chatContent.innerHTML = data.html;
-    hideEmptyState();
-
-    // If this is the new session page, replace captured content with a functional input
-    if (data.isNewSessionPage) {
-      renderNewSessionPage(chatContent, data);
-    }
-
-    // Add mobile copy buttons to code blocks
-    addMobileCopyButtons();
-
-    // Wire up click proxying for interactive elements across all areas
-    addClickProxyHandlers(chatContent);
-
-    // Render both sidebars with AG's captured content
     renderSidebar(leftSidebarContent, data.leftSidebarHtml);
     addClickProxyHandlers(leftSidebarContent);
     // Skip right sidebar re-render if user has active text selection (for commenting)
@@ -952,7 +970,6 @@ function renderNewSessionPage(container, data) {
           id="ag2r-new-session-input"
           placeholder="Ask anything, @ to mention, / for actions"
           rows="3"
-          autofocus
         ></textarea>
         <div class="ag2r-new-session-buttons">
           <button type="button" id="ag2r-new-session-mic" class="mic-btn" aria-label="Voice input">
@@ -1068,8 +1085,7 @@ function renderNewSessionPage(container, data) {
     nsMicBtn.classList.add('unsupported');
   }
 
-  // Focus the input
-  requestAnimationFrame(() => input.focus());
+  // Don't auto-focus — let the user tap the input to bring up keyboard
 }
 
 // ─────────────────────────────────────────────
@@ -1173,11 +1189,11 @@ function addClickProxyHandlers(container) {
       }
       el.classList.remove('ag-clicking');
 
-      // Left sidebar stays open — user closes it by tapping the overlay (outside).
-      // Only close for explicit session navigation (conversation links).
+      // Close sidebar when navigating away (conversation click or new session)
+      // Conversation rows have non-empty labels (title text); icon buttons (three-dots, +) have empty labels
       if (clickId.startsWith('left:')) {
-        const isConversationLink = el.closest('a[href]') !== null;
-        if (isConversationLink) closeLeftSidebar();
+        const hasLabel = label && label.length > 0;
+        if (hasLabel) closeLeftSidebar();
       }
 
       // Close dropdown overlay after any dropdown/dialog action
