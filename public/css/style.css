@@ -103,6 +103,14 @@ body {
   flex: 1;
 }
 
+.header-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
 .icon-btn {
   display: flex;
   align-items: center;
