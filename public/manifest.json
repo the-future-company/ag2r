@@ -1,0 +1,17 @@
+{
+  "name": "AG2R",
+  "short_name": "AG2R",
+  "description": "Mobile remote interface for Antigravity AI coding sessions",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090e17",
+  "theme_color": "#090e17",
+  "icons": [
+    {
+      "src": "/ag2r-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

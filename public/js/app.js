@@ -54,6 +54,9 @@ const commentSelectionPreview = document.getElementById('comment-selection-previ
 const commentInput = document.getElementById('comment-input');
 const commentCancel = document.getElementById('comment-cancel');
 const commentSubmit = document.getElementById('comment-submit');
+// Input bar + quick actions
+const inputBar = document.getElementById('input-bar');
+const quickActions = document.getElementById('quick-actions');
 // Permission overlay
 const permissionOverlay = document.getElementById('permission-overlay');
 const permissionBackdrop = document.getElementById('permission-backdrop');
@@ -235,6 +238,11 @@ async function loadSnapshot() {
         // Close sidebar when transitioning to new session page (+ button)
         closeLeftSidebar();
       }
+
+      // Hide bottom input bar + quick actions on new session page (it has its own input)
+      const hideBottomBar = data.isNewSessionPage;
+      inputBar.classList.toggle('hidden', hideBottomBar);
+      quickActions.classList.toggle('hidden', hideBottomBar);
 
       // Add mobile copy buttons to code blocks
       addMobileCopyButtons();
@@ -706,8 +714,9 @@ function updateActionButton() {
   }
 
   // Show quick-action chips only when agent is idle
-  const quickActions = document.getElementById('quick-actions');
-  if (quickActions) {
+  // Only toggle quick-actions for agent running state when NOT on new session page
+  // (new session page hides quick-actions entirely via loadSnapshot)
+  if (quickActions && !document.getElementById('ag2r-new-session-input')) {
     quickActions.classList.toggle('hidden', agentRunning);
   }
 }

@@ -497,6 +497,10 @@ body {
   z-index: 100;
 }
 
+.input-bar.hidden {
+  display: none;
+}
+
 .input-wrapper {
   display: flex;
   align-items: flex-end;
