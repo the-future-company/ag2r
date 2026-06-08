@@ -24,6 +24,7 @@ const CDP_PORT = parseInt(process.env.CDP_PORT || '9000');
 const APP_PASSWORD = process.env.APP_PASSWORD || 'antigravity';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'ag2r-default-secret';
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS || '500');
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 const TUNNEL_ENABLED = process.env.TUNNEL_ENABLED === 'true';
 const TUNNEL_URL = process.env.TUNNEL_URL || '';
 
@@ -53,14 +54,7 @@ function authToken() {
   return hashString(APP_PASSWORD + ':ag2r-salt');
 }
 
-function isLocalRequest(req) {
-  // Local network requests bypass auth (no proxy headers)
-  if (req.headers['x-forwarded-for'] || req.headers['cf-connecting-ip']) {
-    return false;
-  }
-  const ip = req.ip || req.connection?.remoteAddress || '';
-  return /^(127\.|::1|::ffff:127\.|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
-}
+
 
 function log(prefix, ...args) {
   console.log(`[${prefix}]`, ...args);
@@ -435,29 +429,25 @@ const CAPTURE_SCRIPT = `
     } catch {}
   }
 
-  // -- 13b. Extract theme CSS variables from DOM --
-  // AG defines critical vars (--foreground, --background, etc.) on DOM elements,
-  // not in stylesheets. Extract them so they resolve in our context.
-  const themeVars = [
-    'foreground', 'background', 'border', 'muted', 'muted-foreground',
-    'primary', 'primary-foreground', 'secondary', 'secondary-foreground',
-    'accent', 'accent-foreground', 'card', 'card-foreground', 'card-border',
-    'popover', 'popover-foreground', 'destructive', 'destructive-foreground',
-    'input', 'ring', 'code-background', 'code-foreground',
-    'sidebar', 'sidebar-background', 'sidebar-foreground', 'sidebar-border',
-    'sidebar-muted', 'sidebar-muted-foreground', 'sidebar-accent',
-    'sidebar-secondary', 'sidebar-ring',
-    // VS Code diff editor colors — AG's diff viewer references these
-    'vscode-diffEditor-insertedLineBackground', 'vscode-diffEditor-insertedTextBackground',
-    'vscode-diffEditor-removedLineBackground', 'vscode-diffEditor-removedTextBackground',
-  ];
+  // -- 13b. Extract ALL CSS custom properties from DOM --
+  // AG defines theme vars on DOM elements (not in stylesheets). Instead of a
+  // hardcoded list, enumerate every --* property so diff colors, chart colors,
+  // and any future vars are captured automatically.
   const rootStyle = getComputedStyle(document.documentElement);
   const bodyStyle = document.body ? getComputedStyle(document.body) : null;
   const themeRules = [];
-  for (const v of themeVars) {
-    const val = rootStyle.getPropertyValue('--' + v).trim()
-              || (bodyStyle ? bodyStyle.getPropertyValue('--' + v).trim() : '');
-    if (val) themeRules.push('--' + v + ':' + val);
+  const seen = new Set();
+  for (const source of [rootStyle, bodyStyle]) {
+    if (!source) continue;
+    for (const name of source) {
+      if (name.startsWith('--') && !seen.has(name)) {
+        const val = source.getPropertyValue(name).trim();
+        if (val) {
+          themeRules.push(name + ':' + val);
+          seen.add(name);
+        }
+      }
+    }
   }
   if (themeRules.length > 0) {
     css = ':root{' + themeRules.join(';') + '}\\n' + css;
@@ -870,6 +860,9 @@ if (TUNNEL_ENABLED) {
 const PUBLIC_PATHS = ['/login', '/login.html', '/favicon.ico'];
 
 app.use((req, res, next) => {
+  // Auth disabled — skip entirely (feature branch testing)
+  if (!AUTH_ENABLED) return next();
+
   // Public paths bypass auth
   if (PUBLIC_PATHS.some(p => req.path === p) || req.path.startsWith('/css/')) {
     return next();
@@ -887,9 +880,6 @@ app.use((req, res, next) => {
     const cleanUrl = req.path;
     return res.redirect(cleanUrl);
   }
-
-  // Local network requests bypass auth
-  if (isLocalRequest(req)) return next();
 
   // Check auth cookie
   const token = req.signedCookies?.ag2r_token;
@@ -1422,7 +1412,7 @@ async function start() {
 
   wss.on('connection', (ws, req) => {
     // Authenticate WebSocket connections
-    if (!isLocalWsRequest(req)) {
+    if (AUTH_ENABLED) {
       const cookies = parseCookiesFromHeader(req.headers.cookie || '');
       const signed = cookieParser.signedCookie(cookies.ag2r_token || '', SESSION_SECRET);
       if (signed !== authToken()) {
@@ -1501,13 +1491,7 @@ async function start() {
 // WebSocket Auth Helpers
 // ─────────────────────────────────────────────
 
-function isLocalWsRequest(req) {
-  if (req.headers['x-forwarded-for'] || req.headers['cf-connecting-ip']) {
-    return false;
-  }
-  const ip = req.socket?.remoteAddress || '';
-  return /^(127\.|::1|::ffff:127\.|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
-}
+
 
 function parseCookiesFromHeader(header) {
   const cookies = {};

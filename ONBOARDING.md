@@ -52,11 +52,11 @@
 - **`div` inside `span`/`p`.** AG2.0 nests block elements inside inline elements for file-type icons. Browsers auto-close the inline parent, causing line breaks. Capture script converts nested `<div>` to `<span style="display: inline-flex">`.
 - **CDP overrides are minimal.** We stripped all CSS overrides (colors, spacing, code blocks, etc.) to let AG2.0's own injected CSS handle styling. Only scrollbar hiding and broken image suppression remain in our CSS.
 - **Never wipe cached content.** If snapshot capture returns null (no chat container found), the server keeps the last valid snapshot. The client never clears `chatContent.innerHTML` based on a failed selector check.
-- **Local network auth bypass.** Requests from 127.x/192.168.x/10.x are auto-authenticated, but only if no proxy headers (X-Forwarded-For, CF-Connecting-IP) are present.
+- **Auth is env-var driven, not IP-based.** `AUTH_ENABLED=false` (default in `.env`) disables auth entirely — no login screen. The `ag2r()` shell function passes `AUTH_ENABLED=true` for production/tunnel use. Feature branch testing never needs auth.
 - **Right sidebar selector is fragile.** The AG right panel is found via position-based heuristic (elements right of viewport midpoint containing "Overview" + "Review" text). There are no stable IDs or data-testids. If AG's layout changes, the sidebar capture may fail silently (returns null). Use `GET /discover` to debug.
 - **Click proxy indices are ephemeral.** `data-ag-click-id` is assigned per snapshot by iterating visible `button/a/[role=button]` elements in DOM order. If the DOM changes between snapshot capture and click proxy execution (e.g., streaming content), the index can point to the wrong element. The label validation in `POST /click` catches most mismatches.
 - **Focus emulation (fragile).** `Emulation.setFocusEmulationEnabled({enabled: true})` is called on CDP connect to force AG's page to render while in the background. Without this, collapsible sections ("Worked for", "Thought for") expand structurally but React defers rendering their content, producing empty space. This is a CDP-level hack — if Electron or Chrome changes this API's behavior, it could cause side effects (e.g., cursor blinks, focus stealing). If strange behavior appears, disabling this is the first thing to try.
-- **Theme CSS variables extracted from DOM, not stylesheets.** AG defines `--foreground`, `--background`, `--sidebar`, etc. on DOM elements (theme provider), not in stylesheets. The capture script reads these via `getComputedStyle(document.documentElement)` and injects them as a `:root{}` rule. If AG changes how/where it sets theme vars, captured content text could become invisible.
+- **Theme CSS variables extracted from DOM, not stylesheets.** AG defines `--foreground`, `--background`, `--sidebar`, etc. on DOM elements (theme provider), not in stylesheets. The capture script enumerates ALL `--*` custom properties via `Array.from(getComputedStyle(...))` and injects them as a `:root{}` rule. If AG changes how/where it sets theme vars, captured content text could become invisible.
 - **Sidebar elements hidden for mobile.** The top 3 actions (New Conversation, History, Scheduled Tasks), the add-project button, and back/forward nav are hidden via CSS attribute selectors in `style.css` (search "Hidden Sidebar Elements") + DOM removal in `app.js` `renderSidebar()`. To re-enable, remove/comment those CSS rules and JS cleanup code.
 - **Permission banner lives OUTSIDE the scroll container.** AG renders the permission/approval radiogroup in a `flex-shrink-0` section below the scrollable chat area. Both capture and click proxy must search `document`-wide, not inside `container`. The `input[checked]` HTML attribute is the initial default, not current state — use `bg-secondary` class to detect the selected option.
 - **Android selection coexistence.** Android's native text selection toolbar cannot be disabled independently of text selection itself. The comment FAB uses `selectionchange` (not `touchend`) to detect selections on mobile — `touchend` fires before Android finalizes the selection. The FAB dismiss handler is scoped to `pointerdown` on the right sidebar only (not global `mousedown`/`touchstart`) so Android's native toolbar interactions don't accidentally dismiss it.
@@ -86,7 +86,7 @@ npm ci
 **Step 4 — Copy environment config:**
 `.env` is gitignored and does not carry over to new worktrees. Copy it from the main checkout:
 ```bash
-cp /Users/omercan/.gemini/antigravity/worktrees/ag2r/main/.env .env 2>/dev/null || echo "No .env in main — copy .env.example and configure"
+cp /Users/omercan/Workspace/ag2r/.env .env 2>/dev/null || echo "No .env in main — copy .env.example and configure"
 ```
 
 ### Phase 2: Implement
@@ -153,19 +153,22 @@ Gotchas or decisions the next session should know.
 
 > Multiple worktrees may be active simultaneously. Each worktree runs its own `server.js`. Future: a hub/proxy on a single port (see [#22](https://github.com/the-future-company/ag2r/issues/22)). For now, follow this process:
 
-1. **Pick an available port.** Start from 3000, increment if in use:
+**Port 3000 is reserved for main.** The user runs a production instance via the `ag2r` shell function, which starts `node server.js` on port 3000 and tunnels it to `ag2r.omercanyy.com` via Cloudflare. Feature branches must never use port 3000.
+
+1. **Start on port 3001+.** Always override the port from `.env`:
    ```bash
-   PORT=3000 node server.js
-   # If EADDRINUSE, try PORT=3001, PORT=3002, etc.
+   PORT=3001 node server.js
+   # If EADDRINUSE, try PORT=3002, PORT=3003, etc.
    ```
 
 2. **Give the user the test link.** After the server starts, tell the user:
    ```
-   Server running at https://localhost:<PORT>
-   Open this on your phone (same network) at https://<local-ip>:<PORT>
+   Test server running at https://localhost:<PORT>
+   Open on your phone (same network): https://<local-ip>:<PORT>
    ```
+   Local network requests bypass auth — no password needed.
 
-3. **If the user needs remote access** (i.e. they're testing from `ag2r.omercanyy.com` and not on the same network), the agent must tunnel the chosen port. The tunnel must point to the port the server is actually running on. Ask the user for their tunnel setup command if you don't know it.
+3. **Remote testing limitation.** The Cloudflare tunnel is hardcoded to port 3000 in `~/.cloudflared/config.yml`. Testing a feature branch remotely would require temporarily breaking the production tunnel. For now, feature branch testing is **local network only**. Ask the user if they need remote access — they'll decide whether to swap the tunnel.
 
 ---
 
