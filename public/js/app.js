@@ -12,6 +12,11 @@ let isRendering = false;
 let isSending = false;
 let userScrollLockUntil = 0;
 
+// Mobile detection: coarse pointer = touchscreen (phone/tablet)
+// On mobile, Enter inserts a newline; the send button sends.
+// On desktop, Enter sends; Shift+Enter inserts a newline.
+const isMobile = window.matchMedia('(pointer: coarse)').matches;
+
 // ─────────────────────────────────────────────
 // DOM References
 // ─────────────────────────────────────────────
@@ -740,11 +745,11 @@ messageInput.addEventListener('input', () => {
   updateActionButton();
 });
 
-// Enter to send (Shift+Enter for newline)
-// Mobile keyboards can fire Enter twice rapidly — debounce to prevent double-send
+// Desktop: Enter to send (Shift+Enter for newline)
+// Mobile: Enter inserts newline (user taps send button)
 let lastEnterSend = 0;
 messageInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
     e.preventDefault();
     const now = Date.now();
     if (now - lastEnterSend < 500) return;
@@ -1028,9 +1033,9 @@ function renderNewSessionPage(container, data) {
     }
   });
 
-  // Also submit on Enter (without Shift)
+  // Desktop: Enter to submit. Mobile: Enter inserts newline.
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
       e.preventDefault();
       form.requestSubmit();
     }
