@@ -3,11 +3,13 @@
 A lightweight mobile remote interface for monitoring and interacting with [Antigravity](https://antigravity.dev) AI coding sessions from your phone — on Wi-Fi, hotspot, or anywhere in the world.
 
 <p align="center">
-  <img src="docs/hero-desktop.png" alt="AG2R Review Changes — Desktop View" width="700" />
-</p>
-
-<p align="center">
-  <img src="docs/hero-mobile.png" alt="AG2R Chat — Mobile View" width="320" />
+  <img src="docs/hero-mobile.png" alt="AG2R Chat" width="180" />
+  &nbsp;&nbsp;
+  <img src="docs/review-diff.png" alt="AG2R Code Review" width="180" />
+  &nbsp;&nbsp;
+  <img src="docs/comment-queued.png" alt="AG2R Comments" width="180" />
+  &nbsp;&nbsp;
+  <img src="docs/overview-panel.png" alt="AG2R Overview" width="180" />
 </p>
 
 ---
@@ -164,7 +166,7 @@ Open `https://ag2r.yourdomain.com` on your phone — works from anywhere.
 See Antigravity's responses as they stream in real time. Code blocks, markdown, and all formatting render on your phone exactly as they appear on desktop.
 
 <p align="center">
-  <img src="docs/chat-monitoring.png" alt="Real-time chat monitoring" width="600" />
+  <img src="docs/hero-mobile.png" alt="Real-time chat monitoring" width="320" />
 </p>
 
 ---
@@ -176,7 +178,7 @@ Approve, deny, or skip permission requests remotely. Select an option, hit Submi
 <p align="center">
   <img src="docs/permission-banner.png" alt="Permission banner on mobile" width="320" />
   &nbsp;&nbsp;&nbsp;
-  <img src="docs/permission-save-rule.png" alt="Save rule permission dialog" width="400" />
+  <img src="docs/overview-with-permission.png" alt="Permission dialog on mobile" width="320" />
 </p>
 
 ---
@@ -212,6 +214,23 @@ Switch between conversations, browse files changed, artifacts, and background ta
   <img src="docs/sidebar-conversations.png" alt="Sidebar conversation list" width="300" />
   &nbsp;&nbsp;&nbsp;
   <img src="docs/overview-panel.png" alt="Overview panel" width="320" />
+</p>
+
+---
+
+### Desktop & Tablet Support
+
+<p align="center">
+  <img src="docs/hero-desktop.png" alt="AG2R Review Changes — Desktop" width="700" />
+</p>
+<p align="center">
+  <img src="docs/chat-monitoring.png" alt="AG2R Chat — Desktop" width="700" />
+</p>
+<p align="center">
+  <img src="docs/permission-save-rule.png" alt="AG2R Permission Dialog — Desktop" width="700" />
+</p>
+<p align="center">
+  <em>Compatible with tablets or desktops as well</em>
 </p>
 
 ---
