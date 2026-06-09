@@ -1252,6 +1252,16 @@ function addClickProxyHandlers(container) {
         openRightSidebar();
       }
 
+      // Fallback: if clicking an artifact/file card in chat (cursor-pointer DIV)
+      // but AG didn't navigate (panel was already showing it), still open the
+      // remote's right sidebar to show what AG already has open.
+      if (clickId.startsWith('chat:') && !result?.navigatedToFile) {
+        const elClass = (el.className || '').toString();
+        if (elClass.includes('cursor-pointer') && rightSidebarContent.innerHTML.trim()) {
+          openRightSidebar();
+        }
+      }
+
       // Refresh snapshots to pick up changes
       setTimeout(loadSnapshot, 300);
       setTimeout(loadSnapshot, 800);
