@@ -295,7 +295,13 @@ function renderLandingPage() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0e17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AG2R Hub</title>
+  <link rel="icon" type="image/png" href="/ag2r-icon.png">
+  <link rel="apple-touch-icon" href="/ag2r-icon.png">
+  <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -580,6 +586,18 @@ function handleRequest(req, res) {
       const stripped = pathname.slice(firstSegment.length + 1) || '/';
       req.url = stripped + (url.search || '');
       return proxyRequest(req, res, server.port, firstSegment);
+    }
+  }
+
+  // ── PWA assets (served directly by hub for landing page) ──
+  if (pathname === '/ag2r-icon.png' || pathname === '/manifest.json' || pathname === '/favicon.png') {
+    const filePath = path.join(__dirname, 'public', pathname);
+    if (fs.existsSync(filePath)) {
+      const ext = path.extname(filePath);
+      const mimeTypes = { '.png': 'image/png', '.json': 'application/json' };
+      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+      res.end(fs.readFileSync(filePath));
+      return;
     }
   }
 

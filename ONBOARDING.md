@@ -49,7 +49,7 @@
 | Self-signed SSL certs (auto-generated, gitignored) | `certs/` |
 | PWA manifest (home screen icon + app metadata) | `public/manifest.json` |
 | Multi-worktree hub (dev-only proxy) | `hub.js` |
-| Main server watchdog + auto-updater (cron scripts) | `scripts/watchdog.sh`, `scripts/updater.sh`, `scripts/hub-watchdog.sh` |
+| Main server watchdog + auto-updater (cron scripts) | `scripts/watchdog.sh`, `scripts/updater.sh`, `scripts/hub-watchdog.sh`, `scripts/tunnel-watchdog.sh` |
 | README screenshots (product showcase) | `docs/` |
 
 ---
@@ -220,11 +220,12 @@ If the hub isn't suitable (e.g., testing a single worktree in isolation):
 ```bash
 crontab -e
 
-# Add this line to keep the hub running:
+# Add these lines to keep hub and tunnel running:
 */5 * * * * ~/Workspace/ag2r/scripts/hub-watchdog.sh >> /tmp/ag2r-hub-watchdog.log 2>&1
+*/5 * * * * ~/Workspace/ag2r/scripts/tunnel-watchdog.sh >> /tmp/ag2r-tunnel-watchdog.log 2>&1
 ```
 
-The hub watchdog checks if the hub is responding every 5 minutes and restarts it if down. Once the hub is up, use the **Start Main** button from the landing page to start the main server on-demand.
+The hub watchdog checks if the hub is responding every 5 minutes and restarts it if down. The tunnel watchdog checks if `cloudflared` is running and restarts it if not. Once both are up, use the **Start Main** button from the landing page to start the main server on-demand.
 
 ### Optional: Server Watchdog + Auto-Updater (cron)
 
