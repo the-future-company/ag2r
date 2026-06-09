@@ -30,11 +30,14 @@ Once the environment is ready, read these for context:
 
 3. **No Auto-Commits:** Only commit when USER explicitly says to. "Commit" from user = instructed, not auto.
 
-4. **Verify Buildability:** After EVERY code change, verify the server starts without errors. Never leave code broken.
+4. **Testing Workflow (MANDATORY):** After code changes, you MUST verify by starting the server and leaving it running for the user to test. Follow this exact sequence:
+   1. Pick an unused port in **[3001, 3099]** (port 3000 is reserved for main, 3100 for the hub). If `EADDRINUSE`, try the next port.
+   2. Start the server: `PORT=<port> node server.js` — run as a **background task** so it stays alive.
+   3. **Never stop the server.** Leave it running. The hub on port 3100 auto-detects it and the user tests through the hub.
+   4. Tell the user: "Server running on port `<port>`. Test it through the hub."
+   5. **Never** ask the user to start the server themselves. **Never** open a browser or use browser subagents. **Never** stop the server after starting it.
 
 5. **Small Sessions, One Phase Per Commit:** Each phase = one session = one commit. Never implement multiple phases together. Self-contained and testable. No skipping ahead — user starts new sessions.
-
-6. **No Browser Testing by Agent:** Never open a browser or use browser subagents during feature development. Summarize changes and tell the user what to test manually.
 
 ## 🛠 Engineering Behaviors
 
@@ -154,4 +157,4 @@ ONBOARDING.md follows a strict **pointer-based context map** pattern. The princi
 
 6. **Always provide the local IP for test servers.** The user tests on their phone over the local network — `localhost` doesn't work from a phone. When starting a test server, run `ipconfig getifaddr en0` and give the full URL: `https://<ip>:<port>`.
 
-7. **Server port allocation.** When starting `server.js` for testing, pick an unused port in the **[3000, 3099]** range. The hub (`hub.js`) runs on port **3100** and scans this range to auto-detect running servers. Never use 3100 for `server.js`. If a port is in use (`EADDRINUSE`), try the next one.
+7. **Server port allocation.** Port **3000** is reserved for the main branch server. Port **3100** is reserved for the hub. Agent servers use **[3001, 3099]**. See Core Behavior #4 for the full testing workflow.

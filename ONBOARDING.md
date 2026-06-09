@@ -169,45 +169,31 @@ Gotchas or decisions the next session should know.
 
 ---
 
-## 🧪 Testing Across Worktrees
+## 🧪 Testing
 
-> Multiple worktrees may be active simultaneously. Use the hub to test them through a single port and tunnel.
+> The hub (`hub.js`) runs on port 3100 and is always available via `ag2r.omercanyy.com`. It auto-detects any AG2R server on ports 3000–3099.
 
-### Primary: Hub (recommended)
+### Agent testing workflow
 
-```bash
-# Start the hub (from any worktree directory)
-node hub.js
+1. `PORT=<port> node server.js` — pick a port in **[3001, 3099]**, run as background task
+2. Tell the user the port. The hub detects it within 5 seconds.
+3. **Leave the server running.** Never stop it. Never ask the user to start it.
 
-# Start worktree servers on any port in 3001–3099
-PORT=3001 node server.js  # in worktree A
-PORT=3002 node server.js  # in worktree B
-```
+### Port reservations
 
-- Hub runs on port 3100 (or `HUB_PORT` from `.env`) and scans ports 3000–3099
-- Auto-detects running AG2R servers and identifies their worktree via process CWD
-- Landing page at `/` shows only active sessions — no stale worktree clutter
-- Tunnel `ag2r.omercanyy.com` to port 3100 — all worktrees accessible under `/<worktree-name>/`
-- The app has zero awareness of the hub — cookie-based routing handles everything
+| Port | Reserved for |
+|------|-------------|
+| 3000 | Main branch server (started via hub "Start Main" button) |
+| 3001–3099 | Agent worktree servers |
+| 3100 | Hub |
 
-### Fallback: Manual port switching
+### How the hub works
 
-If the hub isn't suitable (e.g., testing a single worktree in isolation):
-
-1. **Pick an available port:**
-   ```bash
-   PORT=3001 node server.js
-   # If EADDRINUSE, try PORT=3002, etc.
-   ```
-
-2. **Give the user the test link.** After the server starts:
-   ```
-   Server running at https://localhost:<PORT>
-   Open on your phone (same network): https://<local-ip>:<PORT>
-   ```
-   Local network requests bypass auth — no password needed.
-
-3. **Remote testing limitation.** The Cloudflare tunnel points to port 3100 (hub). Testing a single worktree remotely requires either using the hub or temporarily swapping the tunnel config.
+- Scans ports 3000–3099 every 5s, identifies worktrees via process CWD
+- Landing page at `/` lists active sessions — user clicks one to enter
+- Cookie-based routing proxies all subsequent requests to the chosen session
+- Cloudflare tunnel → port 3100 → user accesses all sessions remotely
+- The app has zero awareness of the hub
 
 ---
 
