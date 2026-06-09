@@ -909,7 +909,13 @@ function closeLeftSidebar() {
   leftSidebarOverlay.classList.remove('visible');
 }
 
-sidebarToggle.addEventListener('click', openLeftSidebar);
+sidebarToggle.addEventListener('click', () => {
+  if (leftSidebar.classList.contains('open')) {
+    closeLeftSidebar();
+  } else {
+    openLeftSidebar();
+  }
+});
 leftSidebarOverlay.addEventListener('click', closeLeftSidebar);
 
 // Dropdown backdrop dismiss — also close the dropdown in AG
