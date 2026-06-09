@@ -61,6 +61,10 @@ const quickActions = document.getElementById('quick-actions');
 const permissionOverlay = document.getElementById('permission-overlay');
 const permissionBackdrop = document.getElementById('permission-backdrop');
 const permissionContent = document.getElementById('permission-content');
+// Settings overlay
+const settingsOverlay = document.getElementById('settings-overlay');
+const settingsContent = document.getElementById('settings-content');
+const settingsBack = document.getElementById('settings-back');
 // Suppression: ignore stale dialog/dropdown snapshots for a short window after user dismisses
 let overlayDismissedAt = 0;
 
@@ -116,6 +120,7 @@ function connectWebSocket() {
           if (data.agentRunning !== undefined) {
             agentRunning = data.agentRunning;
             updateActionButton();
+            quickActions?.classList.toggle('hidden', agentRunning);
           }
           break;
 
@@ -123,6 +128,7 @@ function connectWebSocket() {
           if (data.agentRunning !== undefined) {
             agentRunning = data.agentRunning;
             updateActionButton();
+            quickActions?.classList.toggle('hidden', agentRunning);
           }
           break;
 
@@ -181,10 +187,8 @@ async function loadSnapshot() {
     lastHash = data.hash;
 
     // Update agent status
-    if (data.agentRunning !== undefined) {
-      agentRunning = data.agentRunning;
-      updateActionButton();
-    }
+    // agentRunning is set exclusively by WS handlers (snapshot/status messages).
+    // Do NOT set it here — the HTTP response can be stale vs the WS push.
 
     // Inject CSS (Antigravity's stylesheets) into all panels
     if (data.css) {
@@ -255,7 +259,7 @@ async function loadSnapshot() {
       // Hide bottom input bar + quick actions on new session page (it has its own input)
       const hideBottomBar = data.isNewSessionPage;
       inputBar.classList.toggle('hidden', hideBottomBar);
-      quickActions.classList.toggle('hidden', hideBottomBar);
+      if (hideBottomBar) quickActions.classList.add('hidden');
 
       // Add mobile copy buttons to code blocks
       addMobileCopyButtons();
@@ -524,6 +528,20 @@ async function loadSnapshot() {
       permissionContent.dataset.lastHtml = '';
     }
 
+    // Render Settings overlay if AG's settings modal is open
+    if (data.settingsHtml) {
+      // Only update DOM when content actually changes to preserve scroll position
+      if (settingsContent._lastHtml !== data.settingsHtml) {
+        settingsContent._lastHtml = data.settingsHtml;
+        settingsContent.innerHTML = data.settingsHtml;
+        addClickProxyHandlers(settingsContent);
+      }
+      settingsOverlay.classList.remove('hidden');
+    } else {
+      settingsOverlay.classList.add('hidden');
+      settingsContent._lastHtml = '';
+    }
+
     // Track active artifact URI for commenting
     updateActiveArtifact(data);
 
@@ -577,12 +595,12 @@ function updateScrollFab() {
 }
 
 chatArea.addEventListener('scroll', () => {
+  // Always update the scroll FAB visibility regardless of rendering state
+  updateScrollFab();
+  // Only track user scroll intent when NOT rendering (programmatic scroll shouldn't lock user out)
   if (isRendering) return;
-  // Track whether the user has scrolled away from the bottom.
-  // If they scroll back near the bottom, clear the flag so auto-scroll resumes.
   const nearBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 50;
   userScrolledAway = !nearBottom;
-  updateScrollFab();
 }, { passive: true });
 
 scrollFab.addEventListener('click', () => {
@@ -731,12 +749,8 @@ function updateActionButton() {
     }
   }
 
-  // Show quick-action chips only when agent is idle
-  // Only toggle quick-actions for agent running state when NOT on new session page
-  // (new session page hides quick-actions entirely via loadSnapshot)
-  if (quickActions && !document.getElementById('ag2r-new-session-input')) {
-    quickActions.classList.toggle('hidden', agentRunning);
-  }
+  // Quick actions visibility is managed at server update points only,
+  // not here, to prevent user actions (send, type) from causing flicker.
 }
 
 actionBtn.addEventListener('click', () => {
@@ -912,6 +926,12 @@ permissionBackdrop.addEventListener('click', async () => {
   const skipBtn = permissionContent.querySelector('.perm-skip');
   if (skipBtn) skipBtn.click();
   else permissionOverlay.classList.add('hidden');
+});
+
+// Settings back button — dismiss settings
+settingsBack.addEventListener('click', () => {
+  settingsOverlay.classList.add('hidden');
+  fetchAPI('/dismiss-settings', { method: 'POST' }).catch(() => {});
 });
 
 // ─────────────────────────────────────────────

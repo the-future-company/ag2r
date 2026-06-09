@@ -557,6 +557,26 @@ const CAPTURE_SCRIPT = `
   } catch (e) {
     console.debug('[AG2R] Portal capture error:', e.message);
   }
+
+  // -- 8b. Capture Settings modal (rendered inside #root, not body) --
+  let settingsHtml = null;
+  try {
+    const settingsOverlay = document.querySelector('#root .fixed.inset-0[class*="z-[2550]"]');
+    if (settingsOverlay && settingsOverlay.getBoundingClientRect().width > 0) {
+      // Find the settings content container inside the overlay
+      const settingsCard = settingsOverlay.querySelector('[class*="max-w-5xl"]') ||
+                           settingsOverlay.querySelector('[class*="rounded-2xl"]');
+      if (settingsCard) {
+        const tagged = tagInteractives(settingsCard, 'settings', true, false);
+        const clone = settingsCard.cloneNode(true);
+        untagAll(tagged);
+        settingsHtml = clone.outerHTML;
+      }
+    }
+  } catch (e) {
+    console.debug('[AG2R] Settings capture error:', e.message);
+  }
+
   // -- 9. Detect active tab URI for commenting --
   // Active tab has 'bg-secondary' class; inactive tabs don't.
   // Supports both artifact tabs (artifact__xxx) and code diff file tabs.
@@ -637,7 +657,7 @@ const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Environment/branch extraction error:', e.message);
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName };
 })()
 `;
 
@@ -805,6 +825,7 @@ function startPolling() {
           (snapshot.rightSidebarHtml || '') +
           (snapshot.dropdownHtml || '') +
           (snapshot.dialogHtml || '') +
+          (snapshot.settingsHtml || '') +
           (snapshot.permissionHtml || '')
         );
 
@@ -977,6 +998,7 @@ app.get('/snapshot', (req, res) => {
     isNewSessionPage: cachedSnapshot.isNewSessionPage || false,
     dropdownHtml: cachedSnapshot.dropdownHtml || null,
     dialogHtml: cachedSnapshot.dialogHtml || null,
+    settingsHtml: cachedSnapshot.settingsHtml || null,
     activeArtifactUri: cachedSnapshot.activeArtifactUri || null,
     activeFileUri: cachedSnapshot.activeFileUri || null,
     permissionHtml: cachedSnapshot.permissionHtml || null,
@@ -1018,6 +1040,37 @@ app.post('/dismiss-portal', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.debug('[DismissPortal] Error:', e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// --- Dismiss Settings (click AG's Go Back button) ---
+app.post('/dismiss-settings', async (req, res) => {
+  if (!cdpClient) {
+    return res.status(503).json({ error: 'CDP not connected' });
+  }
+  try {
+    const result = await evaluateInBrowser(`
+      (async () => {
+        // Click the backdrop overlay behind the settings card to close entirely.
+        // Don't use 'Go Back' — it navigates through tab history instead of closing.
+        const overlay = document.querySelector('#root .fixed.inset-0[class*="z-[2550]"]');
+        if (overlay) {
+          // The backdrop is the overlay itself; clicking outside the card closes settings.
+          // Dispatch click at the overlay edges (not on the card).
+          const rect = overlay.getBoundingClientRect();
+          overlay.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 5, clientY: 5 }));
+          return { ok: true, method: 'backdrop' };
+        }
+        // Fallback: press Escape
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        return { ok: true, method: 'escape' };
+      })()
+    `);
+    log('DismissSettings', JSON.stringify(result));
+    res.json(result || { ok: false });
+  } catch (e) {
+    console.debug('[DismissSettings] Error:', e.message);
     res.json({ ok: false, error: e.message });
   }
 });
@@ -1094,6 +1147,14 @@ app.post('/click', async (req, res) => {
             root = child;
           }
         }
+      } else if (source === 'settings') {
+        // Settings overlay: same selector as capture
+        const settingsOverlay = document.querySelector('#root .fixed.inset-0[class*="z-[2550]"]');
+        if (settingsOverlay) {
+          root = settingsOverlay.querySelector('[class*="max-w-5xl"]') ||
+                 settingsOverlay.querySelector('[class*="rounded-2xl"]') ||
+                 settingsOverlay;
+        }
       } else if (source === 'perm') {
         // Permission banner: find radiogroup document-wide (it's outside the scroll container)
         const radioGroup = document.querySelector('[role="radiogroup"]');
@@ -1137,8 +1198,28 @@ app.post('/click', async (req, res) => {
 
       if (!root) return { ok: false, reason: 'no_root_for_' + source };
 
+      // Settings: inline the same logic as tagInteractives(root, 'settings', true, false)
+      // to guarantee identical enumeration between capture and click.
+      // tagInteractives isn't available here (it's in the capture closure),
+      // so we reproduce its logic: tag buttons/links with skipVisibilityCheck=true,
+      // includeCursorPointer=false.
+      if (source === 'settings') {
+        let sIdx = 0;
+        root.querySelectorAll('button, a, [role="button"]').forEach(el => {
+          el.setAttribute('data-ag-click-id', 'settings:' + sIdx);
+          sIdx++;
+        });
+        const target = root.querySelector('[data-ag-click-id="' + clickId + '"]');
+        // Clean up tags
+        root.querySelectorAll('[data-ag-click-id]').forEach(el => el.removeAttribute('data-ag-click-id'));
+        if (!target) return { ok: false, reason: 'settings_element_not_found', clickId, total: sIdx };
+        const actualLabel = (target.textContent || '').trim().substring(0, 50);
+        target.click();
+        return { ok: true, label: actualLabel, source: 'settings' };
+      }
+
       // Build the same interactive element list as capture
-      const skipVis = (source === 'right' || source === 'left');
+      const skipVis = (source === 'right' || source === 'left' || source === 'settings');
       // maxTextLength only applies to cursor-pointer elements (content vs action ambiguity)
       const maxLen = (source === 'chat') ? 80 : 0;
       const visible = [];
@@ -1247,6 +1328,7 @@ app.post('/click', async (req, res) => {
                 (snapshot.rightSidebarHtml || '') +
                 (snapshot.dropdownHtml || '') +
                 (snapshot.dialogHtml || '') +
+                (snapshot.settingsHtml || '') +
                 (snapshot.permissionHtml || '')
               );
               if (hash !== lastSnapshotHash) {

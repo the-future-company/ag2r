@@ -5,8 +5,8 @@
 
 /* ── Design Tokens (from AG's resolved theme) ── */
 :root {
-  /* Core — matches AG's body background: rgb(14, 19, 24) */
-  --bg-app: #0e1318;
+  /* Core — matches AG's body background: rgb(16, 16, 16) */
+  --bg-app: #101010;
   --bg-panel: #161616;      /* AG --sidebar / --muted */
   --bg-surface: #1c1c1c;    /* AG --card / --sidebar-muted */
   --bg-hover: #2d2d2d;      /* AG --secondary */
@@ -455,26 +455,27 @@ body {
 
 /* ── Quick Action Chips ── */
 .quick-actions {
-  flex-shrink: 0;
+  position: fixed;
+  left: 12px;
+  bottom: calc(78px + var(--safe-bottom));
+  z-index: 50;
   display: flex;
   gap: 8px;
-  padding: 6px 12px 0;
-  background: var(--bg-panel);
-  z-index: 100;
 }
 
 .quick-action-chip {
-  padding: 5px 14px;
-  border-radius: 16px;
+  padding: 6px 16px;
+  border-radius: 18px;
   border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
+  background: var(--bg-panel);
   color: var(--text-secondary);
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s, transform 0.1s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  transition: background 0.15s, color 0.15s, transform 0.1s, opacity 0.2s;
 }
 
 .quick-action-chip:active {
@@ -1182,6 +1183,83 @@ body {
   background: var(--accent, #6366f1);
   color: #fff;
   border-color: var(--accent, #6366f1);
+}
+
+/* ── Settings full-screen overlay ── */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app, #0e1318);
+}
+
+.settings-overlay.hidden {
+  display: none;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-back-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-back-btn:active {
+  background: var(--bg-hover);
+}
+
+.settings-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0;
+}
+
+/* Let AG's settings card fill the overlay, override desktop constraints */
+.settings-content > * {
+  max-width: 100% !important;
+  max-height: none !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Settings nav panel: narrow fixed width, smaller text */
+.settings-content [class*="border-r"] {
+  max-width: 100px !important;
+  min-width: 100px !important;
+  flex-shrink: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  font-size: 12px !important;
+}
+
+/* Hide AG's close X button — positioned absolute top-right of settings card */
+.settings-content button[class*="absolute"][class*="top-4"][class*="right-4"] {
+  display: none !important;
 }
 
 /* ── Comment FAB (floating action button on text selection) ── */
