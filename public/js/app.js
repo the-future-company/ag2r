@@ -200,6 +200,19 @@ async function loadSnapshot() {
     const skipChatRender = data.isNewSessionPage && newSessionInput;
 
     if (skipChatRender) {
+      // Update project name + model from fresh snapshot (user may have clicked + on a different project)
+      const tmpDiv = document.createElement('div');
+      tmpDiv.innerHTML = data.html;
+      const projectBtn = tmpDiv.querySelector('[aria-haspopup="dialog"] .truncate');
+      const freshProject = projectBtn ? projectBtn.textContent.trim() : '';
+      const projectEl = chatContent.querySelector('.ag2r-new-session-project span');
+      if (projectEl && freshProject) projectEl.textContent = freshProject;
+
+      const modelBtn = tmpDiv.querySelector('[aria-label*="Select model"]');
+      const freshModel = modelBtn?.querySelector('span')?.textContent?.trim() || '';
+      const modelEl = chatContent.querySelector('.ag2r-new-session-model');
+      if (modelEl && freshModel) modelEl.textContent = freshModel;
+
       // Still update env chips with fresh data (user may have changed worktree/branch)
       const envBar = chatContent.querySelector('.ag2r-new-session-env-bar');
       if (envBar && (data.environmentName || data.branchName)) {
