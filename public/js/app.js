@@ -69,6 +69,21 @@ const settingsBack = document.getElementById('settings-back');
 let overlayDismissedAt = 0;
 
 // ─────────────────────────────────────────────
+// Dynamic Input Bar Height Tracking
+// ─────────────────────────────────────────────
+// Updates --input-bar-height CSS variable so quick-actions and scroll-fab
+// float above the input bar regardless of its height (future: thumbnails, tasks bar).
+if (typeof ResizeObserver !== 'undefined') {
+  const inputBarObserver = new ResizeObserver(entries => {
+    for (const entry of entries) {
+      const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight;
+      document.documentElement.style.setProperty('--input-bar-height', h + 'px');
+    }
+  });
+  inputBarObserver.observe(inputBar);
+}
+
+// ─────────────────────────────────────────────
 // Fetch Wrapper (redirects to login on 401)
 // ─────────────────────────────────────────────
 async function fetchAPI(url, opts = {}) {
@@ -120,7 +135,9 @@ function connectWebSocket() {
           if (data.agentRunning !== undefined) {
             agentRunning = data.agentRunning;
             updateActionButton();
-            quickActions?.classList.toggle('hidden', agentRunning);
+            // Don't show quick actions on new session page (it has its own input)
+            const isOnNewSession = !!document.getElementById('ag2r-new-session-input');
+            quickActions?.classList.toggle('hidden', agentRunning || isOnNewSession);
           }
           break;
 
@@ -128,7 +145,8 @@ function connectWebSocket() {
           if (data.agentRunning !== undefined) {
             agentRunning = data.agentRunning;
             updateActionButton();
-            quickActions?.classList.toggle('hidden', agentRunning);
+            const isOnNewSession = !!document.getElementById('ag2r-new-session-input');
+            quickActions?.classList.toggle('hidden', agentRunning || isOnNewSession);
           }
           break;
 
@@ -209,13 +227,13 @@ async function loadSnapshot() {
       tmpDiv.innerHTML = data.html;
       const projectBtn = tmpDiv.querySelector('[aria-haspopup="dialog"] .truncate');
       const freshProject = projectBtn ? projectBtn.textContent.trim() : '';
-      const projectEl = chatContent.querySelector('.ag2r-new-session-project span');
+      const projectEl = chatContent.querySelector('.ag2r-new-session-project span:not(.material-symbols-rounded)');
       if (projectEl && freshProject) projectEl.textContent = freshProject;
 
-      const modelBtn = tmpDiv.querySelector('[aria-label*="Select model"]');
-      const freshModel = modelBtn?.querySelector('span')?.textContent?.trim() || '';
-      const modelEl = chatContent.querySelector('.ag2r-new-session-model');
-      if (modelEl && freshModel) modelEl.textContent = freshModel;
+      // Update model from server-side extracted name (bottom-row chip only)
+      const freshModel = data.modelName || '';
+      const nsModelChipText = chatContent.querySelector('.ag2r-ns-model-chip .model-chip-text');
+      if (nsModelChipText && freshModel) nsModelChipText.textContent = freshModel;
 
       // Still update env chips with fresh data (user may have changed worktree/branch)
       const envBar = chatContent.querySelector('.ag2r-new-session-env-bar');
@@ -267,6 +285,9 @@ async function loadSnapshot() {
       // Wire up click proxying for interactive elements
       addClickProxyHandlers(chatContent);
     }
+
+    // Update model chip in input bar from server-extracted name (existing conversations)
+    updateModelChip(data.modelName);
 
     // Render both sidebars with AG's captured content (always, even when skipping chat)
     isRendering = true;
@@ -345,15 +366,17 @@ async function loadSnapshot() {
               popoverHtml += `<div class="dropdown-header">${child.textContent.trim()}</div>`;
               continue;
             }
-            // Tagged button inside this child
-            const tagged = child.querySelector('[data-ag-click-id]') || (child.dataset.agClickId ? child : null);
-            if (tagged) {
+            // Tagged buttons inside this child — find ALL, not just the first
+            const taggedEls = child.querySelectorAll('[data-ag-click-id]');
+            const selfTagged = child.dataset?.agClickId ? [child] : [];
+            const allTagged = taggedEls.length > 0 ? taggedEls : selfTagged;
+            allTagged.forEach(tagged => {
               const text = tagged.textContent.trim();
               const id = tagged.dataset.agClickId;
               const label = tagged.dataset.agClickLabel || text;
               const isDestructive = /delete|remove/i.test(text);
               popoverHtml += `<button class="${isDestructive ? 'destructive' : ''}" data-ag-click-id="${id}" data-ag-click-label="${label}">${text}</button>`;
-            }
+            });
           }
           dropdownContent.innerHTML = popoverHtml || buttonsHtml;
         } else {
@@ -911,6 +934,16 @@ if (!SpeechRecognition) {
 }
 
 // ─────────────────────────────────────────────
+// Model Chip (existing conversation input bar)
+// ─────────────────────────────────────────────
+function updateModelChip(modelName) {
+  const chipText = document.querySelector('#model-chip .model-chip-text');
+  if (chipText && modelName) {
+    chipText.textContent = modelName;
+  }
+}
+
+// ─────────────────────────────────────────────
 // Photo Upload (staged thumbnails, upload on send)
 // ─────────────────────────────────────────────
 const attachBtn = document.getElementById('attach-btn');
@@ -953,7 +986,7 @@ function renderImagePreviewsInto(strip, btn) {
     strip.appendChild(wrapper);
   });
 
-  // Disable paperclip when at limit
+  // Disable attach when at limit
   if (btn) {
     if (stagedImages.length >= MAX_STAGED_IMAGES) {
       btn.classList.add('at-limit');
@@ -968,9 +1001,43 @@ function renderImagePreviews() {
   renderImagePreviewsInto(imagePreviewStrip, attachBtn);
 }
 
-attachBtn.addEventListener('click', () => {
-  if (stagedImages.length >= MAX_STAGED_IMAGES) return;
-  photoInput.click();
+// ── Attach Context Menu (+) ──
+// The + button opens a small menu; "Media" triggers the file picker.
+function createAttachMenu(parentEl, fileInput) {
+  const menu = document.createElement('div');
+  menu.className = 'attach-menu hidden';
+  menu.innerHTML = `
+    <button type="button" class="attach-menu-item" data-action="media">
+      <span class="material-symbols-rounded">image</span>
+      <span>Media</span>
+    </button>
+  `;
+  parentEl.appendChild(menu);
+
+  menu.querySelector('[data-action="media"]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.classList.add('hidden');
+    if (stagedImages.length >= MAX_STAGED_IMAGES) return;
+    fileInput.click();
+  });
+
+  return menu;
+}
+
+// Create attach menu for main input bar
+const attachMenu = createAttachMenu(
+  document.querySelector('.input-left-actions'),
+  photoInput
+);
+
+attachBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  attachMenu.classList.toggle('hidden');
+});
+
+// Close all attach menus when clicking elsewhere
+document.addEventListener('click', () => {
+  document.querySelectorAll('.attach-menu').forEach(m => m.classList.add('hidden'));
 });
 
 photoInput.addEventListener('change', () => {
@@ -1132,13 +1199,8 @@ function renderNewSessionPage(container, data) {
   const projectBtn = tmpDiv.querySelector('[aria-haspopup="dialog"] .truncate');
   if (projectBtn) projectName = projectBtn.textContent.trim();
 
-  // Extract model name
-  let modelName = '';
-  const modelBtn = tmpDiv.querySelector('[aria-label*="Select model"]');
-  if (modelBtn) {
-    const span = modelBtn.querySelector('span');
-    if (span) modelName = span.textContent.trim();
-  }
+  // Extract model name from server-extracted data
+  const modelName = data.modelName || '';
 
   // Environment and branch from snapshot data
   const environmentName = data.environmentName || '';
@@ -1174,13 +1236,13 @@ function renderNewSessionPage(container, data) {
   container.innerHTML = `
     <div class="ag2r-new-session">
       <div class="ag2r-new-session-header">
-        ${projectName ? `<div class="ag2r-new-session-project">
+        ${projectName ? `<button type="button" class="ag2r-new-session-project" data-ag-click-id="project:0" data-ag-click-label="${projectName}">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor">
             <path d="M172.31-180Q142-180 121-201t-21-51.31V-707.69Q100-738 121-759t51.31-21H391.92l80,80H787.69Q818-700 839-679t21,51.31v375.38Q860-222 839-201t-51.31,21H172.31Z"/>
           </svg>
           <span>${projectName}</span>
-        </div>` : ''}
-        ${modelName ? `<div class="ag2r-new-session-model">${modelName}</div>` : ''}
+          <span class="material-symbols-rounded" style="font-size:14px;opacity:0.6">expand_more</span>
+        </button>` : ''}
       </div>
       <form id="ag2r-new-session-form" class="ag2r-new-session-form">
         <div id="ag2r-ns-image-preview" class="image-preview-strip hidden"></div>
@@ -1189,19 +1251,27 @@ function renderNewSessionPage(container, data) {
           placeholder="Ask anything, @ to mention, / for actions"
           rows="3"
         ></textarea>
-        <div class="ag2r-new-session-buttons">
-          <input type="file" id="ag2r-ns-photo-input" accept="image/*" multiple hidden>
-          <button type="button" id="ag2r-ns-attach" class="attach-btn" aria-label="Attach photo">
-            <span class="material-symbols-rounded attach-icon">attach_file</span>
-          </button>
-          <button type="button" id="ag2r-new-session-mic" class="mic-btn" aria-label="Voice input">
-            <span class="material-symbols-rounded mic-icon">mic</span>
-          </button>
-          <button type="submit" id="ag2r-new-session-send" aria-label="Send">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 -960 960 960" fill="currentColor">
-              <path d="M120-160v-640l760,320-760,320Zm60-93 544-227-544-230v168l242,62-242,60v167Zm0,0v-457,457Z"/>
-            </svg>
-          </button>
+        <div class="ag2r-new-session-controls">
+          <div class="ag2r-new-session-left">
+            <input type="file" id="ag2r-ns-photo-input" accept="image/*" multiple hidden>
+            <button type="button" id="ag2r-ns-attach" class="attach-btn" aria-label="Add context">
+              <span class="material-symbols-rounded">add</span>
+            </button>
+            <button type="button" class="ag2r-ns-model-chip model-chip" data-ag-click-id="model:0" data-ag-click-label="${modelName}">
+              <span class="model-chip-text">${modelName}</span>
+              <span class="material-symbols-rounded model-chip-chevron">expand_more</span>
+            </button>
+          </div>
+          <div class="ag2r-new-session-right">
+            <button type="button" id="ag2r-new-session-mic" class="mic-btn" aria-label="Voice input">
+              <span class="material-symbols-rounded mic-icon">mic</span>
+            </button>
+            <button type="submit" id="ag2r-new-session-send" aria-label="Send">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 -960 960 960" fill="currentColor">
+                <path d="M120-160v-640l760,320-760,320Zm60-93 544-227-544-230v168l242,62-242,60v167Zm0,0v-457,457Z"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </form>
       ${envBarHtml}
@@ -1217,14 +1287,19 @@ function renderNewSessionPage(container, data) {
   input.addEventListener('input', () => { userIsTyping = true; });
   input.addEventListener('blur', () => { userIsTyping = false; });
 
-  // Wire attach button to shared staged images
+  // Wire attach button (+ icon) to context menu with Media option
   const nsAttachBtn = container.querySelector('#ag2r-ns-attach');
   const nsPhotoInput = container.querySelector('#ag2r-ns-photo-input');
   const nsPreviewStrip = container.querySelector('#ag2r-ns-image-preview');
 
-  nsAttachBtn.addEventListener('click', () => {
-    if (stagedImages.length >= MAX_STAGED_IMAGES) return;
-    nsPhotoInput.click();
+  const nsAttachMenu = createAttachMenu(
+    container.querySelector('.ag2r-new-session-left'),
+    nsPhotoInput
+  );
+
+  nsAttachBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    nsAttachMenu.classList.toggle('hidden');
   });
 
   nsPhotoInput.addEventListener('change', () => {
@@ -1495,6 +1570,9 @@ function addClickProxyHandlers(container) {
   });
 
 }
+
+// Wire click proxies on the static input bar (model chip, etc.)
+addClickProxyHandlers(inputBar);
 
 // ─────────────────────────────────────────────
 // Connection Status

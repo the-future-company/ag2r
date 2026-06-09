@@ -76,23 +76,33 @@
         <textarea
           id="message-input"
           class="message-input"
-          placeholder="Send a message..."
+          placeholder="Ask anything, @ to mention, / for actions"
           rows="1"
           autocomplete="off"
           autocorrect="on"
           autocapitalize="sentences"
           enterkeyhint="enter"
         ></textarea>
-        <input type="file" id="photo-input" accept="image/*" capture="environment" multiple hidden>
-        <button id="attach-btn" class="attach-btn" aria-label="Attach photo" type="button">
-          <span class="material-symbols-rounded attach-icon">attach_file</span>
-        </button>
-        <button id="mic-btn" class="mic-btn" aria-label="Voice input" type="button">
-          <span class="material-symbols-rounded mic-icon">mic</span>
-        </button>
-        <button id="action-btn" class="action-btn" data-action="send" aria-label="Send message">
-          <span class="material-symbols-rounded action-icon" id="action-icon">arrow_upward</span>
-        </button>
+        <div class="input-controls">
+          <div class="input-left-actions">
+            <input type="file" id="photo-input" accept="image/*" capture="environment" multiple hidden>
+            <button id="attach-btn" class="attach-btn" type="button" aria-label="Add context">
+              <span class="material-symbols-rounded">add</span>
+            </button>
+            <button id="model-chip" class="model-chip" type="button" data-ag-click-id="model:0" data-ag-click-label="">
+              <span class="model-chip-text"></span>
+              <span class="material-symbols-rounded model-chip-chevron">expand_more</span>
+            </button>
+          </div>
+          <div class="input-right-actions">
+            <button id="mic-btn" class="mic-btn" aria-label="Voice input" type="button">
+              <span class="material-symbols-rounded mic-icon">mic</span>
+            </button>
+            <button id="action-btn" class="action-btn" data-action="send" aria-label="Send message">
+              <span class="material-symbols-rounded action-icon" id="action-icon">arrow_upward</span>
+            </button>
+          </div>
+        </div>
       </div>
     </footer>
 

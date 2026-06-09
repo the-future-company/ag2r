@@ -31,6 +31,9 @@
 | Right sidebar toggle, click proxy handlers | `public/js/app.js` — search `openRightSidebar` and `addClickProxyHandlers` |
 | Permission banner capture + click proxy (`perm:` prefix) | `server.js` — search `permissionHtml` and `'perm'` |
 | Environment/worktree + branch capture + click proxy (`env:` prefix) | `server.js` — search `environmentName` and `'env'` |
+| Model selection capture + click proxy (`model:` prefix) | `server.js` — search `modelName` and `'model'` |
+| Project dropdown click proxy (`project:` prefix) | `server.js` — search `'project'` in click handler |
+| Model chip + attach button in input bar | `public/index.html` — search `model-chip` and `attach-btn` |
 | Commenting on artifacts + code diffs | `public/js/app.js` — search `activeArtifactUri` and `activeFileUri` |
 | Mobile UI structure | `public/index.html` |
 | Login page | `public/login.html` |

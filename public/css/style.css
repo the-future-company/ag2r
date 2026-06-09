@@ -36,7 +36,7 @@
   --radius-lg: 16px;
 
   --header-height: 52px;
-  --input-bar-height: auto;
+  --input-bar-height: 60px;
 
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
@@ -441,7 +441,7 @@ body {
 .scroll-fab {
   position: fixed;
   right: 16px;
-  bottom: calc(70px + var(--safe-bottom));
+  bottom: calc(var(--input-bar-height) + 8px);
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -473,7 +473,7 @@ body {
 .quick-actions {
   position: fixed;
   left: 12px;
-  bottom: calc(78px + var(--safe-bottom));
+  bottom: calc(var(--input-bar-height) + 8px);
   z-index: 50;
   display: flex;
   gap: 8px;
@@ -543,26 +543,29 @@ body {
 
 .input-wrapper {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px;
+  flex-direction: column;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 6px 6px 6px 16px;
+  padding: 10px 12px 6px;
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--border-subtle);
+  outline: none;
 }
 
 /* Preview strip takes full row width above textarea */
 .input-wrapper > .image-preview-strip {
-  flex-basis: 100%;
-  margin-bottom: -4px;
+  margin-bottom: 4px;
 }
 
 .message-input {
-  flex: 1;
+  width: 100%;
   background: transparent;
   border: none;
   outline: none;
+  -webkit-appearance: none;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 15px;
@@ -570,7 +573,15 @@ body {
   resize: none;
   min-height: 24px;
   max-height: 120px;
-  padding: 4px 0;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.message-input:focus,
+#message-input:focus {
+  outline: none !important;
+  outline-width: 0 !important;
+  box-shadow: none;
 }
 
 .message-input::placeholder {
@@ -643,29 +654,49 @@ body {
   border-color: var(--red, #ef4444);
 }
 
-/* ── Attach Button (Photo Upload) ── */
+/* ── Input Controls Row (below textarea) ── */
+.input-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.input-left-actions,
+.input-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.input-left-actions {
+  position: relative;
+}
+
+/* ── Attach Button (+) ── */
 .attach-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: none;
+  border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
-  transition: color 0.15s, background 0.15s, transform 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.attach-btn .material-symbols-rounded {
+  font-size: 18px;
 }
 
 .attach-btn:active {
   background: var(--bg-hover);
-}
-
-.attach-btn .attach-icon {
-  font-size: 20px;
-  transform: rotate(-45deg);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
 }
 
 .attach-btn.uploading {
@@ -685,6 +716,85 @@ body {
 .attach-btn.at-limit {
   opacity: 0.3;
   pointer-events: none;
+}
+
+/* ── Attach Context Menu ── */
+.attach-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 4px;
+  z-index: 200;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 140px;
+}
+
+.attach-menu.hidden {
+  display: none;
+}
+
+.attach-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.attach-menu-item:active {
+  background: var(--bg-hover);
+}
+
+.attach-menu-item .material-symbols-rounded {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+/* ── Model Chip ── */
+.model-chip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+}
+
+.model-chip:active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.model-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-chip-chevron {
+  font-size: 14px;
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
 /* ── Mic Button (Voice Input) ── */
@@ -940,10 +1050,6 @@ body {
   opacity: 0.7;
 }
 
-.ag2r-new-session-model {
-  font-size: 12px;
-  color: var(--text-muted);
-}
 
 .ag2r-new-session-form {
   display: flex;
@@ -958,9 +1064,10 @@ body {
   width: 100%;
   min-height: 80px;
   max-height: 200px;
-  padding: 14px 48px 14px 14px;
-  border-radius: 16px;
+  padding: 14px;
+  border-radius: 16px 16px 0 0;
   border: 1px solid var(--border-primary);
+  border-bottom: none;
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 14px;
@@ -972,20 +1079,34 @@ body {
 }
 
 .ag2r-new-session-form textarea:focus {
-  border-color: var(--accent);
+  border-color: var(--border-primary);
+  outline: none;
 }
 
 .ag2r-new-session-form textarea::placeholder {
   color: var(--text-muted);
 }
 
-.ag2r-new-session-buttons {
-  position: absolute;
-  right: 8px;
-  bottom: 10px;
+.ag2r-new-session-controls {
   display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+}
+
+.ag2r-new-session-left,
+.ag2r-new-session-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ag2r-new-session-left {
+  position: relative;
 }
 
 .ag2r-new-session-form button[type="submit"] {

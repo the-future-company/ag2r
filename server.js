@@ -669,7 +669,19 @@ const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Environment/branch extraction error:', e.message);
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName };
+  // -- 12. Extract model name from model selector button --
+  let modelName = null;
+  try {
+    const modelBtn = document.querySelector('[aria-label*="Select model"]');
+    if (modelBtn) {
+      const span = modelBtn.querySelector('span');
+      modelName = span ? span.textContent.trim() : (modelBtn.textContent || '').trim();
+    }
+  } catch (e) {
+    console.debug('[AG2R] Model name extraction error:', e.message);
+  }
+
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
 })()
 `;
 
@@ -1016,6 +1028,7 @@ app.get('/snapshot', (req, res) => {
     permissionHtml: cachedSnapshot.permissionHtml || null,
     environmentName: cachedSnapshot.environmentName || null,
     branchName: cachedSnapshot.branchName || null,
+    modelName: cachedSnapshot.modelName || null,
   });
 });
 
@@ -1206,6 +1219,24 @@ app.post('/click', async (req, res) => {
           return { ok: false, reason: 'env_button_not_found', idx };
         }
         return { ok: false, reason: 'env_index_out_of_range' };
+      } else if (source === 'model') {
+        // Model selector button — opens AG's model picker dialog
+        const target = document.querySelector('[aria-label*="Select model"]');
+        if (target) {
+          const actualLabel = (target.textContent || '').trim().substring(0, 50);
+          target.click();
+          return { ok: true, label: actualLabel, source: 'model' };
+        }
+        return { ok: false, reason: 'model_button_not_found' };
+      } else if (source === 'project') {
+        // Project dropdown button — opens AG's project picker dialog
+        const target = document.querySelector('[aria-haspopup="dialog"]');
+        if (target) {
+          const actualLabel = (target.textContent || '').trim().substring(0, 50);
+          target.click();
+          return { ok: true, label: actualLabel, source: 'project' };
+        }
+        return { ok: false, reason: 'project_button_not_found' };
       }
 
       if (!root) return { ok: false, reason: 'no_root_for_' + source };
@@ -1328,7 +1359,7 @@ app.post('/click', async (req, res) => {
     // dialog/dropdown DOM appearing (React render takes 50-200ms)
     if (result?.ok) {
       const source = result.source || '';
-      if (['env', 'dropdown', 'dialog', 'left'].includes(source)) {
+      if (['env', 'model', 'project', 'dropdown', 'dialog', 'left'].includes(source)) {
         const burstCapture = async (delay) => {
           await new Promise(r => setTimeout(r, delay));
           try {
