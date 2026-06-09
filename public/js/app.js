@@ -1226,11 +1226,13 @@ function addClickProxyHandlers(container) {
       }
       el.classList.remove('ag-clicking');
 
-      // Close sidebar when navigating away (conversation click or new session)
-      // Conversation rows have non-empty labels (title text); icon buttons (three-dots, +) have empty labels
+      // Close sidebar only for conversation row clicks (navigates away).
+      // Conversation rows have min-h-[32px] in their class; project headers,
+      // "See all/less", and "Settings" do not.
       if (clickId.startsWith('left:')) {
-        const hasLabel = label && label.length > 0;
-        if (hasLabel) closeLeftSidebar();
+        const elClass = (el.className || '').toString();
+        const isConversationRow = elClass.includes('min-h-[32px]');
+        if (isConversationRow) closeLeftSidebar();
       }
 
       // Close dropdown overlay after any dropdown/dialog action
