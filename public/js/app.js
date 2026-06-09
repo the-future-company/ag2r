@@ -305,14 +305,20 @@ async function loadSnapshot() {
     // Update model chip in input bar from server-extracted name (existing conversations)
     updateModelChip(data.modelName);
 
-    // Render both sidebars with AG's captured content (always, even when skipping chat)
+    // Render left sidebar with AG's captured content (always, even when skipping chat)
     isRendering = true;
     renderSidebar(leftSidebarContent, data.leftSidebarHtml);
     addClickProxyHandlers(leftSidebarContent);
-    // Skip right sidebar re-render if user has active text selection (for commenting)
-    if (!hasActiveSelectionInRightSidebar()) {
-      renderSidebar(rightSidebarContent, data.rightSidebarHtml);
-      addClickProxyHandlers(rightSidebarContent);
+
+    // Right sidebar is on-demand — don't render here.
+    // Track the sidebarSignature so we know when to re-fetch.
+    if (data.sidebarSignature !== undefined) {
+      const sigChanged = data.sidebarSignature !== lastSidebarSignature;
+      lastSidebarSignature = data.sidebarSignature;
+      // Auto-refresh sidebar if it's open and the signature changed
+      if (sigChanged && rightSidebar.classList.contains('open')) {
+        fetchRightSidebar();
+      }
     }
 
     // Render dropdown overlay if AG has a portal menu open (e.g., three-dots conversation menu)
@@ -1310,12 +1316,37 @@ settingsBack.addEventListener('click', () => {
 });
 
 // ─────────────────────────────────────────────
-// Right Sidebar (AG's captured review panel)
+// Right Sidebar (on-demand fetch from AG)
 // ─────────────────────────────────────────────
+let lastSidebarSignature = null;
+let sidebarFetchInFlight = false;
+
+async function fetchRightSidebar() {
+  // Skip if user has active text selection (for commenting)
+  if (hasActiveSelectionInRightSidebar()) return;
+  if (sidebarFetchInFlight) return;
+  sidebarFetchInFlight = true;
+  try {
+    const res = await fetchAPI('/right-sidebar');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.html) {
+      renderSidebar(rightSidebarContent, data.html);
+      addClickProxyHandlers(rightSidebarContent);
+    }
+  } catch (e) {
+    console.debug('[RightSidebar] Fetch error:', e.message);
+  } finally {
+    sidebarFetchInFlight = false;
+  }
+}
+
 function openRightSidebar() {
   rightSidebar.classList.add('open');
   rightSidebar.inert = false;
   rightSidebarOverlay.classList.add('visible');
+  // Fetch sidebar content on-demand
+  fetchRightSidebar();
 }
 
 function closeRightSidebar() {
@@ -1667,11 +1698,19 @@ function addClickProxyHandlers(container) {
       // but AG didn't navigate (panel was already showing it), still open the
       // remote's right sidebar to show what AG already has open.
       // Only for DIVs — buttons (thumbs up/down, etc.) should not trigger this.
+      // Skip expandable sections (e.g. "N files changed") — they expand inline.
       if (clickId.startsWith('chat:') && !result?.navigatedToFile) {
         const elClass = (el.className || '').toString();
-        if (el.tagName === 'DIV' && elClass.includes('cursor-pointer') && rightSidebarContent.innerHTML.trim()) {
+        const isExpandable = /\d+\s+files?\s+changed/i.test(label);
+        if (el.tagName === 'DIV' && elClass.includes('cursor-pointer') && !isExpandable) {
           openRightSidebar();
         }
+      }
+
+      // Re-fetch right sidebar after right-sidebar clicks (tab switches, etc.)
+      if (clickId.startsWith('right:')) {
+        setTimeout(fetchRightSidebar, 300);
+        setTimeout(fetchRightSidebar, 800);
       }
 
       // Refresh snapshots to pick up changes

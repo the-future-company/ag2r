@@ -1098,12 +1098,17 @@ body {
   scrollbar-width: none;
 }
 
-/* Hide broken local file/asset images */
+/* Hide broken local file/asset images (chat + right sidebar) */
 #chat-content img[src^="/c:"],
 #chat-content img[src^="vscode-file:"],
 #chat-content img[src^="file:"],
 #chat-content img[src*="symbols-icons"],
-#chat-content img[src$=".svg"][src^="/"] {
+#chat-content img[src$=".svg"][src^="/"],
+#right-sidebar-content img[src^="/c:"],
+#right-sidebar-content img[src^="vscode-file:"],
+#right-sidebar-content img[src^="file:"],
+#right-sidebar-content img[src*="symbols-icons"],
+#right-sidebar-content img[src$=".svg"][src^="/"] {
   display: none !important;
 }
 

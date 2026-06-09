@@ -291,9 +291,11 @@ async function evaluateAcrossContexts(expression, opts = {}) {
 // ─────────────────────────────────────────────
 
 // The capture script runs IN the Antigravity browser context.
-// Captures: chat container (with cleanup) + left sidebar + right sidebar (raw clones)
-// Tags interactive elements across all three areas for click proxying
-// Click IDs are prefixed: chat:N, left:N, right:N
+// Captures: chat container (with cleanup) + left sidebar (raw clone)
+// Tags interactive elements across chat and left sidebar for click proxying
+// Click IDs are prefixed: chat:N, left:N
+// Right sidebar is captured ON-DEMAND via GET /right-sidebar (not here)
+// Only a lightweight sidebarSignature is extracted here for change detection
 const CAPTURE_SCRIPT = `
 (async () => {
   // -- Helper: tag interactive elements for click proxying --
@@ -509,54 +511,24 @@ const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Left sidebar capture error:', e.message);
   }
 
-  // -- 15. Capture RIGHT sidebar (Overview/Review panel) --
-  // Use stable anchors: data-tab-id, close-aux-pane button
-  let rightSidebarHtml = null;
+  // -- 15. Sidebar signature (lightweight change detection for right sidebar) --
+  // Instead of cloning the entire right sidebar DOM every poll (can be 100KB+),
+  // capture a ~50 byte signature: tab IDs + which tab is active.
+  // The full sidebar HTML is fetched on-demand via GET /right-sidebar.
+  let sidebarSignature = null;
   try {
-    let sidebarRoot = null;
-
-    // Strategy 1: Find via tab-id buttons (always present in the panel)
-    const tabBtn = document.querySelector('[data-tab-id="overview"], [data-tab-id="review"]');
-    if (tabBtn) {
-      // Walk up to find the flex-col root container
-      let el = tabBtn;
-      for (let i = 0; i < 10 && el; i++) {
-        el = el.parentElement;
-        const cls = el?.className?.toString?.() || '';
-        if (cls.includes('flex') && cls.includes('flex-col') && el.children.length >= 2) {
-          const rect = el.getBoundingClientRect();
-          if (rect.width > 100 && rect.height > 200) {
-            sidebarRoot = el;
-            break;
-          }
-        }
+    const tabBtns = document.querySelectorAll('[data-tab-id]');
+    if (tabBtns.length > 0) {
+      const tabs = [];
+      for (const b of tabBtns) {
+        const id = b.getAttribute('data-tab-id');
+        const active = (b.className || '').includes('bg-secondary') ? '*' : '';
+        tabs.push(id + active);
       }
-    }
-
-    // Strategy 2: Find via close-aux-pane button
-    if (!sidebarRoot) {
-      const closeBtn = document.querySelector('[data-testid="close-aux-pane"]');
-      if (closeBtn) {
-        let el = closeBtn;
-        for (let i = 0; i < 10 && el; i++) {
-          el = el.parentElement;
-          const cls = el?.className?.toString?.() || '';
-          if (cls.includes('flex') && cls.includes('flex-col') && el.children.length >= 2) {
-            sidebarRoot = el;
-            break;
-          }
-        }
-      }
-    }
-
-    if (sidebarRoot) {
-      const rightTagged = tagInteractives(sidebarRoot, 'right', true, true);
-      const rightClone = sidebarRoot.cloneNode(true);
-      untagAll(rightTagged);
-      rightSidebarHtml = rightClone.outerHTML;
+      sidebarSignature = tabs.join(',');
     }
   } catch (e) {
-    console.debug('[AG2R] Right sidebar capture error:', e.message);
+    console.debug('[AG2R] Sidebar signature error:', e.message);
   }
   // -- 8. Capture portal elements (dropdowns, dialogs) from body --
   // AG renders these outside #root as direct body children.
@@ -708,7 +680,7 @@ const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Model name extraction error:', e.message);
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, rightSidebarHtml, isNewSessionPage, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarSignature, isNewSessionPage, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
 })()
 `;
 
@@ -737,6 +709,90 @@ const RUNNING_TASKS_SCRIPT = `
 })()
 `;
 
+// Separate script for right sidebar — runs ON-DEMAND only (not every poll).
+// Reuses the same sidebar-finding strategies from the original capture.
+// Returns outerHTML with click-proxy tags for interactive elements.
+const RIGHT_SIDEBAR_SCRIPT = `
+(() => {
+  // -- Helper: tag interactive elements for click proxying --
+  function tagInteractives(root, prefix, skipVisibilityCheck, includeCursorPointer, maxTextLength) {
+    let idx = 0;
+    const tagged = [];
+    root.querySelectorAll('button, a, [role="button"]').forEach(el => {
+      if (skipVisibilityCheck || el.offsetParent !== null) {
+        const text = (el.textContent || '').trim();
+        el.setAttribute('data-ag-click-id', prefix + ':' + idx);
+        el.setAttribute('data-ag-click-label', text.substring(0, 50));
+        idx++;
+        tagged.push(el);
+      }
+    });
+    if (includeCursorPointer) {
+      root.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
+        if ((skipVisibilityCheck || el.offsetParent !== null) && !el.hasAttribute('data-ag-click-id')) {
+          const text = (el.textContent || '').trim();
+          const hasHandler = typeof el.onclick === 'function';
+          if (maxTextLength && text.length > maxTextLength && !hasHandler) return;
+          el.setAttribute('data-ag-click-id', prefix + ':' + idx);
+          el.setAttribute('data-ag-click-label', text.substring(0, 50));
+          idx++;
+          tagged.push(el);
+        }
+      });
+    }
+    return tagged;
+  }
+
+  function untagAll(tagged) {
+    tagged.forEach(el => {
+      el.removeAttribute('data-ag-click-id');
+      el.removeAttribute('data-ag-click-label');
+    });
+  }
+
+  let sidebarRoot = null;
+
+  // Strategy 1: Find via tab-id buttons
+  const tabBtn = document.querySelector('[data-tab-id="overview"], [data-tab-id="review"]');
+  if (tabBtn) {
+    let el = tabBtn;
+    for (let i = 0; i < 10 && el; i++) {
+      el = el.parentElement;
+      const cls = el?.className?.toString?.() || '';
+      if (cls.includes('flex') && cls.includes('flex-col') && el.children.length >= 2) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 100 && rect.height > 200) {
+          sidebarRoot = el;
+          break;
+        }
+      }
+    }
+  }
+
+  // Strategy 2: Find via close-aux-pane button
+  if (!sidebarRoot) {
+    const closeBtn = document.querySelector('[data-testid="close-aux-pane"]');
+    if (closeBtn) {
+      let el = closeBtn;
+      for (let i = 0; i < 10 && el; i++) {
+        el = el.parentElement;
+        const cls = el?.className?.toString?.() || '';
+        if (cls.includes('flex') && cls.includes('flex-col') && el.children.length >= 2) {
+          sidebarRoot = el;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!sidebarRoot) return null;
+
+  const rightTagged = tagInteractives(sidebarRoot, 'right', true, true);
+  const rightClone = sidebarRoot.cloneNode(true);
+  untagAll(rightTagged);
+  return rightClone.outerHTML;
+})()
+`;
 
 
 async function captureSnapshot() {
@@ -908,7 +964,7 @@ function startPolling() {
         const hash = hashString(
           snapshot.html +
           (snapshot.leftSidebarHtml || '') +
-          (snapshot.rightSidebarHtml || '') +
+          (snapshot.sidebarSignature || '') +
           (snapshot.dropdownHtml || '') +
           (snapshot.dialogHtml || '') +
           (snapshot.settingsHtml || '') +
@@ -1081,7 +1137,7 @@ app.get('/snapshot', (req, res) => {
     agentRunning: cachedSnapshot.agentRunning,
     scrollInfo: cachedSnapshot.scrollInfo,
     leftSidebarHtml: cachedSnapshot.leftSidebarHtml || null,
-    rightSidebarHtml: cachedSnapshot.rightSidebarHtml || null,
+    sidebarSignature: cachedSnapshot.sidebarSignature || null,
     isNewSessionPage: cachedSnapshot.isNewSessionPage || false,
     dropdownHtml: cachedSnapshot.dropdownHtml || null,
     dialogHtml: cachedSnapshot.dialogHtml || null,
@@ -1094,6 +1150,17 @@ app.get('/snapshot', (req, res) => {
     modelName: cachedSnapshot.modelName || null,
     runningTasksHtml: cachedSnapshot.runningTasksHtml || null,
   });
+});
+
+// --- Right Sidebar Endpoint (on-demand) ---
+app.get('/right-sidebar', async (req, res) => {
+  try {
+    const html = await evaluateInBrowser(RIGHT_SIDEBAR_SCRIPT);
+    res.json({ html: html || null });
+  } catch (e) {
+    console.debug('[RightSidebar] Error:', e.message);
+    res.json({ html: null, error: e.message });
+  }
 });
 
 // --- Expand Left Sidebar (click AG's toggle when sidebar is collapsed) ---
@@ -1473,7 +1540,7 @@ app.post('/click', async (req, res) => {
               const hash = hashString(
                 snapshot.html +
                 (snapshot.leftSidebarHtml || '') +
-                (snapshot.rightSidebarHtml || '') +
+                (snapshot.sidebarSignature || '') +
                 (snapshot.dropdownHtml || '') +
                 (snapshot.dialogHtml || '') +
                 (snapshot.settingsHtml || '') +
