@@ -44,6 +44,7 @@
 | Agent running state + action button toggle | `public/js/app.js` — search `agentRunning` and `updateActionButton` |
 | Environment config template (SSoT for config) | `.env.example` |
 | Photo upload (POST /upload + CDP drop injection) | `server.js` — search `Upload Image` and `POST /upload` |
+| Running tasks capture + click proxy (`task:` prefix) | `server.js` — search `runningTasksHtml` and `'task'` |
 | Project dependencies (SSoT for versions) | `package.json` |
 | Self-signed SSL certs (auto-generated, gitignored) | `certs/` |
 | PWA manifest (home screen icon + app metadata) | `public/manifest.json` |
@@ -75,7 +76,8 @@
 - **Quick actions (Continue) visibility — single source of truth.** `quickActions.classList.toggle('hidden', ...)` must ONLY be called from WS message handlers (snapshot/status), never from `updateActionButton()` or `loadSnapshot()`. `loadSnapshot` previously had a `classList.toggle('hidden', hideBottomBar)` that force-showed Continue on every render cycle (since `isNewSessionPage` was usually `false`), causing flickering. The fix: `loadSnapshot` can only `add('hidden')`, never remove it.
 - **`agentRunning` is set from WS handlers only.** `loadSnapshot`'s HTTP fetch can return a stale value that races with the WS push. All `agentRunning` assignments and `updateActionButton()` calls must originate from the WS `snapshot`/`status` handlers.
 - **`loadSnapshot` HTML dedup.** `loadSnapshot` stores `_lastHtml` and skips `innerHTML` re-renders when the HTML hasn't changed. Without this, every identical snapshot resets scroll position.
-- **Desktop width alignment uses AG's inline `max-width`.** The chat container has `style="max-width: max(30vw, 40rem)"` set by AG. The desktop `@media` block in `style.css` applies the same value to `.input-wrapper`, `.quick-actions`, and `.scroll-fab`. If AG changes this value, update the media query to match.
+- **Desktop width alignment uses AG's inline `max-width`.** The chat container has `style="max-width: max(30vw, 40rem)"` set by AG. The desktop `@media` block in `style.css` applies the same value to `.input-wrapper`, `.quick-actions`, `.running-tasks`, and `.scroll-fab`. If AG changes this value, update the media query to match.
+- **Running tasks live inside the input box container.** `#antigravity.agentSidePanelInputBox` has a `.rounded-t-2xl` child (sibling of `.bg-card`) that contains the task list. This element is completely absent from the DOM when no tasks are running — it's not hidden, it doesn't exist. The capture must null-check both the input box and the task section child.
 - **Settings dismiss uses backdrop click.** `dismiss-settings` in `server.js` clicks the settings modal's backdrop overlay (`.bg-black\/80`) instead of a Go Back button, ensuring settings close in one action regardless of which tab was visited.
 
 ---

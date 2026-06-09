@@ -71,6 +71,14 @@
 
     <!-- Input Bar -->
     <footer id="input-bar" class="input-bar">
+      <!-- Running tasks strip (inside input bar so ResizeObserver tracks its height) -->
+      <div id="running-tasks" class="running-tasks hidden">
+        <button id="running-tasks-header" class="running-tasks-header">
+          <span id="running-tasks-count" class="running-tasks-count"></span>
+          <span class="material-symbols-rounded running-tasks-arrow">expand_less</span>
+        </button>
+        <div id="running-tasks-list" class="running-tasks-list"></div>
+      </div>
       <div class="input-wrapper">
         <div id="image-preview-strip" class="image-preview-strip hidden"></div>
         <textarea

@@ -65,6 +65,12 @@ const permissionContent = document.getElementById('permission-content');
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsContent = document.getElementById('settings-content');
 const settingsBack = document.getElementById('settings-back');
+// Running tasks strip
+const runningTasks = document.getElementById('running-tasks');
+const runningTasksHeader = document.getElementById('running-tasks-header');
+const runningTasksList = document.getElementById('running-tasks-list');
+const runningTasksCount = document.getElementById('running-tasks-count');
+let runningTasksCollapsed = false;
 // Suppression: ignore stale dialog/dropdown snapshots for a short window after user dismisses
 let overlayDismissedAt = 0;
 
@@ -82,6 +88,16 @@ if (typeof ResizeObserver !== 'undefined') {
   });
   inputBarObserver.observe(inputBar);
 }
+
+// ─────────────────────────────────────────────
+// Running Tasks — Collapse Toggle
+// ─────────────────────────────────────────────
+runningTasksHeader.addEventListener('click', () => {
+  runningTasksCollapsed = !runningTasksCollapsed;
+  runningTasksList.classList.toggle('collapsed', runningTasksCollapsed);
+  runningTasks.querySelector('.running-tasks-arrow')
+    ?.classList.toggle('rotated', runningTasksCollapsed);
+});
 
 // ─────────────────────────────────────────────
 // Fetch Wrapper (redirects to login on 401)
@@ -552,6 +568,95 @@ async function loadSnapshot() {
     } else {
       permissionOverlay.classList.add('hidden');
       permissionContent.dataset.lastHtml = '';
+    }
+
+    // Render running tasks strip if AG has background tasks
+    if (data.runningTasksHtml) {
+      // Skip re-render if HTML hasn't changed
+      if (data.runningTasksHtml !== runningTasks.dataset.lastHtml) {
+        runningTasks.dataset.lastHtml = data.runningTasksHtml;
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = data.runningTasksHtml;
+
+        // Extract header text (e.g., "1 task running")
+        const headerBtn = tempDiv.querySelector('button');
+        const headerSpan = headerBtn?.querySelector('span');
+        runningTasksCount.textContent = headerSpan ? headerSpan.textContent.trim() : 'Tasks running';
+
+        // Extract individual task rows
+        const taskRows = tempDiv.querySelectorAll('.font-mono');
+        const allButtons = tempDiv.querySelectorAll('[data-ag-click-id]');
+
+        // Build a map: for each task row, find its name button click ID and stop button click ID
+        // Button order in capture: header toggle (task:0), then for each task row:
+        //   task name button (task:1, task:3, ...), stop button (task:2, task:4, ...)
+        let rowsHtml = '';
+        const buttonArray = Array.from(allButtons);
+
+        // Skip the first button (header toggle, task:0), then pair remaining buttons
+        for (let i = 1; i < buttonArray.length; i += 2) {
+          const nameBtn = buttonArray[i];
+          const stopBtn = buttonArray[i + 1];
+          const nameClickId = nameBtn?.dataset?.agClickId || '';
+          const nameLabel = nameBtn?.dataset?.agClickLabel || '';
+          const stopClickId = stopBtn?.dataset?.agClickId || '';
+          const stopLabel = stopBtn?.dataset?.agClickLabel || '';
+
+          // Extract task name from the font-mono span inside the name button
+          const monoSpan = nameBtn?.querySelector('.font-mono');
+          const taskName = monoSpan ? monoSpan.textContent.trim() : (nameLabel || 'Task');
+
+          rowsHtml += `
+            <div class="running-task-row">
+              <button class="running-task-name" data-ag-click-id="${nameClickId}" data-ag-click-label="${nameLabel}">
+                <div class="running-task-spinner"></div>
+                <span>${taskName}</span>
+              </button>
+              <button class="running-task-stop" data-ag-click-id="${stopClickId}" data-ag-click-label="${stopLabel}" aria-label="Stop task">
+                <span class="material-symbols-rounded" style="font-size:18px">stop_circle</span>
+              </button>
+            </div>
+          `;
+        }
+
+        runningTasksList.innerHTML = rowsHtml;
+
+        // Wire click proxying for task name (navigate) and stop (kill)
+        runningTasksList.querySelectorAll('[data-ag-click-id]').forEach(btn => {
+          const clickId = btn.dataset.agClickId;
+          const clickLabel = btn.dataset.agClickLabel;
+          const isNameBtn = btn.classList.contains('running-task-name');
+          btn.removeAttribute('data-ag-click-id');
+          btn.addEventListener('click', async () => {
+            btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
+            try {
+              await fetchAPI('/click', {
+                method: 'POST',
+                body: JSON.stringify({ clickId, label: clickLabel }),
+              });
+            } catch {}
+            // Task name click → open right sidebar to show terminal output
+            if (isNameBtn) openRightSidebar();
+            setTimeout(() => {
+              btn.style.opacity = '';
+              btn.style.pointerEvents = '';
+            }, 500);
+            // Refresh snapshot to pick up changes
+            setTimeout(loadSnapshot, 300);
+            setTimeout(loadSnapshot, 1000);
+          });
+        });
+
+        // Restore collapse state
+        runningTasksList.classList.toggle('collapsed', runningTasksCollapsed);
+        runningTasks.querySelector('.running-tasks-arrow')
+          ?.classList.toggle('rotated', runningTasksCollapsed);
+      }
+      runningTasks.classList.remove('hidden');
+    } else {
+      runningTasks.classList.add('hidden');
+      runningTasks.dataset.lastHtml = '';
     }
 
     // Render Settings overlay if AG's settings modal is open

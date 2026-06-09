@@ -506,6 +506,121 @@ body {
   display: none;
 }
 
+/* ── Running Tasks Strip ── */
+.running-tasks {
+  border-bottom: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.running-tasks.hidden {
+  display: none;
+}
+
+.running-tasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.running-tasks-arrow {
+  font-size: 18px;
+  transition: transform 0.2s;
+}
+
+.running-tasks-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.running-tasks-list {
+  max-height: 160px;
+  overflow-y: auto;
+  transition: max-height 0.25s ease, opacity 0.2s;
+}
+
+.running-tasks-list.collapsed {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.running-task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 12px;
+  min-height: 28px;
+}
+
+.running-task-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.15s;
+}
+
+.running-task-name:active {
+  color: var(--text-primary);
+}
+
+.running-task-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.running-task-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--text-muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.running-task-stop {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.running-task-stop:active {
+  color: var(--red);
+  background: var(--bg-hover);
+}
+
 /* ── Input Bar ── */
 .input-bar {
   flex-shrink: 0;

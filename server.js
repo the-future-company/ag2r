@@ -259,6 +259,33 @@ async function evaluateInBrowser(expression, opts = {}) {
   throw new Error('No valid execution context');
 }
 
+// Like evaluateInBrowser but returns the first NON-NULL result across all contexts.
+// Used for captures that may only be visible in one of AG's execution contexts.
+async function evaluateAcrossContexts(expression, opts = {}) {
+  if (!cdpClient) throw new Error('CDP not connected');
+
+  for (const ctx of cdpContexts) {
+    try {
+      const result = await cdpClient.Runtime.evaluate({
+        expression,
+        contextId: ctx.id,
+        awaitPromise: true,
+        returnByValue: true,
+        ...opts,
+      });
+
+      if (result.exceptionDetails) continue;
+
+      const val = result.result?.value ?? null;
+      if (val !== null) return val;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 // ─────────────────────────────────────────────
 // Snapshot Capture
 // ─────────────────────────────────────────────
@@ -685,12 +712,47 @@ const CAPTURE_SCRIPT = `
 })()
 `;
 
+// Separate script for running tasks — must run outside the main capture's context lock
+// because AG's two execution contexts may render the task section in only one context.
+const RUNNING_TASKS_SCRIPT = `
+(() => {
+  const inputBox = document.getElementById('antigravity.agentSidePanelInputBox');
+  if (!inputBox) return null;
+  const taskSection = inputBox.querySelector('.rounded-t-2xl');
+  if (!taskSection || taskSection.getBoundingClientRect().height <= 0) return null;
+  let taskIdx = 0;
+  const taskTagged = [];
+  taskSection.querySelectorAll('button').forEach(btn => {
+    btn.setAttribute('data-ag-click-id', 'task:' + taskIdx);
+    btn.setAttribute('data-ag-click-label', (btn.textContent || '').trim().substring(0, 80));
+    taskIdx++;
+    taskTagged.push(btn);
+  });
+  const taskClone = taskSection.cloneNode(true);
+  taskTagged.forEach(el => {
+    el.removeAttribute('data-ag-click-id');
+    el.removeAttribute('data-ag-click-label');
+  });
+  return taskClone.outerHTML;
+})()
+`;
+
 
 
 async function captureSnapshot() {
   try {
     const result = await evaluateInBrowser(CAPTURE_SCRIPT);
     if (!result) return null;
+
+    // Running tasks: separate eval that tries all contexts (first non-null wins)
+    // because the task section may only be visible in a context different from
+    // the one the main capture script locked to.
+    try {
+      result.runningTasksHtml = await evaluateAcrossContexts(RUNNING_TASKS_SCRIPT);
+    } catch (e) {
+      console.debug('[Snapshot] Running tasks eval failed:', e.message);
+    }
+
     return result;
   } catch (e) {
     console.debug('[Snapshot] Capture failed:', e.message);
@@ -850,7 +912,8 @@ function startPolling() {
           (snapshot.dropdownHtml || '') +
           (snapshot.dialogHtml || '') +
           (snapshot.settingsHtml || '') +
-          (snapshot.permissionHtml || '')
+          (snapshot.permissionHtml || '') +
+          (snapshot.runningTasksHtml || '')
         );
 
         // Only broadcast and update cache when content actually changes
@@ -1029,6 +1092,7 @@ app.get('/snapshot', (req, res) => {
     environmentName: cachedSnapshot.environmentName || null,
     branchName: cachedSnapshot.branchName || null,
     modelName: cachedSnapshot.modelName || null,
+    runningTasksHtml: cachedSnapshot.runningTasksHtml || null,
   });
 });
 
@@ -1115,6 +1179,29 @@ app.post('/click', async (req, res) => {
   }
 
   try {
+    // Task clicks need evaluateAcrossContexts (task section may be in a different context)
+    if (String(clickId).startsWith('task:')) {
+      const taskIdx = parseInt(String(clickId).split(':')[1], 10);
+      const taskClickScript = `
+      (() => {
+        const inputBox = document.getElementById('antigravity.agentSidePanelInputBox');
+        if (!inputBox) return { ok: false, reason: 'no_input_box' };
+        const taskSection = inputBox.querySelector('.rounded-t-2xl');
+        if (!taskSection) return { ok: false, reason: 'no_task_section' };
+        const btns = taskSection.querySelectorAll('button');
+        const idx = ${taskIdx};
+        if (idx < 0 || idx >= btns.length) return { ok: false, reason: 'task_index_out_of_range', total: btns.length };
+        const target = btns[idx];
+        const actualLabel = (target.textContent || '').trim().substring(0, 80);
+        target.click();
+        return { ok: true, label: actualLabel, source: 'task' };
+      })()
+      `;
+      const result = await evaluateAcrossContexts(taskClickScript);
+      log('Click', `Task result: ${JSON.stringify(result)}`);
+      return res.json(result || { ok: false, reason: 'null_result' });
+    }
+
     const clickScript = `
     (async () => {
       const clickId = ${JSON.stringify(String(clickId))};
@@ -1237,6 +1324,24 @@ app.post('/click', async (req, res) => {
           return { ok: true, label: actualLabel, source: 'project' };
         }
         return { ok: false, reason: 'project_button_not_found' };
+      } else if (source === 'task') {
+        // Running tasks: find task section and click the Nth button
+        const inputBox = document.getElementById('antigravity.agentSidePanelInputBox');
+        if (inputBox) {
+          const taskSection = inputBox.querySelector('.rounded-t-2xl');
+          if (taskSection) {
+            const btns = taskSection.querySelectorAll('button');
+            if (idx >= 0 && idx < btns.length) {
+              const target = btns[idx];
+              const actualLabel = (target.textContent || '').trim().substring(0, 80);
+              target.click();
+              return { ok: true, label: actualLabel, source: 'task' };
+            }
+            return { ok: false, reason: 'task_index_out_of_range', total: btns.length };
+          }
+          return { ok: false, reason: 'no_task_section' };
+        }
+        return { ok: false, reason: 'no_input_box' };
       }
 
       if (!root) return { ok: false, reason: 'no_root_for_' + source };
