@@ -30,6 +30,7 @@
 | Client rendering, WebSocket, stop/send | `public/js/app.js` |
 | Right sidebar on-demand fetch + click proxy handlers | `public/js/app.js` — search `fetchRightSidebar` and `openRightSidebar` |
 | Right sidebar on-demand capture (CDP script + endpoint) | `server.js` — search `RIGHT_SIDEBAR_SCRIPT` and `GET /right-sidebar` |
+| Image proxy for sidebar (canvas-based, cached client-side) | `server.js` — search `GET /proxy-image`; `public/js/app.js` — search `proxySidebarImages` |
 | Permission banner capture + click proxy (`perm:` prefix) | `server.js` — search `permissionHtml` and `'perm'` |
 | Environment/worktree + branch capture + click proxy (`env:` prefix) | `server.js` — search `environmentName` and `'env'` |
 | Model selection capture + click proxy (`model:` prefix) | `server.js` — search `modelName` and `'model'` |

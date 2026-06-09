@@ -1163,6 +1163,53 @@ app.get('/right-sidebar', async (req, res) => {
   }
 });
 
+// --- Image Proxy Endpoint (on-demand, for right sidebar images) ---
+// Proxies images that use blob:/file:/vscode-file: URLs (unresolvable from remote client).
+// Finds the <img> in AG's DOM, draws to canvas, returns base64 data URL.
+app.get('/proxy-image', async (req, res) => {
+  const src = req.query.src;
+  if (!src) return res.status(400).json({ error: 'Missing src parameter' });
+
+  try {
+    const script = `
+    (() => {
+      const targetSrc = ${JSON.stringify(src)};
+      const imgs = document.querySelectorAll('img');
+      for (const img of imgs) {
+        if (img.src !== targetSrc && img.getAttribute('src') !== targetSrc) continue;
+        if (!img.complete || img.naturalWidth === 0) continue;
+
+        try {
+          const MAX_WIDTH = 800;
+          let w = img.naturalWidth;
+          let h = img.naturalHeight;
+          if (w > MAX_WIDTH) {
+            h = Math.round(h * (MAX_WIDTH / w));
+            w = MAX_WIDTH;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          return canvas.toDataURL('image/png');
+        } catch (e) {
+          // CORS / tainted canvas
+          return null;
+        }
+      }
+      return null;
+    })()
+    `;
+
+    const dataUrl = await evaluateInBrowser(script);
+    res.json({ dataUrl: dataUrl || null });
+  } catch (e) {
+    console.debug('[ProxyImage] Error:', e.message);
+    res.json({ dataUrl: null, error: e.message });
+  }
+});
+
 // --- Expand Left Sidebar (click AG's toggle when sidebar is collapsed) ---
 app.post('/expand-left-sidebar', async (req, res) => {
   if (!cdpClient) {
