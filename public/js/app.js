@@ -10,7 +10,7 @@ let agentRunning = false;
 let cdpConnected = false;
 let isRendering = false;
 let isSending = false;
-let userScrollLockUntil = 0;
+let userScrolledAway = false;
 
 // Mobile detection: coarse pointer = touchscreen (phone/tablet)
 // On mobile, Enter inserts a newline; the send button sends.
@@ -516,9 +516,11 @@ async function loadSnapshot() {
 
     // Sync scroll position from AG's DOM state.
     // AG handles scroll-to-bottom on send and auto-scroll during streaming.
-    // We mirror: if AG is near bottom, scroll our container to bottom too.
+    // We mirror: if AG is near bottom AND the user hasn't scrolled away, scroll to bottom.
+    // If the user has deliberately scrolled up, we leave them there until they
+    // scroll back to the bottom, tap the FAB, or send a message.
     requestAnimationFrame(() => {
-      if (data.scrollInfo && Date.now() > userScrollLockUntil) {
+      if (data.scrollInfo && !userScrolledAway) {
         const agAtBottom = data.scrollInfo.scrollHeight - data.scrollInfo.scrollTop - data.scrollInfo.clientHeight < 50;
         if (agAtBottom) {
           chatArea.scrollTop = chatArea.scrollHeight;
@@ -563,12 +565,15 @@ function updateScrollFab() {
 
 chatArea.addEventListener('scroll', () => {
   if (isRendering) return;
-  userScrollLockUntil = Date.now() + 3000;
+  // Track whether the user has scrolled away from the bottom.
+  // If they scroll back near the bottom, clear the flag so auto-scroll resumes.
+  const nearBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 50;
+  userScrolledAway = !nearBottom;
   updateScrollFab();
 }, { passive: true });
 
 scrollFab.addEventListener('click', () => {
-  userScrollLockUntil = 0;
+  userScrolledAway = false;
   scrollToBottom();
   updateScrollFab();
 });
@@ -649,8 +654,8 @@ async function sendMessage() {
       console.debug('[Send] Failed:', result.reason);
     }
 
-    // Reset scroll lock so AG's scroll position syncs immediately on next render
-    userScrollLockUntil = 0;
+    // Reset scroll-away flag so AG's scroll position syncs immediately on next render
+    userScrolledAway = false;
 
     // Schedule snapshot reloads to pick up the sent message
     setTimeout(loadSnapshot, 300);
