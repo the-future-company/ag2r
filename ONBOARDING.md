@@ -49,7 +49,7 @@
 | Self-signed SSL certs (auto-generated, gitignored) | `certs/` |
 | PWA manifest (home screen icon + app metadata) | `public/manifest.json` |
 | Multi-worktree hub (dev-only proxy) | `hub.js` |
-| Main server watchdog + auto-updater (cron scripts) | `scripts/watchdog.sh`, `scripts/updater.sh` |
+| Main server watchdog + auto-updater (cron scripts) | `scripts/watchdog.sh`, `scripts/updater.sh`, `scripts/hub-watchdog.sh` |
 | README screenshots (product showcase) | `docs/` |
 
 ---
@@ -211,25 +211,28 @@ If the hub isn't suitable (e.g., testing a single worktree in isolation):
 
 ---
 
-## 🔄 Auto-Managed Main Server
+## 🔄 Auto-Managed Hub & Main Server
 
-> The main branch server can be kept always-running and up-to-date via two cron jobs.
+> The hub landing page has a **Start Main** button that pulls latest and starts the main server on-demand. A cron job keeps the hub itself alive.
 
-### Setup
+### Hub Watchdog (cron)
 
 ```bash
-# Install cron jobs (edit with crontab -e)
 crontab -e
 
-# Add these two lines:
-*/5 * * * * /path/to/ag2r/scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
-*/10 * * * * /path/to/ag2r/scripts/updater.sh >> /tmp/ag2r-updater.log 2>&1
+# Add this line to keep the hub running:
+*/5 * * * * ~/Workspace/ag2r/scripts/hub-watchdog.sh >> /tmp/ag2r-hub-watchdog.log 2>&1
 ```
 
-### How it works
+The hub watchdog checks if the hub is responding every 5 minutes and restarts it if down. Once the hub is up, use the **Start Main** button from the landing page to start the main server on-demand.
 
-- **Watchdog** (every 5 min): health-checks `localhost:<port>`, restarts if down. Max 5 min downtime.
-- **Updater** (every 10 min): `git fetch`, pulls if new commits, `npm ci` if package-lock changed, restarts server. Changes applied within 10 min of merge.
+### Optional: Server Watchdog + Auto-Updater (cron)
+
+```bash
+# Keep main server always running (optional — Start Main button is usually enough):
+*/5 * * * * ~/Workspace/ag2r/scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
+*/10 * * * * ~/Workspace/ag2r/scripts/updater.sh >> /tmp/ag2r-updater.log 2>&1
+```
 
 ### Configuration (environment variables)
 
@@ -237,13 +240,8 @@ crontab -e
 |----------|---------|--------|
 | `AG2R_MAIN_DIR` | `~/Workspace/ag2r` | Path to main repo |
 | `AG2R_MAIN_PORT` | `3000` | Port for main server |
+| `HUB_PORT` | `3100` | Port for the hub |
 | `AG2R_LOG` | `/tmp/ag2r-main.log` | Server stdout/stderr log |
-
-### Logs
-
-- Server output: `/tmp/ag2r-main.log`
-- Watchdog activity: `/tmp/ag2r-watchdog.log`
-- Updater activity: `/tmp/ag2r-updater.log`
 
 
 ## 🚫 Git Safety

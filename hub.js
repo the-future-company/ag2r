@@ -10,7 +10,7 @@ import tls from 'tls';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import selfsigned from 'selfsigned';
 import dotenv from 'dotenv';
 
@@ -25,6 +25,9 @@ const HUB_PORT = parseInt(process.env.HUB_PORT || '3100');
 const SCAN_MIN = parseInt(process.env.HUB_SCAN_MIN || '3000');
 const SCAN_MAX = parseInt(process.env.HUB_SCAN_MAX || '3099');
 const SCAN_INTERVAL = parseInt(process.env.HUB_SCAN_INTERVAL || '5000');
+const MAIN_DIR = process.env.AG2R_MAIN_DIR || path.join(process.env.HOME, 'Workspace', 'ag2r');
+const MAIN_PORT = parseInt(process.env.AG2R_MAIN_PORT || '3000');
+const MAIN_LOG = process.env.AG2R_LOG || '/tmp/ag2r-main.log';
 
 function log(prefix, ...args) {
   console.log(`[${prefix}]`, ...args);
@@ -439,6 +442,26 @@ function renderLandingPage() {
       margin-top: 24px;
       text-align: center;
     }
+
+    .wt-btn-main {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: white;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      margin-top: 16px;
+    }
+    .wt-btn-main:hover { background: #5558e6; }
+    .wt-btn-main:disabled { opacity: 0.6; cursor: not-allowed; }
+    .wt-btn-main .material-symbols-rounded { font-size: 20px; }
   </style>
 </head>
 <body>
@@ -462,22 +485,28 @@ function renderLandingPage() {
         const json = JSON.stringify(data);
         if (json === lastData) return;
         lastData = json;
-        render(data.servers);
+        render(data.servers, data.mainAvailable);
       } catch (e) {
         console.debug('Status fetch error:', e);
       }
     }
 
-    function render(servers) {
+    function render(servers, mainAvailable) {
       if (servers.length === 0) {
-        list.innerHTML =
-          '<div class="empty-state">'
+        let html = '<div class="empty-state">'
           + '<span class="material-symbols-rounded">search_off</span>'
-          + '<div class="empty-title">No active sessions</div>'
-          + '<div class="empty-hint">Start a server in any worktree:<br>'
-          + '<code>PORT=3001 node server.js</code><br>'
-          + 'It will appear here automatically.</div>'
-          + '</div>';
+          + '<div class="empty-title">No active sessions</div>';
+        if (mainAvailable) {
+          html += '<button class="wt-btn wt-btn-main" id="start-main-btn" onclick="startMain()">'
+            + '<span class="material-symbols-rounded">play_arrow</span>Start Main</button>'
+            + '<div class="empty-hint" style="margin-top:12px">Pulls latest and starts the main server</div>';
+        } else {
+          html += '<div class="empty-hint">Start a server in any worktree:<br>'
+            + '<code>PORT=3001 node server.js</code><br>'
+            + 'It will appear here automatically.</div>';
+        }
+        html += '</div>';
+        list.innerHTML = html;
         return;
       }
 
@@ -498,6 +527,28 @@ function renderLandingPage() {
     }
     function escapeAttr(s) {
       return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    async function startMain() {
+      const btn = document.getElementById('start-main-btn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Starting...'; }
+      try {
+        const res = await fetch('/_hub/api/start-main', { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) {
+          if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span>' + escapeHtml(data.error || 'Failed');
+          return;
+        }
+        // Poll until detected
+        const poll = setInterval(async () => {
+          await refresh();
+          if (lastData && JSON.parse(lastData).servers.length > 0) {
+            clearInterval(poll);
+          }
+        }, 2000);
+      } catch (e) {
+        if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span>Error';
+      }
     }
 
     refresh();
@@ -569,9 +620,16 @@ function handleHubApi(req, res, pathname) {
       servers.push({ name: server.name, port, cdpConnected: server.cdpConnected });
     }
     servers.sort((a, b) => a.name.localeCompare(b.name));
+    // Check if main dir exists and has server.js
+    const mainAvailable = fs.existsSync(path.join(MAIN_DIR, 'server.js'));
     res.writeHead(200);
-    res.end(JSON.stringify({ servers }));
+    res.end(JSON.stringify({ servers, mainAvailable }));
     return;
+  }
+
+  // POST /_hub/api/start-main
+  if (pathname === '/_hub/api/start-main' && req.method === 'POST') {
+    return handleStartMain(req, res);
   }
 
   // GET /_hub/api/clear-cookie
@@ -584,6 +642,95 @@ function handleHubApi(req, res, pathname) {
 
   res.writeHead(404);
   res.end(JSON.stringify({ error: 'Not found' }));
+}
+
+// ─────────────────────────────────────────────
+// Start Main (on-demand from landing page)
+// ─────────────────────────────────────────────
+let mainStarting = false;
+
+function handleStartMain(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+
+  if (mainStarting) {
+    res.writeHead(409);
+    res.end(JSON.stringify({ ok: false, error: 'Already starting' }));
+    return;
+  }
+
+  if (!fs.existsSync(path.join(MAIN_DIR, 'server.js'))) {
+    res.writeHead(404);
+    res.end(JSON.stringify({ ok: false, error: `Main dir not found: ${MAIN_DIR}` }));
+    return;
+  }
+
+  // Check if already running on MAIN_PORT
+  const existing = activeServers.get(MAIN_PORT);
+  if (existing) {
+    res.writeHead(200);
+    res.end(JSON.stringify({ ok: true, message: 'Already running', name: existing.name }));
+    return;
+  }
+
+  mainStarting = true;
+  log('Main', `Starting main server from ${MAIN_DIR}...`);
+
+  // Pull latest + npm ci + start, all in one shell command
+  const script = `
+    cd "${MAIN_DIR}" &&
+    git fetch origin main --quiet 2>&1 &&
+    LOCAL=$(git rev-parse HEAD) &&
+    REMOTE=$(git rev-parse origin/main) &&
+    if [ "$LOCAL" != "$REMOTE" ]; then
+      echo "[Main] Pulling: $LOCAL → $REMOTE" &&
+      git pull origin main --quiet 2>&1 &&
+      if git diff --name-only "$LOCAL" "$REMOTE" | grep -q "package-lock.json"; then
+        echo "[Main] package-lock changed, running npm ci..." &&
+        npm ci --silent 2>&1
+      fi
+    else
+      echo "[Main] Already at latest"
+    fi
+  `;
+
+  try {
+    const pullOutput = execSync(script, {
+      encoding: 'utf-8',
+      timeout: 60000,
+      env: { ...process.env, NVM_DIR: path.join(process.env.HOME, '.nvm') },
+    }).trim();
+    if (pullOutput) log('Main', pullOutput);
+  } catch (e) {
+    log('Main', `Pull/install failed: ${e.message}`);
+    mainStarting = false;
+    res.writeHead(500);
+    res.end(JSON.stringify({ ok: false, error: 'git pull failed' }));
+    return;
+  }
+
+  // Open log file for server output
+  const logStream = fs.openSync(MAIN_LOG, 'a');
+
+  // Spawn server
+  const child = spawn('node', ['server.js'], {
+    cwd: MAIN_DIR,
+    env: { ...process.env, PORT: String(MAIN_PORT) },
+    stdio: ['ignore', logStream, logStream],
+    detached: true,
+  });
+
+  child.unref(); // Let hub exit without waiting for child
+  log('Main', `Server starting on port ${MAIN_PORT} (PID ${child.pid})`);
+
+  child.on('error', (err) => {
+    log('Main', `Spawn error: ${err.message}`);
+    mainStarting = false;
+  });
+
+  // Give it a moment, then respond
+  mainStarting = false;
+  res.writeHead(200);
+  res.end(JSON.stringify({ ok: true, port: MAIN_PORT, pid: child.pid }));
 }
 
 // ─────────────────────────────────────────────
