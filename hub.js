@@ -583,14 +583,9 @@ function handleRequest(req, res) {
     }
   }
 
-  // ── Root path ──
+  // ── Root path — always show landing page ──
   if (pathname === '/' || pathname === '') {
-    const server = getServerFromCookie(req);
-    if (server) {
-      // Cookie set and server running — proxy to child
-      return proxyRequest(req, res, server.port, server.name);
-    }
-    // No cookie or server gone — serve landing page
+    clearWorktreeCookie(res);
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(renderLandingPage());
     return;
