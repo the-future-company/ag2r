@@ -49,6 +49,7 @@
 | Self-signed SSL certs (auto-generated, gitignored) | `certs/` |
 | PWA manifest (home screen icon + app metadata) | `public/manifest.json` |
 | Multi-worktree hub (dev-only proxy) | `hub.js` |
+| Main server watchdog + auto-updater (cron scripts) | `scripts/watchdog.sh`, `scripts/updater.sh` |
 | README screenshots (product showcase) | `docs/` |
 
 ---
@@ -206,9 +207,44 @@ If the hub isn't suitable (e.g., testing a single worktree in isolation):
    ```
    Local network requests bypass auth — no password needed.
 
-3. **Remote testing limitation.** The Cloudflare tunnel points to port 3000. Testing a single worktree remotely requires either using the hub or temporarily swapping the tunnel config.
+3. **Remote testing limitation.** The Cloudflare tunnel points to port 3100 (hub). Testing a single worktree remotely requires either using the hub or temporarily swapping the tunnel config.
 
 ---
+
+## 🔄 Auto-Managed Main Server
+
+> The main branch server can be kept always-running and up-to-date via two cron jobs.
+
+### Setup
+
+```bash
+# Install cron jobs (edit with crontab -e)
+crontab -e
+
+# Add these two lines:
+*/5 * * * * /path/to/ag2r/scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
+*/10 * * * * /path/to/ag2r/scripts/updater.sh >> /tmp/ag2r-updater.log 2>&1
+```
+
+### How it works
+
+- **Watchdog** (every 5 min): health-checks `localhost:<port>`, restarts if down. Max 5 min downtime.
+- **Updater** (every 10 min): `git fetch`, pulls if new commits, `npm ci` if package-lock changed, restarts server. Changes applied within 10 min of merge.
+
+### Configuration (environment variables)
+
+| Variable | Default | Purpose |
+|----------|---------|--------|
+| `AG2R_MAIN_DIR` | `~/Workspace/ag2r` | Path to main repo |
+| `AG2R_MAIN_PORT` | `3000` | Port for main server |
+| `AG2R_LOG` | `/tmp/ag2r-main.log` | Server stdout/stderr log |
+
+### Logs
+
+- Server output: `/tmp/ag2r-main.log`
+- Watchdog activity: `/tmp/ag2r-watchdog.log`
+- Updater activity: `/tmp/ag2r-updater.log`
+
 
 ## 🚫 Git Safety
 
