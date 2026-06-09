@@ -1539,7 +1539,6 @@ function addClickProxyHandlers(container) {
       if (clickId.startsWith('dropdown:') || clickId.startsWith('dialog:')) {
         overlayDismissedAt = Date.now();
         dropdownOverlay.classList.add('hidden');
-        closeLeftSidebar();
       }
 
       // Only open right sidebar for explicit "Review" button clicks
@@ -1555,9 +1554,10 @@ function addClickProxyHandlers(container) {
       // Fallback: if clicking an artifact/file card in chat (cursor-pointer DIV)
       // but AG didn't navigate (panel was already showing it), still open the
       // remote's right sidebar to show what AG already has open.
+      // Only for DIVs — buttons (thumbs up/down, etc.) should not trigger this.
       if (clickId.startsWith('chat:') && !result?.navigatedToFile) {
         const elClass = (el.className || '').toString();
-        if (elClass.includes('cursor-pointer') && rightSidebarContent.innerHTML.trim()) {
+        if (el.tagName === 'DIV' && elClass.includes('cursor-pointer') && rightSidebarContent.innerHTML.trim()) {
           openRightSidebar();
         }
       }
