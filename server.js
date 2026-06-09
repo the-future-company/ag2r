@@ -985,6 +985,32 @@ app.get('/snapshot', (req, res) => {
   });
 });
 
+// --- Expand Left Sidebar (click AG's toggle when sidebar is collapsed) ---
+app.post('/expand-left-sidebar', async (req, res) => {
+  if (!cdpClient) {
+    return res.status(503).json({ error: 'CDP not connected' });
+  }
+  try {
+    const result = await evaluateInBrowser(`
+      (async () => {
+        const leftRoot = document.querySelector('[class*="bg-sidebar"]');
+        const isCollapsed = !leftRoot || leftRoot.offsetParent === null;
+        if (!isCollapsed) return { ok: true, wasCollapsed: false };
+        // Click the sidebar toggle button to expand
+        const toggleBtn = document.querySelector('[data-testid="sidebar-toggle"]');
+        if (!toggleBtn) return { ok: false, error: 'Toggle button not found' };
+        toggleBtn.click();
+        return { ok: true, wasCollapsed: true };
+      })()
+    `);
+    log('ExpandLeftSidebar', JSON.stringify(result));
+    res.json(result || { ok: false });
+  } catch (e) {
+    console.debug('[ExpandLeftSidebar] Error:', e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // --- Dismiss Portal (close dropdowns/dialogs in AG via Escape key) ---
 app.post('/dismiss-portal', async (req, res) => {
   try {

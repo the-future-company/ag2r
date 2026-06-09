@@ -865,6 +865,10 @@ function openLeftSidebar() {
   leftSidebar.classList.add('open');
   leftSidebar.inert = false;
   leftSidebarOverlay.classList.add('visible');
+  // If sidebar content is empty (AG's sidebar is collapsed), expand it
+  if (!leftSidebarContent.innerHTML.trim()) {
+    fetchAPI('/expand-left-sidebar', { method: 'POST' }).catch(() => {});
+  }
 }
 
 function closeLeftSidebar() {
