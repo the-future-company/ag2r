@@ -387,12 +387,14 @@ function renderLandingPage() {
     .server-list {
       display: flex;
       flex-direction: column;
+      align-items: center;
       gap: 12px;
       width: 100%;
       max-width: 480px;
     }
 
     .server-card {
+      align-self: stretch;
       background: var(--surface);
       border: 1px solid rgba(34, 197, 94, 0.3);
       border-radius: var(--radius);
