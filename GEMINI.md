@@ -153,3 +153,5 @@ ONBOARDING.md follows a strict **pointer-based context map** pattern. The princi
 5. **Subagent quota is shared.** All subagents share the parent model's quota. Running 3+ research subagents in parallel causes rate limit errors. Use subagents sparingly — prefer sequential over parallel when possible, or limit to 2 concurrent subagents.
 
 6. **Always provide the local IP for test servers.** The user tests on their phone over the local network — `localhost` doesn't work from a phone. When starting a test server, run `ipconfig getifaddr en0` and give the full URL: `https://<ip>:<port>`.
+
+7. **Server port allocation.** When starting `server.js` for testing, pick an unused port in the **[3000, 3099]** range. The hub (`hub.js`) runs on port **3100** and scans this range to auto-detect running servers. Never use 3100 for `server.js`. If a port is in use (`EADDRINUSE`), try the next one.

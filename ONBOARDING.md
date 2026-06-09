@@ -47,6 +47,7 @@
 | Project dependencies (SSoT for versions) | `package.json` |
 | Self-signed SSL certs (auto-generated, gitignored) | `certs/` |
 | PWA manifest (home screen icon + app metadata) | `public/manifest.json` |
+| Multi-worktree hub (dev-only proxy) | `hub.js` |
 | README screenshots (product showcase) | `docs/` |
 
 ---
@@ -167,24 +168,43 @@ Gotchas or decisions the next session should know.
 
 ## 🧪 Testing Across Worktrees
 
-> Multiple worktrees may be active simultaneously. Each worktree runs its own `server.js`. Future: a hub/proxy on a single port (see [#22](https://github.com/the-future-company/ag2r/issues/22)). For now, follow this process:
+> Multiple worktrees may be active simultaneously. Use the hub to test them through a single port and tunnel.
 
-**Port 3000 is reserved for main.** The user runs a production instance via the `ag2r` shell function, which starts `node server.js` on port 3000 and tunnels it to `ag2r.omercanyy.com` via Cloudflare. Feature branches must never use port 3000.
+### Primary: Hub (recommended)
 
-1. **Start on port 3001+.** Always override the port from `.env`:
+```bash
+# Start the hub (from any worktree directory)
+node hub.js
+
+# Start worktree servers on any port in 3001–3099
+PORT=3001 node server.js  # in worktree A
+PORT=3002 node server.js  # in worktree B
+```
+
+- Hub runs on port 3100 (or `HUB_PORT` from `.env`) and scans ports 3000–3099
+- Auto-detects running AG2R servers and identifies their worktree via process CWD
+- Landing page at `/` shows only active sessions — no stale worktree clutter
+- Tunnel `ag2r.omercanyy.com` to port 3100 — all worktrees accessible under `/<worktree-name>/`
+- The app has zero awareness of the hub — cookie-based routing handles everything
+
+### Fallback: Manual port switching
+
+If the hub isn't suitable (e.g., testing a single worktree in isolation):
+
+1. **Pick an available port:**
    ```bash
    PORT=3001 node server.js
-   # If EADDRINUSE, try PORT=3002, PORT=3003, etc.
+   # If EADDRINUSE, try PORT=3002, etc.
    ```
 
-2. **Give the user the test link.** After the server starts, tell the user:
+2. **Give the user the test link.** After the server starts:
    ```
-   Test server running at https://localhost:<PORT>
+   Server running at https://localhost:<PORT>
    Open on your phone (same network): https://<local-ip>:<PORT>
    ```
    Local network requests bypass auth — no password needed.
 
-3. **Remote testing limitation.** The Cloudflare tunnel is hardcoded to port 3000 in `~/.cloudflared/config.yml`. Testing a feature branch remotely would require temporarily breaking the production tunnel. For now, feature branch testing is **local network only**. Ask the user if they need remote access — they'll decide whether to swap the tunnel.
+3. **Remote testing limitation.** The Cloudflare tunnel points to port 3000. Testing a single worktree remotely requires either using the hub or temporarily swapping the tunnel config.
 
 ---
 
