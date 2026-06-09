@@ -1321,6 +1321,50 @@ settingsBack.addEventListener('click', () => {
 let lastSidebarSignature = null;
 let sidebarFetchInFlight = false;
 
+// Image proxy cache: src → dataUrl (survives sidebar open/close, clears on page reload)
+const imageProxyCache = new Map();
+
+// Scan sidebar for images with unresolvable src and proxy them via the server
+function proxySidebarImages(container) {
+  const imgs = container.querySelectorAll('img');
+  for (const img of imgs) {
+    const src = img.getAttribute('src') || '';
+    if (!src || src.startsWith('data:') || src.startsWith('http')) continue;
+
+    // Only proxy unresolvable sources
+    if (src.startsWith('blob:') || src.startsWith('file:') ||
+        src.startsWith('vscode-file:') || (src.startsWith('/') && !src.startsWith('/symbols-icons'))) {
+
+      // Check cache first
+      const cached = imageProxyCache.get(src);
+      if (cached) {
+        img.src = cached;
+        img.style.display = '';
+        continue;
+      }
+
+      // Mark as loading
+      img.dataset.originalSrc = src;
+
+      // Fetch async — don't block sidebar render
+      fetchAPI(`/proxy-image?src=${encodeURIComponent(src)}`)
+        .then(r => r.json())
+        .then(({ dataUrl }) => {
+          if (dataUrl) {
+            imageProxyCache.set(src, dataUrl);
+            img.src = dataUrl;
+            img.style.display = '';
+          } else {
+            img.style.display = 'none';
+          }
+        })
+        .catch(() => {
+          img.style.display = 'none';
+        });
+    }
+  }
+}
+
 async function fetchRightSidebar() {
   // Skip if user has active text selection (for commenting)
   if (hasActiveSelectionInRightSidebar()) return;
@@ -1333,6 +1377,7 @@ async function fetchRightSidebar() {
     if (data.html) {
       renderSidebar(rightSidebarContent, data.html);
       addClickProxyHandlers(rightSidebarContent);
+      proxySidebarImages(rightSidebarContent);
     }
   } catch (e) {
     console.debug('[RightSidebar] Fetch error:', e.message);

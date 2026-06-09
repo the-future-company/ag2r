@@ -1112,6 +1112,15 @@ body {
   display: none !important;
 }
 
+/* Force tab close (X) buttons visible in right sidebar (mobile has no hover) */
+/* AG uses hidden+group-hover:flex for the X button and group-hover:hidden for the icon */
+#right-sidebar-content [data-tab-id] [class*="group-hover:flex"] {
+  display: flex !important;
+}
+#right-sidebar-content [data-tab-id] [class*="group-hover:hidden"] {
+  display: none !important;
+}
+
 /* Mobile copy button for code blocks */
 .mobile-copy-btn {
   position: absolute;
