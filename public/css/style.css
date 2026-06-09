@@ -514,6 +514,29 @@ body {
   z-index: 100;
 }
 
+/* Desktop: constrain input bar + Continue + scroll FAB to chat content width */
+@media (min-width: 768px) {
+  .input-bar {
+    background: transparent;
+    border-top: none;
+  }
+  .input-wrapper {
+    width: 100%;
+    max-width: max(30vw, 40rem);
+    margin: 0 auto;
+  }
+  .quick-actions {
+    left: 0;
+    right: 0;
+    max-width: max(30vw, 40rem);
+    margin: 0 auto;
+    padding-left: 12px;
+  }
+  .scroll-fab {
+    right: calc(50% - max(30vw, 40rem) / 2 + 16px);
+  }
+}
+
 .input-bar.hidden {
   display: none;
 }
