@@ -762,17 +762,41 @@ const SCHEDULED_TASKS_DIALOG_SCRIPT = `
 
   let idx = 0;
   const tagged = [];
+  // Tag standard interactive elements
   overlay.querySelectorAll('button, a, [role="button"], input, select, textarea, [role="combobox"], [role="switch"]').forEach(el => {
     el.setAttribute('data-ag-click-id', 'scheddlg:' + idx);
     el.setAttribute('data-ag-click-label', (el.textContent || el.getAttribute('placeholder') || '').trim().substring(0, 50));
     idx++;
     tagged.push(el);
   });
-  const clone = overlay.cloneNode(true);
+  // Also tag cursor-pointer divs (Schedule dropdowns) — these have onclick but no role
+  overlay.querySelectorAll('div.cursor-pointer[aria-expanded]').forEach(el => {
+    if (el.getAttribute('data-ag-click-id')) return; // Already tagged
+    el.setAttribute('data-ag-click-id', 'scheddlg:' + idx);
+    el.setAttribute('data-ag-click-label', (el.textContent || '').trim().substring(0, 50));
+    idx++;
+    tagged.push(el);
+  });
+  // Sync live input/textarea values into attributes before cloning
+  // (cloneNode copies HTML attributes but not live .value properties)
+  const valuedEls = [];
+  overlay.querySelectorAll('input, textarea').forEach(el => {
+    const liveVal = el.value || '';
+    if (el.tagName === 'TEXTAREA') {
+      el.setAttribute('data-ag-value', liveVal);
+    } else {
+      el.setAttribute('data-ag-value', liveVal);
+    }
+    valuedEls.push(el);
+  });
+  // Clone only the inner card (skip the outer overlay wrapper with fixed/inset/z-index)
+  const card = overlay.querySelector('[class*="shadow-xl"]') || overlay.firstElementChild || overlay;
+  const clone = card.cloneNode(true);
   tagged.forEach(el => {
     el.removeAttribute('data-ag-click-id');
     el.removeAttribute('data-ag-click-label');
   });
+  valuedEls.forEach(el => el.removeAttribute('data-ag-value'));
   return clone.outerHTML;
 })()
 `;
@@ -896,6 +920,38 @@ async function captureSnapshot() {
         result.scheduledTasksDialogHtml = await evaluateAcrossContexts(SCHEDULED_TASKS_DIALOG_SCRIPT);
       } catch (e) {
         console.debug('[Snapshot] Scheduled tasks dialog eval failed:', e.message);
+      }
+
+      // Also capture body-level dropdowns (Schedule selectors open listboxes as React portals)
+      // These are in the preferred context, not the isolated one.
+      if (!result.dropdownHtml) {
+        try {
+          result.dropdownHtml = await evaluateInBrowser(`
+            (() => {
+              for (const child of document.body.children) {
+                if (child.getAttribute('role') === 'listbox' && child.getBoundingClientRect().width > 0) {
+                  let idx = 0;
+                  const tagged = [];
+                  child.querySelectorAll('[role="option"], button, a').forEach(el => {
+                    el.setAttribute('data-ag-click-id', 'scheddlg:' + (100 + idx));
+                    el.setAttribute('data-ag-click-label', el.textContent.trim().substring(0, 50));
+                    idx++;
+                    tagged.push(el);
+                  });
+                  const clone = child.cloneNode(true);
+                  tagged.forEach(el => {
+                    el.removeAttribute('data-ag-click-id');
+                    el.removeAttribute('data-ag-click-label');
+                  });
+                  return clone.outerHTML;
+                }
+              }
+              return null;
+            })()
+          `);
+        } catch (e) {
+          console.debug('[Snapshot] Scheduled tasks dropdown eval failed:', e.message);
+        }
       }
     }
 
@@ -1479,14 +1535,63 @@ app.post('/click', async (req, res) => {
     // Scheduled Tasks dialog clicks (New Scheduled Task form) — different context from page
     if (String(clickId).startsWith('scheddlg:')) {
       const dlgIdx = parseInt(String(clickId).split(':')[1], 10);
+
+      // scheddlg:100+ → body-level listbox options (Schedule dropdown, in preferred context)
+      if (dlgIdx >= 100) {
+        const optIdx = dlgIdx - 100;
+        const listboxClickScript = `
+        (() => {
+          for (const child of document.body.children) {
+            if (child.getAttribute('role') === 'listbox' && child.getBoundingClientRect().width > 0) {
+              const options = child.querySelectorAll('[role="option"], button, a');
+              const idx = ${optIdx};
+              if (idx < 0 || idx >= options.length) return { ok: false, reason: 'option_index_out_of_range', total: options.length };
+              const target = options[idx];
+              target.click();
+              return { ok: true, label: target.textContent.trim().substring(0, 50), source: 'scheddlg_listbox' };
+            }
+          }
+          return { ok: false, reason: 'no_listbox' };
+        })()
+        `;
+        const result = await evaluateInBrowser(listboxClickScript);
+        log('Click', `SchedDlgListbox result: ${JSON.stringify(result)}`);
+        return res.json(result || { ok: false, reason: 'null_result' });
+      }
+
+      // scheddlg:0-99 → elements inside the z-[2550] dialog overlay
+      const safeLabel = JSON.stringify(label || '');
       const dlgClickScript = `
       (() => {
         const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
         if (!overlay || overlay.getBoundingClientRect().width <= 0) return { ok: false, reason: 'no_dialog' };
-        const elements = overlay.querySelectorAll('button, a, [role="button"], input, select, textarea, [role="combobox"], [role="switch"]');
+        // Must match the same selector order as SCHEDULED_TASKS_DIALOG_SCRIPT
+        const elements = [];
+        overlay.querySelectorAll('button, a, [role="button"], input, select, textarea, [role="combobox"], [role="switch"]').forEach(el => elements.push(el));
+        overlay.querySelectorAll('div.cursor-pointer[aria-expanded]').forEach(el => {
+          if (!elements.includes(el)) elements.push(el);
+        });
+
         const idx = ${dlgIdx};
-        if (idx < 0 || idx >= elements.length) return { ok: false, reason: 'dlg_index_out_of_range', total: elements.length };
-        const target = elements[idx];
+        const expectedLabel = ${safeLabel};
+
+        // Try index-based match first
+        let target = (idx >= 0 && idx < elements.length) ? elements[idx] : null;
+
+        // Verify label matches; if not, fall back to label-based search
+        if (target && expectedLabel) {
+          const actualLabel = (target.textContent || target.getAttribute('placeholder') || '').trim().substring(0, 50);
+          if (actualLabel !== expectedLabel) {
+            // Index mismatch — search by label
+            target = null;
+            for (const el of elements) {
+              const elLabel = (el.textContent || el.getAttribute('placeholder') || '').trim().substring(0, 50);
+              if (elLabel === expectedLabel) { target = el; break; }
+            }
+          }
+        }
+
+        if (!target) return { ok: false, reason: 'element_not_found', idx: idx, label: expectedLabel, total: elements.length };
         const actualLabel = (target.textContent || target.getAttribute('placeholder') || '').trim().substring(0, 80);
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
           target.focus();
@@ -1809,6 +1914,56 @@ app.post('/eval', async (req, res) => {
     const result = await evaluateInBrowser(`${req.body.script}`);
     res.json({ result });
   } catch (e) { res.json({ error: e.message }); }
+});
+
+// --- Type Text into input/textarea (React-compatible) ---
+// Targets element by placeholder text within the z-[2550] dialog overlay.
+// Uses React's nativeInputValueSetter trick to trigger onChange handlers.
+app.post('/type-text', async (req, res) => {
+  const { placeholder, text } = req.body;
+  if (!placeholder || text === undefined) {
+    return res.status(400).json({ error: 'placeholder and text are required' });
+  }
+  if (!cdpClient) {
+    return res.status(503).json({ error: 'CDP not connected' });
+  }
+
+  const safeText = JSON.stringify(text);
+  const safePlaceholder = JSON.stringify(placeholder);
+  const typeScript = `
+  (() => {
+    // Find the target input/textarea by placeholder within the dialog
+    const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
+    const scope = overlay || document;
+    const el = scope.querySelector('input[placeholder=' + ${JSON.stringify(JSON.stringify(placeholder))} + '], textarea[placeholder=' + ${JSON.stringify(JSON.stringify(placeholder))} + ']');
+    if (!el) return { ok: false, reason: 'element_not_found', placeholder: ${safePlaceholder} };
+
+    // Focus the element
+    el.focus();
+
+    // Use React's native value setter to bypass synthetic events
+    const nativeSetter = el.tagName === 'TEXTAREA'
+      ? Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
+      : Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+
+    nativeSetter.call(el, ${safeText});
+
+    // Dispatch input and change events to trigger React's onChange
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+
+    return { ok: true, tag: el.tagName, placeholder: ${safePlaceholder}, valueLength: el.value.length };
+  })()
+  `;
+
+  try {
+    const result = await evaluateAcrossContexts(typeScript);
+    log('TypeText', `Result: ${JSON.stringify(result)}`);
+    res.json(result || { ok: false, reason: 'null_result' });
+  } catch (e) {
+    log('TypeText', `Error: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 

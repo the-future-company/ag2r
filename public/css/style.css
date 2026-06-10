@@ -1344,7 +1344,7 @@ body {
 .dropdown-overlay {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 2400;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1754,6 +1754,112 @@ body {
   min-height: 24px;
 }
 
+/* ── Fallback CSS for Tailwind utility classes in AG HTML ── */
+/* These ensure the page looks decent even when Tailwind doesn't resolve */
+
+/* Flex layouts */
+.scheduled-tasks-content .flex { display: flex; }
+.scheduled-tasks-content .flex-col { flex-direction: column; }
+.scheduled-tasks-content .flex-1 { flex: 1; }
+.scheduled-tasks-content .items-center { align-items: center; }
+.scheduled-tasks-content .items-start { align-items: flex-start; }
+.scheduled-tasks-content .justify-between { justify-content: space-between; }
+.scheduled-tasks-content .justify-center { justify-content: center; }
+.scheduled-tasks-content .justify-end { justify-content: flex-end; }
+.scheduled-tasks-content .min-w-0 { min-width: 0; }
+.scheduled-tasks-content .w-full { width: 100%; }
+.scheduled-tasks-content .h-full { height: 100%; }
+.scheduled-tasks-content .shrink-0 { flex-shrink: 0; }
+.scheduled-tasks-content .overflow-hidden { overflow: hidden; }
+
+/* Gaps */
+.scheduled-tasks-content .gap-1 { gap: 4px; }
+.scheduled-tasks-content .gap-2 { gap: 8px; }
+.scheduled-tasks-content .gap-3 { gap: 12px; }
+.scheduled-tasks-content .gap-4 { gap: 16px; }
+
+/* Padding */
+.scheduled-tasks-content .p-2 { padding: 8px; }
+.scheduled-tasks-content .p-3 { padding: 12px; }
+.scheduled-tasks-content .p-4 { padding: 16px; }
+.scheduled-tasks-content .px-2 { padding-left: 8px; padding-right: 8px; }
+.scheduled-tasks-content .px-3 { padding-left: 12px; padding-right: 12px; }
+.scheduled-tasks-content .px-4 { padding-left: 16px; padding-right: 16px; }
+.scheduled-tasks-content .py-2 { padding-top: 8px; padding-bottom: 8px; }
+.scheduled-tasks-content .py-3 { padding-top: 12px; padding-bottom: 12px; }
+
+/* Text sizing */
+.scheduled-tasks-content .text-sm { font-size: 13px; }
+.scheduled-tasks-content .text-xs { font-size: 11px; }
+.scheduled-tasks-content .text-lg { font-size: 18px; }
+.scheduled-tasks-content .font-medium { font-weight: 500; }
+.scheduled-tasks-content .font-semibold { font-weight: 600; }
+
+/* Colors */
+.scheduled-tasks-content .text-foreground { color: var(--text-primary, #e0e4ea); }
+.scheduled-tasks-content .text-secondary-foreground { color: var(--text-secondary, #a0a8b4); }
+.scheduled-tasks-content .text-muted-foreground { color: var(--text-muted, #6b7280); }
+.scheduled-tasks-content .bg-background { background: var(--bg-app, #0e1318); }
+.scheduled-tasks-content .bg-secondary { background: var(--bg-secondary, #1f2328); }
+.scheduled-tasks-content .bg-muted { background: var(--bg-card, #1a1d23); }
+
+/* Borders */
+.scheduled-tasks-content .border { border: 1px solid var(--border, #2a2e35); }
+.scheduled-tasks-content .border-border { border-color: var(--border, #2a2e35); }
+.scheduled-tasks-content .rounded-md { border-radius: 6px; }
+.scheduled-tasks-content .rounded-lg { border-radius: 8px; }
+.scheduled-tasks-content .rounded-xl { border-radius: 12px; }
+.scheduled-tasks-content .rounded-full { border-radius: 9999px; }
+
+/* Search input styling */
+.scheduled-tasks-content input[type="text"],
+.scheduled-tasks-content input[placeholder*="earch"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px 8px 32px;
+  font-size: 14px;
+  color: var(--text-primary, #e0e4ea);
+  background: var(--bg-app, #0e1318);
+  border: 1px solid var(--border, #2a2e35);
+  border-radius: 8px;
+}
+
+/* Toggle switch base (when Tailwind class doesn't resolve) */
+.scheduled-tasks-content button[role="switch"] {
+  position: relative;
+  display: inline-flex;
+  width: 44px;
+  height: 24px;
+  border-radius: 9999px;
+  border: none;
+  transition: background-color 0.2s;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.scheduled-tasks-content button[role="switch"][aria-checked="true"] {
+  background: var(--accent, #8b5cf6);
+}
+.scheduled-tasks-content button[role="switch"][aria-checked="false"] {
+  background: var(--bg-secondary, #3a3f47);
+}
+.scheduled-tasks-content button[role="switch"] span {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: white;
+  transition: transform 0.2s;
+}
+
+/* Task card sections — give them some structure */
+.scheduled-tasks-content section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border, #2a2e35);
+}
+
+/* Hidden utility */
+.scheduled-tasks-content .hidden { display: none !important; }
+
 /* ── Scheduled Tasks Dialog (New Scheduled Task form) ── */
 .scheduled-tasks-dialog {
   position: fixed;
@@ -1786,15 +1892,149 @@ body {
   width: 100%;
   box-sizing: border-box;
   font-size: 16px; /* Prevent iOS zoom */
+  padding: 8px 12px;
+  color: var(--text-primary, #e0e4ea);
+  background: var(--bg-app, #0e1318);
+  border: 1px solid var(--border, #2a2e35);
+  border-radius: 8px;
 }
 
-/* Ensure dropdowns (Daily, time) are tappable */
+/* Ensure dropdowns (Daily, time, project) are tappable */
 .scheduled-tasks-dialog button,
-.scheduled-tasks-dialog [role="combobox"] {
+.scheduled-tasks-dialog [role="combobox"],
+.scheduled-tasks-dialog [aria-expanded] {
   min-height: 36px;
+  cursor: pointer;
 }
+
+/* Dropdown selector divs — look interactive */
+.scheduled-tasks-dialog [aria-expanded] {
+  padding: 6px 10px;
+  border: 1px solid var(--border, #2a2e35);
+  border-radius: 8px;
+  color: var(--text-primary, #e0e4ea);
+}
+
+/* ── Fallback Tailwind utilities for dialog HTML ── */
+.scheduled-tasks-dialog .flex { display: flex; }
+.scheduled-tasks-dialog .flex-col { flex-direction: column; }
+.scheduled-tasks-dialog .flex-1 { flex: 1; }
+.scheduled-tasks-dialog .items-center { align-items: center; }
+.scheduled-tasks-dialog .items-start { align-items: flex-start; }
+.scheduled-tasks-dialog .justify-between { justify-content: space-between; }
+.scheduled-tasks-dialog .justify-end { justify-content: flex-end; }
+.scheduled-tasks-dialog .w-full { width: 100%; }
+.scheduled-tasks-dialog .gap-1 { gap: 4px; }
+.scheduled-tasks-dialog .gap-2 { gap: 8px; }
+.scheduled-tasks-dialog .gap-3 { gap: 12px; }
+.scheduled-tasks-dialog .gap-4 { gap: 16px; }
+.scheduled-tasks-dialog .p-4 { padding: 16px; }
+.scheduled-tasks-dialog .text-sm { font-size: 13px; }
+.scheduled-tasks-dialog .text-xs { font-size: 11px; }
+.scheduled-tasks-dialog .font-medium { font-weight: 500; }
+.scheduled-tasks-dialog .text-foreground { color: var(--text-primary, #e0e4ea); }
+.scheduled-tasks-dialog .text-muted-foreground { color: var(--text-muted, #6b7280); }
+.scheduled-tasks-dialog .rounded-lg { border-radius: 8px; }
+.scheduled-tasks-dialog .rounded-xl { border-radius: 12px; }
 
 /* ── Comment FAB (floating action button on text selection) ── */
+/* ── Text Input Modal (for scheduled tasks form fields) ── */
+.text-input-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+}
+
+.text-input-modal.hidden {
+  display: none;
+}
+
+.text-input-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.text-input-card {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-card, #1a1d23);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border, #2a2e35);
+}
+
+.text-input-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary, #a0a8b4);
+}
+
+.text-input-field,
+.text-input-area {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-size: 16px; /* Prevent iOS zoom */
+  font-family: inherit;
+  color: var(--text-primary, #e0e4ea);
+  background: var(--bg-app, #0e1318);
+  border: 1px solid var(--border, #2a2e35);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.text-input-field:focus,
+.text-input-area:focus {
+  border-color: var(--accent, #8b5cf6);
+}
+
+.text-input-area {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.text-input-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.text-input-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.text-input-btn:active {
+  opacity: 0.7;
+}
+
+.text-input-btn.cancel {
+  background: var(--bg-secondary, #1f2328);
+  color: var(--text-secondary, #a0a8b4);
+}
+
+.text-input-btn.submit {
+  background: var(--accent, #8b5cf6);
+  color: white;
+}
+
 .comment-fab {
   position: fixed;
   z-index: 1500;
