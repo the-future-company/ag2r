@@ -712,6 +712,7 @@ const RUNNING_TASKS_SCRIPT = `
 // Separate script for Scheduled Tasks page — must run via evaluateAcrossContexts
 // because AG renders the scheduled tasks view in the isolated execution context.
 // Detects the page via the unique "Add scheduled task" button.
+// Returns just the page HTML string (dialog is captured separately — different context).
 const SCHEDULED_TASKS_SCRIPT = `
 (() => {
   const newBtn = document.querySelector('[aria-label="Add scheduled task"]');
@@ -729,7 +730,7 @@ const SCHEDULED_TASKS_SCRIPT = `
   // Find the inner panel that has the scheduled tasks content
   const inner = container.querySelector('.flex-1.flex.flex-col.min-w-0.h-full') || container;
 
-  // Tag interactive elements
+  // Tag interactive elements on the page
   let idx = 0;
   const tagged = [];
   inner.querySelectorAll('button, a, [role="button"], input, select, textarea').forEach(el => {
@@ -738,7 +739,36 @@ const SCHEDULED_TASKS_SCRIPT = `
     idx++;
     tagged.push(el);
   });
-  const clone = inner.cloneNode(true);
+  const pageClone = inner.cloneNode(true);
+  tagged.forEach(el => {
+    el.removeAttribute('data-ag-click-id');
+    el.removeAttribute('data-ag-click-label');
+  });
+
+  return pageClone.outerHTML;
+})()
+`;
+
+// Separate script for the Scheduled Tasks dialog (New Scheduled Task form, etc.)
+// This is a DIFFERENT execution context from the page, so it must run independently.
+// Detects the z-[2550] overlay that AG uses for modal dialogs.
+const SCHEDULED_TASKS_DIALOG_SCRIPT = `
+(() => {
+  const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
+  if (!overlay || overlay.getBoundingClientRect().width <= 0) return null;
+  // Only capture if this looks like a scheduled task dialog (not settings)
+  const text = overlay.textContent || '';
+  if (!text.includes('Scheduled Task') && !text.includes('task name')) return null;
+
+  let idx = 0;
+  const tagged = [];
+  overlay.querySelectorAll('button, a, [role="button"], input, select, textarea, [role="combobox"], [role="switch"]').forEach(el => {
+    el.setAttribute('data-ag-click-id', 'scheddlg:' + idx);
+    el.setAttribute('data-ag-click-label', (el.textContent || el.getAttribute('placeholder') || '').trim().substring(0, 50));
+    idx++;
+    tagged.push(el);
+  });
+  const clone = overlay.cloneNode(true);
   tagged.forEach(el => {
     el.removeAttribute('data-ag-click-id');
     el.removeAttribute('data-ag-click-label');
@@ -851,11 +881,22 @@ async function captureSnapshot() {
       console.debug('[Snapshot] Running tasks eval failed:', e.message);
     }
 
-    // Scheduled Tasks page: also in the isolated context
+    // Scheduled Tasks page: in the isolated context, returns HTML string
     try {
       result.scheduledTasksHtml = await evaluateAcrossContexts(SCHEDULED_TASKS_SCRIPT);
     } catch (e) {
       console.debug('[Snapshot] Scheduled tasks eval failed:', e.message);
+    }
+
+    // Scheduled Tasks dialog (New Scheduled Task form): may be in a DIFFERENT
+    // context than the page, so we run a separate capture independently.
+    // Only runs when the page is detected (to avoid false positives from settings dialog).
+    if (result.scheduledTasksHtml) {
+      try {
+        result.scheduledTasksDialogHtml = await evaluateAcrossContexts(SCHEDULED_TASKS_DIALOG_SCRIPT);
+      } catch (e) {
+        console.debug('[Snapshot] Scheduled tasks dialog eval failed:', e.message);
+      }
     }
 
     return result;
@@ -1019,7 +1060,8 @@ function startPolling() {
           (snapshot.settingsHtml || '') +
           (snapshot.permissionHtml || '') +
           (snapshot.runningTasksHtml || '') +
-          (snapshot.scheduledTasksHtml || '')
+          (snapshot.scheduledTasksHtml || '') +
+          (snapshot.scheduledTasksDialogHtml || '')
         );
 
         // Only broadcast and update cache when content actually changes
@@ -1200,6 +1242,7 @@ app.get('/snapshot', (req, res) => {
     modelName: cachedSnapshot.modelName || null,
     runningTasksHtml: cachedSnapshot.runningTasksHtml || null,
     scheduledTasksHtml: cachedSnapshot.scheduledTasksHtml || null,
+    scheduledTasksDialogHtml: cachedSnapshot.scheduledTasksDialogHtml || null,
   });
 });
 
@@ -1339,7 +1382,7 @@ app.post('/dismiss-settings', async (req, res) => {
       (async () => {
         // Click the backdrop overlay behind the settings card to close entirely.
         // Don't use 'Go Back' — it navigates through tab history instead of closing.
-        const overlay = document.querySelector('#root .fixed.inset-0[class*="z-[2550]"]');
+        const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
         if (overlay) {
           // The backdrop is the overlay itself; clicking outside the card closes settings.
           // Dispatch click at the overlay edges (not on the card).
@@ -1430,6 +1473,31 @@ app.post('/click', async (req, res) => {
       `;
       const result = await evaluateAcrossContexts(schedClickScript);
       log('Click', `Sched result: ${JSON.stringify(result)}`);
+      return res.json(result || { ok: false, reason: 'null_result' });
+    }
+
+    // Scheduled Tasks dialog clicks (New Scheduled Task form) — different context from page
+    if (String(clickId).startsWith('scheddlg:')) {
+      const dlgIdx = parseInt(String(clickId).split(':')[1], 10);
+      const dlgClickScript = `
+      (() => {
+        const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
+        if (!overlay || overlay.getBoundingClientRect().width <= 0) return { ok: false, reason: 'no_dialog' };
+        const elements = overlay.querySelectorAll('button, a, [role="button"], input, select, textarea, [role="combobox"], [role="switch"]');
+        const idx = ${dlgIdx};
+        if (idx < 0 || idx >= elements.length) return { ok: false, reason: 'dlg_index_out_of_range', total: elements.length };
+        const target = elements[idx];
+        const actualLabel = (target.textContent || target.getAttribute('placeholder') || '').trim().substring(0, 80);
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+          target.focus();
+        } else {
+          target.click();
+        }
+        return { ok: true, label: actualLabel, source: 'scheddlg' };
+      })()
+      `;
+      const result = await evaluateAcrossContexts(dlgClickScript);
+      log('Click', `SchedDlg result: ${JSON.stringify(result)}`);
       return res.json(result || { ok: false, reason: 'null_result' });
     }
 
@@ -1709,7 +1777,8 @@ app.post('/click', async (req, res) => {
                 (snapshot.dialogHtml || '') +
                 (snapshot.settingsHtml || '') +
                 (snapshot.permissionHtml || '') +
-                (snapshot.scheduledTasksHtml || '')
+                (snapshot.scheduledTasksHtml || '') +
+                (snapshot.scheduledTasksDialogHtml || '')
               );
               if (hash !== lastSnapshotHash) {
                 cachedSnapshot = snapshot;

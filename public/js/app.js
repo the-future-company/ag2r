@@ -68,6 +68,7 @@ const settingsBack = document.getElementById('settings-back');
 // Scheduled Tasks overlay
 const scheduledTasksOverlay = document.getElementById('scheduled-tasks-overlay');
 const scheduledTasksContent = document.getElementById('scheduled-tasks-content');
+const scheduledTasksDialog = document.getElementById('scheduled-tasks-dialog');
 const scheduledTasksBack = document.getElementById('scheduled-tasks-back');
 // Running tasks strip
 const runningTasks = document.getElementById('running-tasks');
@@ -694,6 +695,19 @@ async function loadSnapshot() {
     } else {
       scheduledTasksOverlay.classList.add('hidden');
       scheduledTasksContent._lastHtml = '';
+    }
+
+    // Render Scheduled Tasks dialog (New Scheduled Task form, etc.)
+    if (data.scheduledTasksDialogHtml) {
+      if (scheduledTasksDialog._lastHtml !== data.scheduledTasksDialogHtml) {
+        scheduledTasksDialog._lastHtml = data.scheduledTasksDialogHtml;
+        scheduledTasksDialog.innerHTML = data.scheduledTasksDialogHtml;
+        addClickProxyHandlers(scheduledTasksDialog);
+      }
+      scheduledTasksDialog.classList.remove('hidden');
+    } else {
+      scheduledTasksDialog.classList.add('hidden');
+      scheduledTasksDialog._lastHtml = '';
     }
 
     // Track active artifact URI for commenting

@@ -1754,6 +1754,46 @@ body {
   min-height: 24px;
 }
 
+/* ── Scheduled Tasks Dialog (New Scheduled Task form) ── */
+.scheduled-tasks-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.scheduled-tasks-dialog.hidden {
+  display: none;
+}
+
+/* Style the captured dialog card */
+.scheduled-tasks-dialog > * {
+  max-width: 100% !important;
+  max-height: 90vh !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px !important;
+  background: var(--bg-app, #0e1318) !important;
+}
+
+/* Inputs and textareas should be full width and styled */
+.scheduled-tasks-dialog input,
+.scheduled-tasks-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 16px; /* Prevent iOS zoom */
+}
+
+/* Ensure dropdowns (Daily, time) are tappable */
+.scheduled-tasks-dialog button,
+.scheduled-tasks-dialog [role="combobox"] {
+  min-height: 36px;
+}
+
 /* ── Comment FAB (floating action button on text selection) ── */
 .comment-fab {
   position: fixed;
