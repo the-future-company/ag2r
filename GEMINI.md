@@ -158,3 +158,7 @@ ONBOARDING.md follows a strict **pointer-based context map** pattern. The princi
 6. **Always provide the local IP for test servers.** The user tests on their phone over the local network — `localhost` doesn't work from a phone. When starting a test server, run `ipconfig getifaddr en0` and give the full URL: `https://<ip>:<port>`.
 
 7. **Server port allocation.** Port **3000** is reserved for the main branch server. Port **3100** is reserved for the hub. Agent servers use **[3001, 3099]**. See Core Behavior #4 for the full testing workflow.
+
+8. **Hub.js changes need a test hub.** The testing workflow (Core Behavior #4) is for `server.js` changes. For `hub.js` changes (landing page, hub API), start the modified hub on a test port: `HUB_PORT=3033 node hub.js`. The production hub on 3100 runs old code from `~/Workspace/ag2r` — starting `server.js` won't test hub changes.
+
+9. **Never trigger restart-antigravity from the agent.** Killing Antigravity kills the agent's own session. Add logging, let the user trigger the restart from their phone, and review logs after AG comes back up.
