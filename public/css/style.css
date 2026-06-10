@@ -1187,8 +1187,11 @@ body {
   flex-direction: column;
   width: 100%;
   max-width: 500px;
-  gap: 8px;
   position: relative;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, #ffffff 5%, #101010);
+  overflow: hidden;
 }
 
 .ag2r-new-session-form textarea {
@@ -1196,21 +1199,17 @@ body {
   min-height: 80px;
   max-height: 200px;
   padding: 14px;
-  border-radius: 16px 16px 0 0;
-  border: 1px solid var(--border-primary);
-  border-bottom: none;
-  background: var(--bg-secondary);
+  border: none;
+  background: transparent;
   color: var(--text-primary);
   font-size: 14px;
   font-family: var(--font-sans);
   resize: vertical;
   outline: none;
-  transition: border-color 0.15s;
   line-height: 1.5;
 }
 
 .ag2r-new-session-form textarea:focus {
-  border-color: var(--border-primary);
   outline: none;
 }
 
@@ -1223,10 +1222,6 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-top: none;
-  border-radius: 0 0 16px 16px;
 }
 
 .ag2r-new-session-left,
@@ -1278,8 +1273,8 @@ body {
   align-items: center;
   gap: 6px;
   width: 100%;
-  max-width: 500px;
-  padding: 0 4px;
+  padding: 6px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .ag2r-env-chip {

@@ -1497,8 +1497,8 @@ function renderNewSessionPage(container, data) {
             </button>
           </div>
         </div>
+        ${envBarHtml}
       </form>
-      ${envBarHtml}
     </div>
   `;
 
