@@ -788,6 +788,24 @@ scrollFab.addEventListener('click', () => {
 // ─────────────────────────────────────────────
 // Code Block Copy Buttons
 // ─────────────────────────────────────────────
+function getCodeBlockText(pre) {
+  // AG renders code blocks with .code-line > .line-content elements.
+  // textContent concatenates without newlines; we must extract line-by-line.
+  const code = pre.querySelector('code') || pre;
+
+  // Strategy 1: AG's line-based rendering (.code-line .line-content)
+  const lineContents = code.querySelectorAll('.line-content');
+  if (lineContents.length > 0) {
+    return Array.from(lineContents).map(lc => lc.textContent).join('\n');
+  }
+
+  // Strategy 2: Use innerText (layout-aware, preserves visual line breaks)
+  // Clone to strip <style> tags and UI elements (copy buttons, etc.)
+  const clone = code.cloneNode(true);
+  clone.querySelectorAll('style, button, .mobile-copy-btn').forEach(el => el.remove());
+  return clone.innerText;
+}
+
 function addMobileCopyButtons() {
   chatContent.querySelectorAll('pre').forEach(pre => {
     // Skip if already has copy button
@@ -805,12 +823,11 @@ function addMobileCopyButtons() {
     const btn = document.createElement('button');
     btn.className = 'mobile-copy-btn';
     btn.textContent = 'Copy';
+    btn.addEventListener('mousedown', e => e.preventDefault()); // Keep keyboard open
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
-        // Get code text (prefer <code> child if present)
-        const code = pre.querySelector('code');
-        const text = (code || pre).textContent;
+        const text = getCodeBlockText(pre);
         await navigator.clipboard.writeText(text);
         btn.textContent = 'Copied!';
         btn.classList.add('copied');
