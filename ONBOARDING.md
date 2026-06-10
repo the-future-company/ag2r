@@ -51,6 +51,7 @@
 | Self-signed SSL certs (auto-generated, gitignored) | `certs/` |
 | PWA manifest (home screen icon + app metadata) | `public/manifest.json` |
 | Multi-worktree hub (dev-only proxy) | `hub.js` |
+| Hub: Antigravity restart + status detection | `hub.js` — search `handleRestartAntigravity` and `antigravityRunning` |
 | Main server watchdog + auto-updater (cron scripts) | `scripts/watchdog.sh`, `scripts/updater.sh`, `scripts/hub-watchdog.sh`, `scripts/tunnel-watchdog.sh` |
 | Voice input (shared factory for main + new session mic) | `public/js/app.js` — search `createVoiceInput` |
 | README screenshots (product showcase) | `docs/` |
@@ -71,6 +72,7 @@
 - **Auth is env-var driven, not IP-based.** `AUTH_ENABLED=false` (default in `.env`) disables auth entirely — no login screen. The `ag2r()` shell function passes `AUTH_ENABLED=true` for production/tunnel use. Feature branch testing never needs auth.
 - **Right sidebar is on-demand, not polled.** The right sidebar HTML is NOT included in continuous snapshot polling (too heavy — can be 100KB+). Instead, `CAPTURE_SCRIPT` extracts a lightweight `sidebarSignature` (tab IDs + active tab, ~50 bytes). The full sidebar HTML is fetched via `GET /right-sidebar` when the user opens the panel. The client auto-refreshes when the signature changes while the sidebar is open.
 - **Right sidebar selector is fragile.** The AG right panel is found via `data-tab-id` buttons and `close-aux-pane` testid in `RIGHT_SIDEBAR_SCRIPT`. There are no stable container IDs. If AG's layout changes, the sidebar capture may fail silently (returns null). Use `GET /discover` to debug.
+- **Electron process detection on macOS.** `pgrep -x Antigravity` does NOT work — macOS Electron apps report the full binary path. Use `ps aux | grep "[A]ntigravity.app/Contents/MacOS/Antigravity"` instead. The `[A]` trick excludes the grep process itself.
 - **Click proxy indices are ephemeral.** `data-ag-click-id` is assigned per snapshot by iterating visible `button/a/[role=button]` elements in DOM order. If the DOM changes between snapshot capture and click proxy execution (e.g., streaming content), the index can point to the wrong element. The label validation in `POST /click` catches most mismatches.
 - **AG artifact/file cards are DIVs, not buttons.** AG renders artifact banners and file-changed cards as `<div class="cursor-pointer" onclick="...">`, not `<button>`. The `maxTextLength` filter for cursor-pointer elements would skip them (text often >80 chars). The filter exempts elements with a direct `onclick` handler — if this breaks, check `tagInteractives` in `server.js`.
 - **Focus emulation (fragile).** `Emulation.setFocusEmulationEnabled({enabled: true})` is called on CDP connect to force AG's page to render while in the background. Without this, collapsible sections ("Worked for", "Thought for") expand structurally but React defers rendering their content, producing empty space. This is a CDP-level hack — if Electron or Chrome changes this API's behavior, it could cause side effects (e.g., cursor blinks, focus stealing). If strange behavior appears, disabling this is the first thing to try.
