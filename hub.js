@@ -500,6 +500,121 @@ function renderLandingPage() {
     .wt-btn-main:hover { background: #5558e6; }
     .wt-btn-main:disabled { opacity: 0.6; cursor: not-allowed; }
     .wt-btn-main .material-symbols-rounded { font-size: 20px; }
+
+    .ag-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 480px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 24px;
+    }
+
+    .ag-status-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ag-status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .ag-status-dot.running { background: var(--green); box-shadow: 0 0 6px rgba(34, 197, 94, 0.4); }
+    .ag-status-dot.stopped { background: var(--red); box-shadow: 0 0 6px rgba(239, 68, 68, 0.3); }
+    .ag-status-dot.no-debug { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.4); }
+
+    .ag-status-label { font-size: 13px; font-weight: 500; }
+    .ag-status-state { font-size: 12px; color: var(--text-dim); }
+
+    .btn-restart {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--red);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .btn-restart:hover { background: rgba(239, 68, 68, 0.1); border-color: var(--red); }
+    .btn-restart:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-restart .material-symbols-rounded { font-size: 16px; }
+
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-overlay.hidden { display: none; }
+
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 380px;
+      width: 100%;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .modal-body {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn-cancel {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .btn-confirm-danger {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      background: var(--red);
+      color: white;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-confirm-danger:hover { background: #dc2626; }
   </style>
 </head>
 <body>
@@ -509,12 +624,43 @@ function renderLandingPage() {
     <div class="hub-subtitle">Active Sessions</div>
   </div>
 
+  <div id="ag-status" class="ag-status">
+    <div class="ag-status-left">
+      <div id="ag-dot" class="ag-status-dot stopped"></div>
+      <div>
+        <div class="ag-status-label">Antigravity</div>
+        <div id="ag-state" class="ag-status-state">Checking...</div>
+      </div>
+    </div>
+    <button id="restart-btn" class="btn-restart" onclick="showRestartModal()">
+      <span class="material-symbols-rounded">restart_alt</span>Restart
+    </button>
+  </div>
+
   <div id="server-list" class="server-list"></div>
 
   <div class="scan-info">Scanning ports ${SCAN_MIN}–${SCAN_MAX} every ${SCAN_INTERVAL / 1000}s</div>
 
+  <div id="restart-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-title">Restart Antigravity?</div>
+      <div class="modal-body">
+        This will force-quit the Antigravity desktop app and relaunch it with debug mode.
+        All active coding sessions will be interrupted.
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="hideRestartModal()">Cancel</button>
+        <button class="btn-confirm-danger" onclick="confirmRestart()">Restart</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const list = document.getElementById('server-list');
+    const agDot = document.getElementById('ag-dot');
+    const agState = document.getElementById('ag-state');
+    const restartBtn = document.getElementById('restart-btn');
+    const restartModal = document.getElementById('restart-modal');
     let lastData = null;
 
     async function refresh() {
@@ -525,8 +671,64 @@ function renderLandingPage() {
         if (json === lastData) return;
         lastData = json;
         render(data.servers, data.mainAvailable);
+        updateAgStatus(data.antigravityRunning, data.antigravityDebug);
       } catch (e) {
         console.debug('Status fetch error:', e);
+      }
+    }
+
+    function updateAgStatus(running, debug) {
+      if (running && debug) {
+        agDot.className = 'ag-status-dot running';
+        agState.textContent = 'Running (debug)';
+      } else if (running) {
+        agDot.className = 'ag-status-dot no-debug';
+        agState.textContent = 'Running (no debug)';
+      } else {
+        agDot.className = 'ag-status-dot stopped';
+        agState.textContent = 'Not running';
+      }
+    }
+
+    function showRestartModal() { restartModal.classList.remove('hidden'); }
+    function hideRestartModal() { restartModal.classList.add('hidden'); }
+
+    async function confirmRestart() {
+      hideRestartModal();
+      restartBtn.disabled = true;
+      restartBtn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Restarting...';
+      agState.textContent = 'Restarting...';
+      agDot.className = 'ag-status-dot stopped';
+
+      try {
+        const res = await fetch('/_hub/api/restart-antigravity', { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) {
+          restartBtn.innerHTML = '<span class="material-symbols-rounded">error</span>' + escapeHtml(data.error || 'Failed');
+          agState.textContent = 'Restart failed';
+          return;
+        }
+        agState.textContent = 'Launching...';
+        // Poll until AG comes back
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          await refresh();
+          const status = lastData ? JSON.parse(lastData) : {};
+          if (status.antigravityRunning) {
+            clearInterval(poll);
+            restartBtn.disabled = false;
+            restartBtn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>Restart';
+          } else if (attempts > 30) {
+            clearInterval(poll);
+            restartBtn.disabled = false;
+            restartBtn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>Restart';
+            agState.textContent = 'May still be starting...';
+          }
+        }, 2000);
+      } catch (e) {
+        restartBtn.innerHTML = '<span class="material-symbols-rounded">error</span>Error';
+        agState.textContent = 'Restart failed';
       }
     }
 
@@ -668,14 +870,32 @@ function handleHubApi(req, res, pathname) {
     servers.sort((a, b) => a.name.localeCompare(b.name));
     // Check if main dir exists and has server.js
     const mainAvailable = fs.existsSync(path.join(MAIN_DIR, 'server.js'));
+    // Check if Antigravity desktop app is running (and if debug mode is on)
+    let antigravityRunning = false;
+    let antigravityDebug = false;
+    try {
+      const psOutput = execSync(
+        'ps aux | grep "[A]ntigravity.app/Contents/MacOS/Antigravity"',
+        { encoding: 'utf-8', timeout: 2000 }
+      ).trim();
+      if (psOutput) {
+        antigravityRunning = true;
+        antigravityDebug = psOutput.includes('--remote-debugging-port');
+      }
+    } catch { /* not running or grep found 0 matches (exit 1) */ }
     res.writeHead(200);
-    res.end(JSON.stringify({ servers, mainAvailable }));
+    res.end(JSON.stringify({ servers, mainAvailable, antigravityRunning, antigravityDebug }));
     return;
   }
 
   // POST /_hub/api/start-main
   if (pathname === '/_hub/api/start-main' && req.method === 'POST') {
     return handleStartMain(req, res);
+  }
+
+  // POST /_hub/api/restart-antigravity
+  if (pathname === '/_hub/api/restart-antigravity' && req.method === 'POST') {
+    return handleRestartAntigravity(req, res);
   }
 
   // GET /_hub/api/clear-cookie
@@ -688,6 +908,47 @@ function handleHubApi(req, res, pathname) {
 
   res.writeHead(404);
   res.end(JSON.stringify({ error: 'Not found' }));
+}
+
+// ─────────────────────────────────────────────
+// Restart Antigravity (break-glass from landing page)
+// ─────────────────────────────────────────────
+function handleRestartAntigravity(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+
+  log('Antigravity', 'Restart requested');
+
+  // Respond immediately — if we kill AG, the hub process might survive but
+  // the client needs the response before we start killing things.
+  res.writeHead(200);
+  res.end(JSON.stringify({ ok: true, message: 'Antigravity restart initiated' }));
+
+  // Step 1: Kill all Antigravity processes
+  log('Antigravity', 'Step 1: Killing existing processes...');
+  try {
+    // killall works with the app name on macOS
+    const killOutput = execSync('killall "Antigravity" 2>&1 || true', {
+      encoding: 'utf-8', timeout: 5000,
+    }).trim();
+    log('Antigravity', `Kill result: ${killOutput || '(no output, likely killed)'}`);
+  } catch (e) {
+    log('Antigravity', `Kill error: ${e.message}`);
+  }
+
+  // Step 2: Wait for cleanup, then relaunch
+  setTimeout(() => {
+    log('Antigravity', 'Step 2: Relaunching with --remote-debugging-port=9000...');
+    try {
+      const child = spawn('open', ['-a', 'Antigravity', '--args', '--remote-debugging-port=9000'], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+      log('Antigravity', `Relaunch spawned (open PID: ${child.pid})`);
+    } catch (e) {
+      log('Antigravity', `Relaunch failed: ${e.message}`);
+    }
+  }, 2000);
 }
 
 // ─────────────────────────────────────────────
