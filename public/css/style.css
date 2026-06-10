@@ -278,10 +278,9 @@ body {
    To re-enable: comment out or remove the rules below.
    See ONBOARDING.md gotcha: "Sidebar hidden elements" */
 
-/* Task 1: Hide top 3 action buttons (New Conversation, History, Scheduled Tasks) */
+/* Task 1: Hide top 2 action buttons (New Conversation, History) — Scheduled Tasks is visible */
 [data-ag-click-label="New Conversation"],
-[data-ag-click-label="Conversation History"],
-[data-ag-click-label="Scheduled Tasks"] {
+[data-ag-click-label="Conversation History"] {
   display: none !important;
 }
 
@@ -1702,6 +1701,57 @@ body {
 /* Hide AG's close X button — positioned absolute top-right of settings card */
 .settings-content button[class*="absolute"][class*="top-4"][class*="right-4"] {
   display: none !important;
+}
+
+/* ── Scheduled Tasks full-screen overlay ── */
+.scheduled-tasks-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app, #0e1318);
+}
+
+.scheduled-tasks-overlay.hidden {
+  display: none;
+}
+
+.scheduled-tasks-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.scheduled-tasks-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0;
+}
+
+/* Remove AG's header bar from captured content (we have our own) */
+.scheduled-tasks-content > * > .shrink-0:first-child {
+  display: none !important;
+}
+
+/* Let AG's content fill the overlay */
+.scheduled-tasks-content > * {
+  max-width: 100% !important;
+  max-height: none !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Scheduled task toggle switches — ensure they're tappable */
+.scheduled-tasks-content button[role="switch"] {
+  min-width: 44px;
+  min-height: 24px;
 }
 
 /* ── Comment FAB (floating action button on text selection) ── */

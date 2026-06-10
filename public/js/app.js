@@ -65,6 +65,10 @@ const permissionContent = document.getElementById('permission-content');
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsContent = document.getElementById('settings-content');
 const settingsBack = document.getElementById('settings-back');
+// Scheduled Tasks overlay
+const scheduledTasksOverlay = document.getElementById('scheduled-tasks-overlay');
+const scheduledTasksContent = document.getElementById('scheduled-tasks-content');
+const scheduledTasksBack = document.getElementById('scheduled-tasks-back');
 // Running tasks strip
 const runningTasks = document.getElementById('running-tasks');
 const runningTasksHeader = document.getElementById('running-tasks-header');
@@ -677,6 +681,19 @@ async function loadSnapshot() {
     } else {
       settingsOverlay.classList.add('hidden');
       settingsContent._lastHtml = '';
+    }
+
+    // Render Scheduled Tasks overlay if AG's scheduled tasks page is open
+    if (data.scheduledTasksHtml) {
+      if (scheduledTasksContent._lastHtml !== data.scheduledTasksHtml) {
+        scheduledTasksContent._lastHtml = data.scheduledTasksHtml;
+        scheduledTasksContent.innerHTML = data.scheduledTasksHtml;
+        addClickProxyHandlers(scheduledTasksContent);
+      }
+      scheduledTasksOverlay.classList.remove('hidden');
+    } else {
+      scheduledTasksOverlay.classList.add('hidden');
+      scheduledTasksContent._lastHtml = '';
     }
 
     // Track active artifact URI for commenting
@@ -1315,6 +1332,13 @@ settingsBack.addEventListener('click', () => {
   fetchAPI('/dismiss-settings', { method: 'POST' }).catch(() => {});
 });
 
+// Scheduled Tasks back button — dismiss and navigate back to conversation
+scheduledTasksBack.addEventListener('click', () => {
+  scheduledTasksOverlay.classList.add('hidden');
+  scheduledTasksContent._lastHtml = '';
+  fetchAPI('/dismiss-scheduled-tasks', { method: 'POST' }).catch(() => {});
+});
+
 // ─────────────────────────────────────────────
 // Right Sidebar (on-demand fetch from AG)
 // ─────────────────────────────────────────────
@@ -1649,14 +1673,9 @@ function renderSidebar(container, html) {
     const topBar = container.querySelector('[style*="app-region: drag"]');
     if (topBar) topBar.remove();
 
-    // The wrapper div for the 3 hidden actions (New Conversation, History, Scheduled)
-    // It's a div.px-2 that is a direct child of the sidebar nav, containing the action buttons
-    const actionBtns = container.querySelectorAll('[data-ag-click-label="New Conversation"], [data-ag-click-label="Conversation History"], [data-ag-click-label="Scheduled Tasks"]');
-    if (actionBtns.length > 0) {
-      // Walk up to the px-2 wrapper and remove it entirely
-      const wrapper = actionBtns[0].closest('.px-2');
-      if (wrapper) wrapper.remove();
-    }
+    // Remove New Conversation and History buttons (not useful on mobile).
+    // Scheduled Tasks stays visible — it's the only action kept from the top 3.
+    container.querySelectorAll('[data-ag-click-label="New Conversation"], [data-ag-click-label="Conversation History"]').forEach(el => el.remove());
 
     // The separator line between actions and project list
     // It's a div with mt-3 mx-2 h-px (transparent background divider)
@@ -1719,10 +1738,12 @@ function addClickProxyHandlers(container) {
       // Close sidebar only for conversation row clicks (navigates away).
       // Conversation rows have min-h-[32px] in their class; project headers,
       // "See all/less", and "Settings" do not.
+      // Also close for "Scheduled Tasks" since it opens a full-screen overlay.
       if (clickId.startsWith('left:')) {
         const elClass = (el.className || '').toString();
         const isConversationRow = elClass.includes('min-h-[32px]');
-        if (isConversationRow) closeLeftSidebar();
+        const isScheduledTasks = label === 'Scheduled Tasks';
+        if (isConversationRow || isScheduledTasks) closeLeftSidebar();
       }
 
       // Close dropdown overlay after any dropdown/dialog action

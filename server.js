@@ -709,6 +709,44 @@ const RUNNING_TASKS_SCRIPT = `
 })()
 `;
 
+// Separate script for Scheduled Tasks page — must run via evaluateAcrossContexts
+// because AG renders the scheduled tasks view in the isolated execution context.
+// Detects the page via the unique "Add scheduled task" button.
+const SCHEDULED_TASKS_SCRIPT = `
+(() => {
+  const newBtn = document.querySelector('[aria-label="Add scheduled task"]');
+  if (!newBtn) return null;
+
+  // Walk up from the New button to find the content panel (stops before sidebar)
+  let container = newBtn;
+  for (let i = 0; i < 15; i++) {
+    if (!container.parentElement) break;
+    const p = container.parentElement;
+    if (p.getBoundingClientRect().x < 10) break;
+    container = p;
+  }
+
+  // Find the inner panel that has the scheduled tasks content
+  const inner = container.querySelector('.flex-1.flex.flex-col.min-w-0.h-full') || container;
+
+  // Tag interactive elements
+  let idx = 0;
+  const tagged = [];
+  inner.querySelectorAll('button, a, [role="button"], input, select, textarea').forEach(el => {
+    el.setAttribute('data-ag-click-id', 'sched:' + idx);
+    el.setAttribute('data-ag-click-label', (el.textContent || el.getAttribute('placeholder') || '').trim().substring(0, 50));
+    idx++;
+    tagged.push(el);
+  });
+  const clone = inner.cloneNode(true);
+  tagged.forEach(el => {
+    el.removeAttribute('data-ag-click-id');
+    el.removeAttribute('data-ag-click-label');
+  });
+  return clone.outerHTML;
+})()
+`;
+
 // Separate script for right sidebar — runs ON-DEMAND only (not every poll).
 // Reuses the same sidebar-finding strategies from the original capture.
 // Returns outerHTML with click-proxy tags for interactive elements.
@@ -797,8 +835,12 @@ const RIGHT_SIDEBAR_SCRIPT = `
 
 async function captureSnapshot() {
   try {
-    const result = await evaluateInBrowser(CAPTURE_SCRIPT);
-    if (!result) return null;
+    let result = await evaluateInBrowser(CAPTURE_SCRIPT);
+    // When CAPTURE_SCRIPT returns null (e.g. Scheduled Tasks page has no chat container),
+    // create a minimal result so cross-context captures (running tasks, scheduled tasks) still run.
+    if (!result) {
+      result = { html: '', css: '', agentRunning: false, scrollInfo: null };
+    }
 
     // Running tasks: separate eval that tries all contexts (first non-null wins)
     // because the task section may only be visible in a context different from
@@ -807,6 +849,13 @@ async function captureSnapshot() {
       result.runningTasksHtml = await evaluateAcrossContexts(RUNNING_TASKS_SCRIPT);
     } catch (e) {
       console.debug('[Snapshot] Running tasks eval failed:', e.message);
+    }
+
+    // Scheduled Tasks page: also in the isolated context
+    try {
+      result.scheduledTasksHtml = await evaluateAcrossContexts(SCHEDULED_TASKS_SCRIPT);
+    } catch (e) {
+      console.debug('[Snapshot] Scheduled tasks eval failed:', e.message);
     }
 
     return result;
@@ -969,7 +1018,8 @@ function startPolling() {
           (snapshot.dialogHtml || '') +
           (snapshot.settingsHtml || '') +
           (snapshot.permissionHtml || '') +
-          (snapshot.runningTasksHtml || '')
+          (snapshot.runningTasksHtml || '') +
+          (snapshot.scheduledTasksHtml || '')
         );
 
         // Only broadcast and update cache when content actually changes
@@ -1149,6 +1199,7 @@ app.get('/snapshot', (req, res) => {
     branchName: cachedSnapshot.branchName || null,
     modelName: cachedSnapshot.modelName || null,
     runningTasksHtml: cachedSnapshot.runningTasksHtml || null,
+    scheduledTasksHtml: cachedSnapshot.scheduledTasksHtml || null,
   });
 });
 
@@ -1247,6 +1298,37 @@ app.post('/dismiss-portal', async (req, res) => {
   }
 });
 
+// --- Dismiss Scheduled Tasks (navigate back to conversation) ---
+app.post('/dismiss-scheduled-tasks', async (req, res) => {
+  if (!cdpClient) return res.status(503).json({ error: 'CDP not connected' });
+  try {
+    // Click the active conversation in the sidebar to navigate back,
+    // or click the back button. Simplest: use browser history back.
+    const result = await evaluateAcrossContexts(`
+    (() => {
+      // Find a conversation row to click in the sidebar
+      const sidebar = document.querySelector('[class*="bg-sidebar"]');
+      if (sidebar) {
+        // Click the first conversation row (min-h-[32px] identifies them)
+        const row = sidebar.querySelector('[class*="min-h-[32px]"]');
+        if (row) {
+          row.click();
+          return { ok: true, method: 'sidebar-row' };
+        }
+      }
+      // Fallback: use history back
+      window.history.back();
+      return { ok: true, method: 'history-back' };
+    })()
+    `);
+    log('DismissScheduledTasks', JSON.stringify(result));
+    res.json(result || { ok: true });
+  } catch (e) {
+    console.debug('[DismissScheduledTasks] Error:', e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // --- Dismiss Settings (click AG's Go Back button) ---
 app.post('/dismiss-settings', async (req, res) => {
   if (!cdpClient) {
@@ -1313,6 +1395,41 @@ app.post('/click', async (req, res) => {
       `;
       const result = await evaluateAcrossContexts(taskClickScript);
       log('Click', `Task result: ${JSON.stringify(result)}`);
+      return res.json(result || { ok: false, reason: 'null_result' });
+    }
+
+    // Scheduled Tasks page clicks need evaluateAcrossContexts (isolated context)
+    if (String(clickId).startsWith('sched:')) {
+      const schedIdx = parseInt(String(clickId).split(':')[1], 10);
+      const schedClickScript = `
+      (() => {
+        const newBtn = document.querySelector('[aria-label="Add scheduled task"]');
+        if (!newBtn) return { ok: false, reason: 'no_scheduled_tasks_page' };
+        // Walk up to find the content panel
+        let container = newBtn;
+        for (let i = 0; i < 15; i++) {
+          if (!container.parentElement) break;
+          const p = container.parentElement;
+          if (p.getBoundingClientRect().x < 10) break;
+          container = p;
+        }
+        const inner = container.querySelector('.flex-1.flex.flex-col.min-w-0.h-full') || container;
+        const elements = inner.querySelectorAll('button, a, [role="button"], input, select, textarea');
+        const idx = ${schedIdx};
+        if (idx < 0 || idx >= elements.length) return { ok: false, reason: 'sched_index_out_of_range', total: elements.length };
+        const target = elements[idx];
+        const actualLabel = (target.textContent || target.getAttribute('placeholder') || '').trim().substring(0, 80);
+        // For inputs/textareas, focus instead of click
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+          target.focus();
+        } else {
+          target.click();
+        }
+        return { ok: true, label: actualLabel, source: 'sched' };
+      })()
+      `;
+      const result = await evaluateAcrossContexts(schedClickScript);
+      log('Click', `Sched result: ${JSON.stringify(result)}`);
       return res.json(result || { ok: false, reason: 'null_result' });
     }
 
@@ -1591,7 +1708,8 @@ app.post('/click', async (req, res) => {
                 (snapshot.dropdownHtml || '') +
                 (snapshot.dialogHtml || '') +
                 (snapshot.settingsHtml || '') +
-                (snapshot.permissionHtml || '')
+                (snapshot.permissionHtml || '') +
+                (snapshot.scheduledTasksHtml || '')
               );
               if (hash !== lastSnapshotHash) {
                 cachedSnapshot = snapshot;
@@ -1623,6 +1741,8 @@ app.post('/eval', async (req, res) => {
     res.json({ result });
   } catch (e) { res.json({ error: e.message }); }
 });
+
+
 
 // --- Upload Image ---
 app.post('/upload', upload.single('image'), async (req, res) => {
