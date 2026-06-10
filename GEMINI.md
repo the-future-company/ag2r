@@ -162,3 +162,5 @@ ONBOARDING.md follows a strict **pointer-based context map** pattern. The princi
 8. **Hub.js changes need a test hub.** The testing workflow (Core Behavior #4) is for `server.js` changes. For `hub.js` changes (landing page, hub API), start the modified hub on a test port: `HUB_PORT=3033 node hub.js`. The production hub on 3100 runs old code from `~/Workspace/ag2r` — starting `server.js` won't test hub changes.
 
 9. **Never trigger restart-antigravity from the agent.** Killing Antigravity kills the agent's own session. Add logging, let the user trigger the restart from their phone, and review logs after AG comes back up.
+
+10. **Handover prompts in code blocks.** When producing a next-session / continuation prompt, wrap the entire prompt in a 4-backtick code block so the user can copy it from the remote app.

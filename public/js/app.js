@@ -1735,6 +1735,9 @@ function addClickProxyHandlers(container) {
     el.dataset.agClickWired = '1';
     wiredCount++;
 
+    // Prevent keyboard dismissal: stop mousedown from stealing focus
+    el.addEventListener('mousedown', e => e.preventDefault());
+
     el.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1759,6 +1762,27 @@ function addClickProxyHandlers(container) {
           );
           return; // Don't proxy the click
         }
+      }
+
+      // Intercept Copy button — get markdown source from AG and copy to phone clipboard
+      if (el.getAttribute('aria-label') === 'Copy') {
+        try {
+          const res = await fetchAPI('/copy-response', {
+            method: 'POST',
+            body: JSON.stringify({ clickId }),
+          });
+          const result = await res.json();
+          if (result.ok && result.text) {
+            await navigator.clipboard.writeText(result.text);
+            // Visual feedback — green checkmark
+            const origHTML = el.innerHTML;
+            el.innerHTML = '<span style="font-size:12px;color:#4ade80">✓</span>';
+            setTimeout(() => { el.innerHTML = origHTML; }, 1500);
+          }
+        } catch (err) {
+          console.debug('[Copy] Error:', err.message);
+        }
+        return;
       }
       el.classList.add('ag-clicking');
       let result = null;
