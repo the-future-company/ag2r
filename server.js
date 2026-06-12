@@ -715,11 +715,24 @@ const RUNNING_TASKS_SCRIPT = `
 // Returns just the page HTML string (dialog is captured separately — different context).
 const SCHEDULED_TASKS_SCRIPT = `
 (() => {
-  const newBtn = document.querySelector('[aria-label="Add scheduled task"]');
-  if (!newBtn) return null;
+  // Try list view first (has "Add scheduled task" button)
+  let anchor = document.querySelector('[aria-label="Add scheduled task"]');
 
-  // Walk up from the New button to find the content panel (stops before sidebar)
-  let container = newBtn;
+  // Fallback: task detail/edit view — has "Edit task title" button
+  if (!anchor) {
+    anchor = document.querySelector('[aria-label="Edit task title"]');
+  }
+
+  // Fallback: task detail with name editing active — "Edit task title" button is replaced
+  // by an inline input, but the prompt textarea is always present
+  if (!anchor) {
+    anchor = document.querySelector('textarea[placeholder*="Prompt to execute"]');
+  }
+
+  if (!anchor) return null;
+
+  // Walk up from the anchor to find the content panel (stops before sidebar)
+  let container = anchor;
   for (let i = 0; i < 15; i++) {
     if (!container.parentElement) break;
     const p = container.parentElement;
@@ -739,11 +752,34 @@ const SCHEDULED_TASKS_SCRIPT = `
     idx++;
     tagged.push(el);
   });
+  // Also tag cursor-pointer divs (task cards are DIVs, not buttons)
+  inner.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
+    if (el.hasAttribute('data-ag-click-id')) return; // Already tagged
+    const text = (el.textContent || '').trim();
+    // Skip very long text containers (likely not interactive cards)
+    if (text.length > 200) return;
+    el.setAttribute('data-ag-click-id', 'sched:' + idx);
+    el.setAttribute('data-ag-click-label', text.substring(0, 50));
+    idx++;
+    tagged.push(el);
+  });
+  // Sync live input/textarea values into attributes before cloning
+  // (cloneNode copies HTML attributes but not live .value properties)
+  const valuedEls = [];
+  inner.querySelectorAll('input, textarea').forEach(el => {
+    valuedEls.push(el);
+    el.setAttribute('data-ag-value', el.value || '');
+  });
   const pageClone = inner.cloneNode(true);
   tagged.forEach(el => {
     el.removeAttribute('data-ag-click-id');
     el.removeAttribute('data-ag-click-label');
   });
+  valuedEls.forEach(el => el.removeAttribute('data-ag-value'));
+
+  // Strip <style> tags from captured HTML — AG's inline styles interfere
+  // with the remote app's CSS when injected via innerHTML
+  pageClone.querySelectorAll('style').forEach(s => s.remove());
 
   return pageClone.outerHTML;
 })()
@@ -757,8 +793,9 @@ const SCHEDULED_TASKS_DIALOG_SCRIPT = `
   const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
   if (!overlay || overlay.getBoundingClientRect().width <= 0) return null;
   // Only capture if this looks like a scheduled task dialog (not settings)
+  // Matches: new/edit task form ("Scheduled Task", "task name") and delete confirmation ("delete")
   const text = overlay.textContent || '';
-  if (!text.includes('Scheduled Task') && !text.includes('task name')) return null;
+  if (!text.includes('Scheduled Task') && !text.includes('task name') && !/delete/i.test(text)) return null;
 
   let idx = 0;
   const tagged = [];
@@ -797,6 +834,7 @@ const SCHEDULED_TASKS_DIALOG_SCRIPT = `
     el.removeAttribute('data-ag-click-label');
   });
   valuedEls.forEach(el => el.removeAttribute('data-ag-value'));
+  clone.querySelectorAll('style').forEach(s => s.remove());
   return clone.outerHTML;
 })()
 `;
@@ -922,8 +960,9 @@ async function captureSnapshot() {
         console.debug('[Snapshot] Scheduled tasks dialog eval failed:', e.message);
       }
 
-      // Also capture body-level dropdowns (Schedule selectors open listboxes as React portals)
-      // These are in the preferred context, not the isolated one.
+      // Also capture body-level dropdowns/popovers (React portals for schedule selectors, kebab menus).
+      // Try preferred context first (listbox for schedule dropdowns), then across all contexts
+      // for kebab menu context menus (popover-style portals in the isolated context).
       if (!result.dropdownHtml) {
         try {
           result.dropdownHtml = await evaluateInBrowser(`
@@ -951,6 +990,53 @@ async function captureSnapshot() {
           `);
         } catch (e) {
           console.debug('[Snapshot] Scheduled tasks dropdown eval failed:', e.message);
+        }
+      }
+
+      // Capture kebab context menus (popover/dialog portals) from the isolated context.
+      // These are body-level children with role="dialog", data-side attribute (Radix popover),
+      // or short text content indicating a context menu.
+      if (!result.dropdownHtml) {
+        try {
+          result.dropdownHtml = await evaluateAcrossContexts(`
+            (() => {
+              for (const child of document.body.children) {
+                if (child.id || child.tagName === 'SCRIPT' || child.tagName === 'STYLE') continue;
+                const text = child.textContent.trim();
+                if (!text || text.length > 500) continue;
+                // Match popover/context menu patterns:
+                // - role="dialog" (Radix popover)
+                // - data-side attribute (Radix positioning)
+                // - role="menu" or role="listbox"
+                const role = child.getAttribute('role');
+                const hasSide = child.hasAttribute('data-side') || child.querySelector('[data-side]');
+                const isPopover = role === 'dialog' || role === 'menu' || role === 'listbox' || hasSide;
+                // Also match plain divs that look like menus (few children, short text, buttons inside)
+                const hasButtons = child.querySelectorAll('button, [role="menuitem"], [role="option"]').length > 0;
+                if (!isPopover && !hasButtons) continue;
+                if (child.getBoundingClientRect().width <= 0) continue;
+
+                let idx = 0;
+                const tagged = [];
+                child.querySelectorAll('button, [role="menuitem"], [role="option"], a').forEach(el => {
+                  el.setAttribute('data-ag-click-id', 'scheddlg:' + (100 + idx));
+                  el.setAttribute('data-ag-click-label', el.textContent.trim().substring(0, 50));
+                  idx++;
+                  tagged.push(el);
+                });
+                if (idx === 0) continue;
+                const clone = child.cloneNode(true);
+                tagged.forEach(el => {
+                  el.removeAttribute('data-ag-click-id');
+                  el.removeAttribute('data-ag-click-label');
+                });
+                return clone.outerHTML;
+              }
+              return null;
+            })()
+          `);
+        } catch (e) {
+          console.debug('[Snapshot] Kebab context menu eval failed:', e.message);
         }
       }
     }
@@ -1250,6 +1336,7 @@ app.get('/symbols-icons/*', (req, res) => {
   res.type('svg').send(EMPTY_SVG);
 });
 
+
 // --- Auth Endpoints ---
 app.post('/login', (req, res) => {
   const { password } = req.body;
@@ -1467,18 +1554,35 @@ app.post('/dismiss-portal', async (req, res) => {
   }
 });
 
-// --- Dismiss Scheduled Tasks (navigate back to conversation) ---
+// --- Dismiss Scheduled Tasks (navigate back: detail→list, list→conversation) ---
 app.post('/dismiss-scheduled-tasks', async (req, res) => {
   if (!cdpClient) return res.status(503).json({ error: 'CDP not connected' });
   try {
-    // Click the active conversation in the sidebar to navigate back,
-    // or click the back button. Simplest: use browser history back.
     const result = await evaluateAcrossContexts(`
     (() => {
-      // Find a conversation row to click in the sidebar
+      // Check if we're on the task detail view
+      const editBtn = document.querySelector('[aria-label="Edit task title"]');
+      const promptTA = document.querySelector('textarea[placeholder*="Prompt to execute"]');
+      if (editBtn || promptTA) {
+        // We're on the detail view — look for breadcrumb link back to list
+        const links = document.querySelectorAll('a');
+        for (const a of links) {
+          if ((a.textContent || '').trim() === 'Scheduled') {
+            a.click();
+            return { ok: true, method: 'detail-back' };
+          }
+        }
+        // Fallback: use AG's Go Back toolbar button
+        const goBack = document.querySelector('[aria-label="Go Back"]');
+        if (goBack) {
+          goBack.click();
+          return { ok: true, method: 'detail-back' };
+        }
+      }
+
+      // We're on the list view — navigate away to a conversation
       const sidebar = document.querySelector('[class*="bg-sidebar"]');
       if (sidebar) {
-        // Click the first conversation row (min-h-[32px] identifies them)
         const row = sidebar.querySelector('[class*="min-h-[32px]"]');
         if (row) {
           row.click();
@@ -1572,10 +1676,19 @@ app.post('/click', async (req, res) => {
       const schedIdx = parseInt(String(clickId).split(':')[1], 10);
       const schedClickScript = `
       (() => {
-        const newBtn = document.querySelector('[aria-label="Add scheduled task"]');
-        if (!newBtn) return { ok: false, reason: 'no_scheduled_tasks_page' };
+        // Try list view first (has "Add scheduled task" button)
+        let anchor = document.querySelector('[aria-label="Add scheduled task"]');
+        // Fallback: task detail/edit view
+        if (!anchor) {
+          anchor = document.querySelector('[aria-label="Edit task title"]');
+        }
+        // Fallback: task detail with name editing active
+        if (!anchor) {
+          anchor = document.querySelector('textarea[placeholder*="Prompt to execute"]');
+        }
+        if (!anchor) return { ok: false, reason: 'no_scheduled_tasks_page' };
         // Walk up to find the content panel
-        let container = newBtn;
+        let container = anchor;
         for (let i = 0; i < 15; i++) {
           if (!container.parentElement) break;
           const p = container.parentElement;
@@ -1583,7 +1696,15 @@ app.post('/click', async (req, res) => {
           container = p;
         }
         const inner = container.querySelector('.flex-1.flex.flex-col.min-w-0.h-full') || container;
-        const elements = inner.querySelectorAll('button, a, [role="button"], input, select, textarea');
+        const elements = [];
+        inner.querySelectorAll('button, a, [role="button"], input, select, textarea').forEach(el => elements.push(el));
+        // Also include cursor-pointer divs (task cards are DIVs, not buttons)
+        inner.querySelectorAll('[class*="cursor-pointer"]').forEach(el => {
+          if (elements.includes(el)) return;
+          const text = (el.textContent || '').trim();
+          if (text.length > 200) return;
+          elements.push(el);
+        });
         const idx = ${schedIdx};
         if (idx < 0 || idx >= elements.length) return { ok: false, reason: 'sched_index_out_of_range', total: elements.length };
         const target = elements[idx];
@@ -1599,34 +1720,122 @@ app.post('/click', async (req, res) => {
       `;
       const result = await evaluateAcrossContexts(schedClickScript);
       log('Click', `Sched result: ${JSON.stringify(result)}`);
-      return res.json(result || { ok: false, reason: 'null_result' });
+      res.json(result || { ok: false, reason: 'null_result' });
+
+      // After sched: clicks (especially kebab menu ⋮), fire burst re-captures
+      // to pick up the newly-opened context menu / dialog portal
+      if (result?.ok) {
+        const burstCapture = async (delay) => {
+          await new Promise(r => setTimeout(r, delay));
+          try {
+            const snapshot = await captureSnapshot();
+            if (snapshot) {
+              const hash = hashString(
+                snapshot.html +
+                (snapshot.leftSidebarHtml || '') +
+                (snapshot.sidebarSignature || '') +
+                (snapshot.dropdownHtml || '') +
+                (snapshot.dialogHtml || '') +
+                (snapshot.settingsHtml || '') +
+                (snapshot.permissionHtml || '') +
+                (snapshot.runningTasksHtml || '') +
+                (snapshot.scheduledTasksHtml || '') +
+                (snapshot.scheduledTasksDialogHtml || '')
+              );
+              if (hash !== lastSnapshotHash) {
+                cachedSnapshot = snapshot;
+                cachedSnapshot.hash = hash;
+                lastSnapshotHash = hash;
+                broadcast({ type: 'snapshot', hash, agentRunning: snapshot.agentRunning, timestamp: new Date().toISOString() });
+              }
+            }
+          } catch (e) {
+            console.debug('[BurstCapture] Error:', e.message);
+          }
+        };
+        burstCapture(150);
+        burstCapture(400);
+        burstCapture(700);
+      }
+      return;
     }
 
     // Scheduled Tasks dialog clicks (New Scheduled Task form) — different context from page
     if (String(clickId).startsWith('scheddlg:')) {
       const dlgIdx = parseInt(String(clickId).split(':')[1], 10);
 
-      // scheddlg:100+ → body-level listbox options (Schedule dropdown, in preferred context)
+      // scheddlg:100+ → body-level portal options (listbox for schedule dropdowns,
+      // or popover/context menu for kebab actions). Try preferred context first,
+      // then fall back to cross-context for isolated context portals.
       if (dlgIdx >= 100) {
         const optIdx = dlgIdx - 100;
-        const listboxClickScript = `
+        const portalClickScript = `
         (() => {
           for (const child of document.body.children) {
-            if (child.getAttribute('role') === 'listbox' && child.getBoundingClientRect().width > 0) {
-              const options = child.querySelectorAll('[role="option"], button, a');
-              const idx = ${optIdx};
-              if (idx < 0 || idx >= options.length) return { ok: false, reason: 'option_index_out_of_range', total: options.length };
-              const target = options[idx];
-              target.click();
-              return { ok: true, label: target.textContent.trim().substring(0, 50), source: 'scheddlg_listbox' };
-            }
+            if (child.id || child.tagName === 'SCRIPT' || child.tagName === 'STYLE') continue;
+            if (child.getBoundingClientRect().width <= 0) continue;
+            // Match listbox (schedule dropdowns) or popover/menu (kebab context menus)
+            const role = child.getAttribute('role');
+            const hasSide = child.hasAttribute('data-side') || child.querySelector('[data-side]');
+            const isPortal = role === 'listbox' || role === 'dialog' || role === 'menu' || hasSide;
+            const hasButtons = child.querySelectorAll('button, [role="menuitem"], [role="option"]').length > 0;
+            if (!isPortal && !hasButtons) continue;
+
+            const options = child.querySelectorAll('[role="option"], [role="menuitem"], button, a');
+            const idx = ${optIdx};
+            if (idx < 0 || idx >= options.length) return { ok: false, reason: 'option_index_out_of_range', total: options.length };
+            const target = options[idx];
+            target.click();
+            return { ok: true, label: target.textContent.trim().substring(0, 50), source: 'scheddlg_portal' };
           }
-          return { ok: false, reason: 'no_listbox' };
+          return null;
         })()
         `;
-        const result = await evaluateInBrowser(listboxClickScript);
-        log('Click', `SchedDlgListbox result: ${JSON.stringify(result)}`);
-        return res.json(result || { ok: false, reason: 'null_result' });
+        // Try preferred context first
+        let result = await evaluateInBrowser(portalClickScript);
+        // If not found in preferred context, try across all contexts (kebab menu in isolated context)
+        if (!result) {
+          result = await evaluateAcrossContexts(portalClickScript);
+        }
+        log('Click', `SchedDlgPortal result: ${JSON.stringify(result)}`);
+        res.json(result || { ok: false, reason: 'no_portal' });
+
+        // Burst re-captures: clicking a kebab menu option (e.g. Delete Task)
+        // may open a confirmation dialog or update the page
+        if (result?.ok) {
+          const burstCapture = async (delay) => {
+            await new Promise(r => setTimeout(r, delay));
+            try {
+              const snapshot = await captureSnapshot();
+              if (snapshot) {
+                const hash = hashString(
+                  snapshot.html +
+                  (snapshot.leftSidebarHtml || '') +
+                  (snapshot.sidebarSignature || '') +
+                  (snapshot.dropdownHtml || '') +
+                  (snapshot.dialogHtml || '') +
+                  (snapshot.settingsHtml || '') +
+                  (snapshot.permissionHtml || '') +
+                  (snapshot.runningTasksHtml || '') +
+                  (snapshot.scheduledTasksHtml || '') +
+                  (snapshot.scheduledTasksDialogHtml || '')
+                );
+                if (hash !== lastSnapshotHash) {
+                  cachedSnapshot = snapshot;
+                  cachedSnapshot.hash = hash;
+                  lastSnapshotHash = hash;
+                  broadcast({ type: 'snapshot', hash, agentRunning: snapshot.agentRunning, timestamp: new Date().toISOString() });
+                }
+              }
+            } catch (e) {
+              console.debug('[BurstCapture] Error:', e.message);
+            }
+          };
+          burstCapture(150);
+          burstCapture(400);
+          burstCapture(800);
+        }
+        return;
       }
 
       // scheddlg:0-99 → elements inside the z-[2550] dialog overlay
@@ -1673,7 +1882,44 @@ app.post('/click', async (req, res) => {
       `;
       const result = await evaluateAcrossContexts(dlgClickScript);
       log('Click', `SchedDlg result: ${JSON.stringify(result)}`);
-      return res.json(result || { ok: false, reason: 'null_result' });
+      res.json(result || { ok: false, reason: 'null_result' });
+
+      // Burst re-captures: dialog button clicks may close dialog, update the page,
+      // or open a new dialog (e.g. delete confirmation)
+      if (result?.ok) {
+        const burstCapture = async (delay) => {
+          await new Promise(r => setTimeout(r, delay));
+          try {
+            const snapshot = await captureSnapshot();
+            if (snapshot) {
+              const hash = hashString(
+                snapshot.html +
+                (snapshot.leftSidebarHtml || '') +
+                (snapshot.sidebarSignature || '') +
+                (snapshot.dropdownHtml || '') +
+                (snapshot.dialogHtml || '') +
+                (snapshot.settingsHtml || '') +
+                (snapshot.permissionHtml || '') +
+                (snapshot.runningTasksHtml || '') +
+                (snapshot.scheduledTasksHtml || '') +
+                (snapshot.scheduledTasksDialogHtml || '')
+              );
+              if (hash !== lastSnapshotHash) {
+                cachedSnapshot = snapshot;
+                cachedSnapshot.hash = hash;
+                lastSnapshotHash = hash;
+                broadcast({ type: 'snapshot', hash, agentRunning: snapshot.agentRunning, timestamp: new Date().toISOString() });
+              }
+            }
+          } catch (e) {
+            console.debug('[BurstCapture] Error:', e.message);
+          }
+        };
+        burstCapture(150);
+        burstCapture(400);
+        burstCapture(800);
+      }
+      return;
     }
 
     const clickScript = `
@@ -1987,26 +2233,85 @@ app.post('/eval', async (req, res) => {
 });
 
 // --- Type Text into input/textarea (React-compatible) ---
-// Targets element by placeholder text within the z-[2550] dialog overlay.
+// Targets element by placeholder text or by clickId (sched:N / scheddlg:N).
 // Uses React's nativeInputValueSetter trick to trigger onChange handlers.
 app.post('/type-text', async (req, res) => {
-  const { placeholder, text } = req.body;
-  if (!placeholder || text === undefined) {
-    return res.status(400).json({ error: 'placeholder and text are required' });
+  const { placeholder, text, clickId } = req.body;
+  if (text === undefined) {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  if (!placeholder && !clickId) {
+    return res.status(400).json({ error: 'placeholder or clickId is required' });
   }
   if (!cdpClient) {
     return res.status(503).json({ error: 'CDP not connected' });
   }
 
   const safeText = JSON.stringify(text);
-  const safePlaceholder = JSON.stringify(placeholder);
+  const safePlaceholder = JSON.stringify(placeholder || '');
+  const safeClickId = JSON.stringify(clickId || '');
+
+  // Build the element-finding script
+  // Strategy 1: find by placeholder (works for inputs with placeholder)
+  // Strategy 2: find by clickId index (works for inputs without placeholder, e.g. task name)
   const typeScript = `
   (() => {
-    // Find the target input/textarea by placeholder within the dialog
-    const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
-    const scope = overlay || document;
-    const el = scope.querySelector('input[placeholder=' + ${JSON.stringify(JSON.stringify(placeholder))} + '], textarea[placeholder=' + ${JSON.stringify(JSON.stringify(placeholder))} + ']');
-    if (!el) return { ok: false, reason: 'element_not_found', placeholder: ${safePlaceholder} };
+    let el = null;
+
+    // Strategy 1: find by placeholder
+    const placeholder = ${safePlaceholder};
+    if (placeholder) {
+      const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
+      const mainContent = document.querySelector('.flex-1.flex.flex-col.min-w-0.h-full');
+      const scope = overlay || mainContent || document;
+      el = scope.querySelector('input[placeholder=' + JSON.stringify(placeholder) + '], textarea[placeholder=' + JSON.stringify(placeholder) + ']');
+    }
+
+    // Strategy 2: find by clickId (sched:N or scheddlg:N)
+    if (!el) {
+      const clickId = ${safeClickId};
+      if (clickId) {
+        const parts = clickId.split(':');
+        const prefix = parts[0];
+        const idx = parseInt(parts[1], 10);
+
+        if (prefix === 'sched') {
+          // Use same anchor + element-finding logic as capture/click handler
+          let anchor = document.querySelector('[aria-label="Add scheduled task"]');
+          if (!anchor) anchor = document.querySelector('[aria-label="Edit task title"]');
+          if (!anchor) anchor = document.querySelector('textarea[placeholder*="Prompt to execute"]');
+          if (anchor) {
+            let container = anchor;
+            for (let i = 0; i < 15; i++) {
+              if (!container.parentElement) break;
+              const p = container.parentElement;
+              if (p.getBoundingClientRect().x < 10) break;
+              container = p;
+            }
+            const inner = container.querySelector('.flex-1.flex.flex-col.min-w-0.h-full') || container;
+            const elements = inner.querySelectorAll('button, a, [role="button"], input, select, textarea');
+            const cursorPointerDivs = inner.querySelectorAll('[class*="cursor-pointer"]');
+            // Merge into ordered list (same order as capture)
+            const allEls = [...elements];
+            cursorPointerDivs.forEach(cpEl => {
+              if (!allEls.includes(cpEl)) allEls.push(cpEl);
+            });
+            if (idx < allEls.length) el = allEls[idx];
+          }
+        } else if (prefix === 'scheddlg') {
+          const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
+          if (overlay) {
+            const elements = overlay.querySelectorAll('button, a, [role="button"], input, select, textarea');
+            if (idx < elements.length) el = elements[idx];
+          }
+        }
+      }
+    }
+
+    if (!el) return { ok: false, reason: 'element_not_found', placeholder: ${safePlaceholder}, clickId: ${safeClickId} };
+    if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') {
+      return { ok: false, reason: 'not_input', tag: el.tagName };
+    }
 
     // Focus the element
     el.focus();

@@ -1857,6 +1857,10 @@ body {
   border-bottom: 1px solid var(--border, #2a2e35);
 }
 
+/* cursor-pointer — critical for iOS tap events (iOS only fires click on "clickable" elements) */
+.scheduled-tasks-content .cursor-pointer { cursor: pointer; }
+.scheduled-tasks-content [class*="cursor-pointer"] { cursor: pointer; }
+
 /* Hidden utility */
 .scheduled-tasks-content .hidden { display: none !important; }
 
@@ -1944,9 +1948,9 @@ body {
   inset: 0;
   z-index: 2500;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: center;
-  padding: 16px;
+  padding: 60px 16px 16px;
 }
 
 .text-input-modal.hidden {

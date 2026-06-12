@@ -1371,11 +1371,22 @@ settingsBack.addEventListener('click', () => {
   fetchAPI('/dismiss-settings', { method: 'POST' }).catch(() => {});
 });
 
-// Scheduled Tasks back button — dismiss and navigate back to conversation
-scheduledTasksBack.addEventListener('click', () => {
+// Scheduled Tasks back button — detail view goes back to list, list view navigates to conversation
+scheduledTasksBack.addEventListener('click', async () => {
+  try {
+    const resp = await fetchAPI('/dismiss-scheduled-tasks', { method: 'POST' });
+    const data = await resp.json();
+    if (data.method === 'detail-back') {
+      // Went from detail view back to list — keep overlay open, clear cached HTML to force re-render
+      scheduledTasksContent._lastHtml = '';
+      return;
+    }
+  } catch (e) {
+    // Fall through to dismiss
+  }
+  // Navigated away from scheduled tasks entirely — hide overlay
   scheduledTasksOverlay.classList.add('hidden');
   scheduledTasksContent._lastHtml = '';
-  fetchAPI('/dismiss-scheduled-tasks', { method: 'POST' }).catch(() => {});
 });
 
 // ─────────────────────────────────────────────
@@ -1752,6 +1763,14 @@ function addClickProxyHandlers(container) {
     el.dataset.agClickWired = '1';
     wiredCount++;
 
+    // Ensure non-interactive elements (DIVs) are tappable on iOS Safari.
+    // iOS only fires click events on elements considered "clickable" —
+    // either semantic (button, a, input) or elements with cursor:pointer.
+    const tag = el.tagName;
+    if (tag !== 'BUTTON' && tag !== 'A' && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') {
+      el.style.cursor = 'pointer';
+    }
+
     // Prevent keyboard dismissal: stop mousedown from stealing focus
     el.addEventListener('mousedown', e => e.preventDefault());
 
@@ -1764,8 +1783,37 @@ function addClickProxyHandlers(container) {
 
       console.debug('[Click] id=' + clickId, 'label="' + label + '"', 'tag=' + el.tagName, 'class=' + (el.className || '').substring(0, 80));
 
-      // Intercept scheddlg: clicks on INPUT/TEXTAREA — show local text input modal
-      if (clickId.startsWith('scheddlg:')) {
+      // Intercept "Edit task title" pencil icon — single-click name editing
+      // Proxy the click (AG enters inline edit mode), then auto-open text input modal
+      if (clickId.startsWith('sched:') && el.getAttribute('aria-label') === 'Edit task title') {
+        // Get current name from nearby truncated span
+        const nameContainer = el.closest('[class*="flex"]');
+        const currentName = nameContainer?.querySelector('.truncate')?.textContent?.trim() || '';
+
+        // Proxy click to AG (enters inline edit mode)
+        fetchAPI('/click', {
+          method: 'POST',
+          body: JSON.stringify({ clickId, label }),
+        });
+
+        // Wait for burst re-capture to render the new input, then auto-open text input
+        const tryAutoOpen = () => {
+          // After edit mode, AG replaces the name span with an input — find it
+          const nameInput = scheduledTasksContent.querySelector(
+            'input:not([placeholder*="earch"]):not([type="hidden"]):not([role="switch"])'
+          );
+          if (nameInput && nameInput.dataset.agClickId) {
+            showTextInput('Task name', '', false, nameInput.getAttribute('data-ag-value') || currentName, nameInput.dataset.agClickId);
+            return true;
+          }
+          return false;
+        };
+        setTimeout(() => { if (!tryAutoOpen()) setTimeout(tryAutoOpen, 600); }, 600);
+        return;
+      }
+
+      // Intercept scheddlg: and sched: clicks on INPUT/TEXTAREA — show local text input modal
+      if (clickId.startsWith('scheddlg:') || clickId.startsWith('sched:')) {
         const origTag = el.tagName;
         const origPlaceholder = el.getAttribute('placeholder') || '';
         // Check if this element is an input/textarea (in the captured DOM)
@@ -1775,7 +1823,8 @@ function addClickProxyHandlers(container) {
             origPlaceholder || (origTag === 'TEXTAREA' ? 'Enter text' : 'Enter value'),
             origPlaceholder,
             origTag === 'TEXTAREA',
-            currentValue
+            currentValue,
+            clickId
           );
           return; // Don't proxy the click
         }
@@ -1826,8 +1875,8 @@ function addClickProxyHandlers(container) {
         if (isConversationRow || isScheduledTasks) closeLeftSidebar();
       }
 
-      // Close dropdown overlay after any dropdown/dialog action
-      if (clickId.startsWith('dropdown:') || clickId.startsWith('dialog:')) {
+      // Close dropdown overlay after any dropdown/dialog/scheduled-tasks-portal action
+      if (clickId.startsWith('dropdown:') || clickId.startsWith('dialog:') || (clickId.startsWith('scheddlg:') && parseInt(clickId.split(':')[1], 10) >= 100)) {
         overlayDismissedAt = Date.now();
         dropdownOverlay.classList.add('hidden');
       }
@@ -1877,9 +1926,11 @@ addClickProxyHandlers(inputBar);
 // Text Input Modal (for scheduled tasks form fields)
 // ─────────────────────────────────────────────
 let pendingTextInputPlaceholder = null;
+let pendingTextInputClickId = null;
 
-function showTextInput(label, placeholder, isTextarea, currentValue) {
+function showTextInput(label, placeholder, isTextarea, currentValue, clickId) {
   pendingTextInputPlaceholder = placeholder;
+  pendingTextInputClickId = clickId || null;
   textInputLabel.textContent = label;
 
   if (isTextarea) {
@@ -1907,21 +1958,23 @@ function closeTextInput() {
   textInputField.value = '';
   textInputArea.value = '';
   pendingTextInputPlaceholder = null;
+  pendingTextInputClickId = null;
 }
 
 async function submitTextInput() {
   const isTextarea = !textInputArea.classList.contains('hidden');
   const text = isTextarea ? textInputArea.value : textInputField.value;
   const placeholder = pendingTextInputPlaceholder;
+  const clickId = pendingTextInputClickId;
 
   closeTextInput();
 
-  if (!placeholder) return;
+  if (!placeholder && !clickId) return;
 
   try {
     const res = await fetchAPI('/type-text', {
       method: 'POST',
-      body: JSON.stringify({ placeholder, text }),
+      body: JSON.stringify({ placeholder, text, clickId }),
     });
     const result = await res.json();
     console.debug('[TypeText] Result:', result);
