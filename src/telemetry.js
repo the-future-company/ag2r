@@ -19,6 +19,14 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 // (ESM hoists imports, so module-scope reads would see empty env vars)
 // ─────────────────────────────────────────────
 
+// Default Firebase config for centralized telemetry.
+// These are intentionally public — Firebase API keys are project identifiers,
+// not secrets. Firestore security rules enforce create-only access with schema
+// validation. The Spark (free) plan has hard daily caps preventing abuse.
+// Override via .env to send telemetry to your own Firebase project.
+const DEFAULT_PROJECT_ID = 'ag2r-telemetry';
+const DEFAULT_API_KEY = 'AIzaSyDyV0ywPHpqzuYrk72GYSibxTAd6gKpn4w';
+
 let _configLoaded = false;
 let ENABLED = true;
 let FIREBASE_PROJECT_ID = '';
@@ -30,8 +38,8 @@ function loadConfig() {
   if (_configLoaded) return;
   _configLoaded = true;
   ENABLED = process.env.AG2R_TELEMETRY !== 'false';
-  FIREBASE_PROJECT_ID = process.env.TELEMETRY_FIREBASE_PROJECT_ID || '';
-  FIREBASE_API_KEY = process.env.TELEMETRY_FIREBASE_API_KEY || '';
+  FIREBASE_PROJECT_ID = process.env.TELEMETRY_FIREBASE_PROJECT_ID || DEFAULT_PROJECT_ID;
+  FIREBASE_API_KEY = process.env.TELEMETRY_FIREBASE_API_KEY || DEFAULT_API_KEY;
 }
 
 // ─────────────────────────────────────────────
