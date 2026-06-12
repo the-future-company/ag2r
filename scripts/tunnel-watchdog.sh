@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+# Homebrew PATH — cron doesn't inherit user's shell PATH
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 TUNNEL_LOG="${TUNNEL_LOG:-/tmp/ag2r-tunnel.log}"
 
 # Check if cloudflared is already running

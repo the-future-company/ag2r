@@ -13,6 +13,7 @@ export NVM_DIR="$HOME/.nvm"
 AG2R_MAIN_DIR="${AG2R_MAIN_DIR:-$HOME/Workspace/ag2r}"
 AG2R_MAIN_PORT="${AG2R_MAIN_PORT:-3000}"
 AG2R_LOG="${AG2R_LOG:-/tmp/ag2r-main.log}"
+BOOT_COMMIT_FILE="/tmp/ag2r-main-boot-commit"
 
 # Health check — if server responds, nothing to do
 HEALTH=$(curl -sk --connect-timeout 2 --max-time 5 \
@@ -31,7 +32,8 @@ if [ -n "$EXISTING_PID" ]; then
   sleep 1
 fi
 
-# Start server
+# Start server and record boot commit
 cd "$AG2R_MAIN_DIR"
 PORT="${AG2R_MAIN_PORT}" nohup node server.js >> "$AG2R_LOG" 2>&1 &
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server restarted with PID $!"
+git rev-parse HEAD > "$BOOT_COMMIT_FILE" 2>/dev/null || true
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server restarted with PID $! (commit $(cat "$BOOT_COMMIT_FILE" | head -c 12))"
