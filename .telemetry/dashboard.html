@@ -9,42 +9,41 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, 'Inter', sans-serif;
-      background: #0a0e1a;
-      color: #e2e8f0;
+      background: #101010;
+      color: #cccccc;
       min-height: 100vh;
     }
     .header {
       position: sticky; top: 0; z-index: 10;
-      background: #0a0e1aee; backdrop-filter: blur(12px);
-      padding: 16px 20px 12px; border-bottom: 1px solid #1e293b;
+      background: #161616ee; backdrop-filter: blur(12px);
+      padding: 16px 20px 12px; border-bottom: 1px solid #252525;
     }
     .header h1 {
       font-size: 22px; font-weight: 700;
-      background: linear-gradient(135deg, #818cf8, #6366f1, #a78bfa);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      color: #007acc;
       display: inline;
     }
     .header-row { display: flex; justify-content: space-between; align-items: center; }
     .refresh-btn {
-      background: #312e81; color: #a5b4fc; border: 1px solid #4338ca;
+      background: #1c1c1c; color: #007acc; border: 1px solid #2d2d2d;
       padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 12px;
     }
-    .last-update { color: #475569; font-size: 11px; margin-top: 4px; }
+    .last-update { color: #6e6e6e; font-size: 11px; margin-top: 4px; }
 
     /* Tabs */
     .tabs {
       display: flex; gap: 0; overflow-x: auto; padding: 0 20px;
-      border-bottom: 1px solid #1e293b; background: #0f1320;
+      border-bottom: 1px solid #252525; background: #161616;
       -webkit-overflow-scrolling: touch;
     }
     .tab {
-      padding: 10px 16px; font-size: 13px; color: #64748b;
+      padding: 10px 16px; font-size: 13px; color: #6e6e6e;
       border: none; background: none; cursor: pointer; white-space: nowrap;
       border-bottom: 2px solid transparent; transition: all 0.2s;
     }
-    .tab.active { color: #a5b4fc; border-bottom-color: #6366f1; }
+    .tab.active { color: #007acc; border-bottom-color: #007acc; }
     .tab .badge {
-      background: #312e81; color: #a5b4fc; font-size: 10px;
+      background: rgba(0, 122, 204, 0.15); color: #007acc; font-size: 10px;
       padding: 1px 6px; border-radius: 10px; margin-left: 4px;
     }
 
@@ -59,41 +58,41 @@
       gap: 10px; margin-bottom: 16px;
     }
     .stat-card {
-      background: #111827; border: 1px solid #1e293b;
+      background: #161616; border: 1px solid #252525;
       border-radius: 10px; padding: 12px; text-align: center;
     }
-    .stat-card .value { font-size: 28px; font-weight: 700; color: #818cf8; }
+    .stat-card .value { font-size: 28px; font-weight: 700; color: #007acc; }
     .stat-card .label {
-      font-size: 10px; color: #64748b; text-transform: uppercase;
+      font-size: 10px; color: #6e6e6e; text-transform: uppercase;
       letter-spacing: 0.5px; margin-top: 2px;
     }
 
     /* Chart cards */
     .chart-card {
-      background: #111827; border: 1px solid #1e293b;
+      background: #161616; border: 1px solid #252525;
       border-radius: 12px; padding: 14px; margin-bottom: 14px;
     }
     .chart-card h3 {
-      font-size: 14px; font-weight: 600; color: #cbd5e1; margin-bottom: 10px;
+      font-size: 14px; font-weight: 600; color: #cccccc; margin-bottom: 10px;
       display: flex; justify-content: space-between; align-items: center;
     }
     .chart-card h3 .count {
-      font-size: 20px; font-weight: 700; color: #818cf8;
+      font-size: 20px; font-weight: 700; color: #007acc;
     }
     .chart-wrap { position: relative; height: 120px; }
 
     /* Timeline */
     .event-row {
       display: flex; align-items: center; gap: 10px;
-      padding: 8px 0; border-bottom: 1px solid #1e293b44; font-size: 12px;
+      padding: 8px 0; border-bottom: 1px solid #25252544; font-size: 12px;
     }
-    .event-time { color: #475569; font-family: monospace; font-size: 11px; white-space: nowrap; }
+    .event-time { color: #6e6e6e; font-family: monospace; font-size: 11px; white-space: nowrap; }
     .event-tag {
-      background: #312e81; color: #a5b4fc; padding: 2px 8px;
+      background: rgba(0, 122, 204, 0.15); color: #60a5fa; padding: 2px 8px;
       border-radius: 6px; font-size: 11px; font-weight: 500; white-space: nowrap;
     }
-    .event-detail { color: #475569; font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
-    .empty { text-align: center; padding: 40px; color: #334155; font-size: 14px; }
+    .event-detail { color: #6e6e6e; font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+    .empty { text-align: center; padding: 40px; color: #2d2d2d; font-size: 14px; }
 
     @media (max-width: 400px) {
       .stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -103,7 +102,8 @@
 <body>
   <div class="header">
     <div class="header-row">
-      <h1>📊 AG2R Telemetry</h1>
+      <img src="/ag2r-icon.png" alt="AG2R" style="width:28px;height:28px;border-radius:6px;vertical-align:middle;margin-right:8px">
+      <h1>AG2R Telemetry</h1>
       <button class="refresh-btn" onclick="loadData()">⟳ Refresh</button>
     </div>
     <div class="last-update" id="lastUpdate">Loading...</div>
@@ -115,17 +115,17 @@
 
   <script>
     const COLORS = {
-      session_start: '#34d399', session_end: '#f87171', session_heartbeat: '#fbbf24',
-      message_sent: '#818cf8', image_uploaded: '#e879f9', code_copied: '#22d3ee',
-      generation_stopped: '#fb923c', cdp_disconnected: '#f87171', cdp_reconnected: '#34d399',
-      login: '#a78bfa', conversation_switched: '#6366f1', scheduled_task_viewed: '#c084fc',
-      plan_approved: '#4ade80', command_accepted: '#2dd4bf', api_error: '#ef4444',
-      comment_added: '#818cf8', comment_edited: '#a78bfa', comment_deleted: '#f472b6',
-      comments_sent: '#6366f1', voice_input_used: '#f59e0b', artifact_viewed: '#38bdf8',
-      model_changed: '#e879f9', branch_changed: '#c084fc', worktree_changed: '#a78bfa',
-      quick_action_used: '#facc15', client_error: '#ef4444',
+      session_start: '#22c55e', session_end: '#ef4444', session_heartbeat: '#9d9d9d',
+      message_sent: '#007acc', image_uploaded: '#60a5fa', code_copied: '#38bdf8',
+      generation_stopped: '#eab308', cdp_disconnected: '#ef4444', cdp_reconnected: '#22c55e',
+      login: '#1a8ad4', conversation_switched: '#60a5fa', scheduled_task_viewed: '#9d9d9d',
+      plan_approved: '#22c55e', command_accepted: '#22c55e', api_error: '#ef4444',
+      comment_added: '#007acc', comment_edited: '#1a8ad4', comment_deleted: '#ef4444',
+      comments_sent: '#60a5fa', voice_input_used: '#eab308', artifact_viewed: '#38bdf8',
+      model_changed: '#60a5fa', branch_changed: '#1a8ad4', worktree_changed: '#38bdf8',
+      quick_action_used: '#007acc', client_error: '#ef4444',
     };
-    const DEFAULT_COLOR = '#64748b';
+    const DEFAULT_COLOR = '#6e6e6e';
 
     const GROUPS = [
       { id: 'overview', label: 'Overview', events: null },
@@ -237,7 +237,7 @@
 
       // Render overview charts
       if (charts['all']) charts['all'].destroy();
-      charts['all'] = makeTimelineChart(document.getElementById('chart-all'), allEvents, '#818cf8');
+      charts['all'] = makeTimelineChart(document.getElementById('chart-all'), allEvents, '#007acc');
 
       if (charts['breakdown']) charts['breakdown'].destroy();
       charts['breakdown'] = new Chart(document.getElementById('chart-breakdown'), {
@@ -255,8 +255,8 @@
           responsive: true, maintainAspectRatio: false, indexAxis: 'y',
           plugins: { legend: { display: false } },
           scales: {
-            x: { grid: { color: '#1e293b' }, ticks: { color: '#475569', font: { size: 10 } } },
-            y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 } } }
+            x: { grid: { color: '#252525' }, ticks: { color: '#6e6e6e', font: { size: 10 } } },
+            y: { grid: { display: false }, ticks: { color: '#9d9d9d', font: { size: 11 } } }
           }
         }
       });
