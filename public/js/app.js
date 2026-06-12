@@ -12,6 +12,11 @@ let isRendering = false;
 let isSending = false;
 let userScrolledAway = false;
 
+// Telemetry: previous snapshot values for change detection
+let _prevModelName = null;
+let _prevBranchName = null;
+let _prevEnvironmentName = null;
+
 // Mobile detection: coarse pointer = touchscreen (phone/tablet)
 // On mobile, Enter inserts a newline; the send button sends.
 // On desktop, Enter sends; Shift+Enter inserts a newline.
@@ -133,6 +138,28 @@ async function fetchAPI(url, opts = {}) {
 
   return res;
 }
+
+// ─────────────────────────────────────────────
+// Client Telemetry — fire-and-forget
+// ─────────────────────────────────────────────
+function track(event, payload = {}) {
+  try {
+    fetch('/telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, ...payload }),
+    }).catch(() => {}); // swallow network errors
+  } catch {}
+}
+
+// Global error tracking
+window.addEventListener('error', (e) => {
+  track('client_error', { message: (e.message || '').substring(0, 200) });
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason?.message || String(e.reason || '');
+  track('client_error', { message: msg.substring(0, 200) });
+});
 
 // ─────────────────────────────────────────────
 // WebSocket Connection
@@ -721,6 +748,22 @@ async function loadSnapshot() {
     // Track active artifact URI for commenting
     updateActiveArtifact(data);
 
+    // Telemetry: detect model/branch/worktree changes
+    if (data.modelName && _prevModelName && data.modelName !== _prevModelName) {
+      track('model_changed');
+    }
+    if (data.modelName) _prevModelName = data.modelName;
+
+    if (data.branchName && _prevBranchName && data.branchName !== _prevBranchName) {
+      track('branch_changed');
+    }
+    if (data.branchName) _prevBranchName = data.branchName;
+
+    if (data.environmentName && _prevEnvironmentName && data.environmentName !== _prevEnvironmentName) {
+      track('worktree_changed');
+    }
+    if (data.environmentName) _prevEnvironmentName = data.environmentName;
+
     // Sync scroll position from AG's DOM state.
     // AG handles scroll-to-bottom on send and auto-scroll during streaming.
     // We mirror: if AG is near bottom AND the user hasn't scrolled away, scroll to bottom.
@@ -985,6 +1028,7 @@ document.querySelectorAll('.quick-action-chip').forEach(chip => {
   chip.addEventListener('click', () => {
     const msg = chip.dataset.message;
     if (msg) {
+      track('quick_action_used', { label: msg });
       messageInput.value = msg;
       sendMessage();
     }
@@ -1102,6 +1146,7 @@ function createVoiceInput(inputEl, btnEl) {
     baselineText = inputEl.value;
     sessionFinals = '';
     isRecording = true;
+    track('voice_input_used');
     btnEl.classList.add('recording');
     btnEl.setAttribute('aria-label', 'Stop recording');
 
@@ -2094,9 +2139,22 @@ function saveComments() {
 // Track active artifact URI from snapshots
 function updateActiveArtifact(data) {
   if (data.activeArtifactUri) {
+    // Track artifact views — deduplicate by checking if URI changed
+    if (data.activeArtifactUri !== activeArtifactUri) {
+      const uri = data.activeArtifactUri;
+      let type = 'other';
+      if (uri.includes('implementation_plan')) type = 'implementation_plan';
+      else if (uri.includes('walkthrough')) type = 'walkthrough';
+      else if (uri.includes('task')) type = 'task';
+      else if (/\.(png|jpg|jpeg|gif|svg|webp)$/i.test(uri)) type = 'image';
+      track('artifact_viewed', { type });
+    }
     activeArtifactUri = data.activeArtifactUri;
     activeFileUri = null;
   } else if (data.activeFileUri) {
+    if (data.activeFileUri !== activeFileUri) {
+      track('artifact_viewed', { type: 'code_diff' });
+    }
     activeFileUri = data.activeFileUri;
     activeArtifactUri = null;
   }
@@ -2205,6 +2263,7 @@ commentSubmit.addEventListener('click', () => {
   });
   saveComments();
   console.debug('[Comment] Queued:', queuedComments[queuedComments.length - 1]);
+  track('comment_added');
   closeCommentModal();
 
   // Clear the text selection to prevent stale selection state
@@ -2281,6 +2340,7 @@ async function sendQueuedComments() {
     });
     const result = await resp.json();
     console.debug('[Comment] Send result:', result);
+    track('comments_sent', { count: fullMessage.split('* >').length - 1 });
   } catch (e) {
     console.error('[Comment] Send failed:', e);
   }
@@ -2355,6 +2415,7 @@ function renderReviewList() {
         if (val) {
           queuedComments[idx].comment = val;
           saveComments();
+          track('comment_edited');
         }
         renderReviewList();
         updateCommentBadge();
@@ -2370,6 +2431,7 @@ function renderReviewList() {
       const idx = parseInt(btn.dataset.idx);
       queuedComments.splice(idx, 1);
       saveComments();
+      track('comment_deleted');
       renderReviewList();
       updateCommentBadge();
       if (queuedComments.length === 0) closeReviewModal();

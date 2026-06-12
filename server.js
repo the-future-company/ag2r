@@ -13,7 +13,7 @@ import compression from 'compression';
 import selfsigned from 'selfsigned';
 import multer from 'multer';
 import dotenv from 'dotenv';
-import { track, startSession, endSession } from './src/telemetry.js';
+import { track, startSession, endSession, readEvents } from './src/telemetry.js';
 
 dotenv.config();
 
@@ -214,6 +214,7 @@ function scheduleReconnect() {
     try {
       await connectCDP();
       log('CDP', 'Reconnected successfully');
+      track('cdp_reconnected');
     } catch (e) {
       console.debug('[CDP] Reconnect failed:', e.message);
       scheduleReconnect();
@@ -1282,6 +1283,19 @@ app.use(compression());
 app.use(express.json());
 app.use(cookieParser(SESSION_SECRET));
 
+// --- Centralized API Error Tracking ---
+// Wraps res.json before routes run to intercept 5xx responses
+app.use((req, res, next) => {
+  const _json = res.json.bind(res);
+  res.json = function (body) {
+    if (res.statusCode >= 500) {
+      track('api_error', { endpoint: req.path, status: res.statusCode });
+    }
+    return _json(body);
+  };
+  next();
+});
+
 // Trust proxy for Cloudflare Tunnel
 if (TUNNEL_ENABLED) {
   app.set('trust proxy', true);
@@ -1353,6 +1367,7 @@ app.post('/login', (req, res) => {
     sameSite: 'lax',
   });
 
+  track('login');
   res.json({ ok: true });
 });
 
@@ -1638,9 +1653,45 @@ app.post('/dismiss-settings', async (req, res) => {
 
 // --- Click Proxy (forward clicks to real AG DOM) ---
 // Click IDs are prefixed: chat:N, left:N, right:N
+// --- Client Telemetry Endpoint ---
+// Receives events from the client-side track() function and forwards to Firestore
+app.post('/telemetry', (req, res) => {
+  const { event, ...payload } = req.body || {};
+  if (!event || typeof event !== 'string') {
+    return res.status(400).json({ error: 'event is required' });
+  }
+  // Whitelist client events to prevent abuse
+  const allowed = new Set([
+    'comment_added', 'comment_edited', 'comment_deleted', 'comments_sent',
+    'voice_input_used', 'artifact_viewed', 'client_error',
+    'model_changed', 'branch_changed', 'worktree_changed',
+    'quick_action_used',
+  ]);
+  if (!allowed.has(event)) {
+    return res.status(400).json({ error: 'unknown event' });
+  }
+  track(event, payload);
+  res.json({ ok: true });
+});
+
 app.post('/click', async (req, res) => {
   const { clickId, label } = req.body;
-  log('Click', `Proxying click id=${clickId} label="${label}"`);
+  log('Click', `Proxying click id=${clickId} label="${label}"`);  
+
+  // Telemetry: detect meaningful clicks by prefix/label
+  const cid = String(clickId || '');
+  if (cid.startsWith('left:')) {
+    track('conversation_switched');
+  } else if (cid.startsWith('sched:')) {
+    track('scheduled_task_viewed');
+  }
+  const trimmedLabel = String(label || '').trim();
+  if (/^(Proceed|Approve)/i.test(trimmedLabel)) {
+    track('plan_approved');
+  }
+  if (/^Run$/i.test(trimmedLabel) || /^Accept$/i.test(trimmedLabel)) {
+    track('command_accepted');
+  }
 
   if (!clickId && clickId !== 0) {
     return res.status(400).json({ error: 'clickId is required' });
@@ -2673,6 +2724,22 @@ app.get('/health', (req, res) => {
     wsClients: wsClients.size,
   });
 });
+// --- Telemetry Dashboard ---
+app.get('/telemetry/events', async (req, res) => {
+  try {
+    const events = await readEvents();
+    res.json(events);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/telemetry/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, '.telemetry', 'dashboard.html'));
+});
+
+
+
 
 // ─────────────────────────────────────────────
 // Server Startup
