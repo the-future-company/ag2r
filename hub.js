@@ -6,6 +6,7 @@
 
 import { createServer as createHttpsServer } from 'https';
 import { request as httpsRequest } from 'https';
+import { createHash } from 'crypto';
 import tls from 'tls';
 import fs from 'fs';
 import path from 'path';
@@ -28,6 +29,14 @@ const SCAN_INTERVAL = parseInt(process.env.HUB_SCAN_INTERVAL || '5000');
 const MAIN_DIR = process.env.AG2R_MAIN_DIR || path.join(process.env.HOME, 'Workspace', 'ag2r');
 const MAIN_PORT = parseInt(process.env.AG2R_MAIN_PORT || '3000');
 const MAIN_LOG = process.env.AG2R_LOG || '/tmp/ag2r-main.log';
+
+// Cache-busting hash for static assets — changes when file content changes
+function fileHash(filePath) {
+  try {
+    return createHash('md5').update(fs.readFileSync(filePath)).digest('hex').slice(0, 8);
+  } catch { return Date.now().toString(36); }
+}
+const ICON_HASH = fileHash(path.join(__dirname, 'public', 'ag2r-icon.png'));
 
 function log(prefix, ...args) {
   console.log(`[${prefix}]`, ...args);
@@ -322,8 +331,8 @@ function renderLandingPage() {
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AG2R Hub</title>
-  <link rel="icon" type="image/png" href="/ag2r-icon.png">
-  <link rel="apple-touch-icon" href="/ag2r-icon.png">
+  <link rel="icon" type="image/png" href="/ag2r-icon.png?v=${ICON_HASH}">
+  <link rel="apple-touch-icon" href="/ag2r-icon.png?v=${ICON_HASH}">
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -619,7 +628,7 @@ function renderLandingPage() {
 </head>
 <body>
   <div class="hub-header">
-    <img src="/ag2r-icon.png" alt="AG2R">
+    <img src="/ag2r-icon.png?v=${ICON_HASH}" alt="AG2R">
     <div class="hub-logo">AG2R Hub</div>
     <div class="hub-subtitle">Active Sessions</div>
   </div>
@@ -830,7 +839,10 @@ function handleRequest(req, res) {
     if (fs.existsSync(filePath)) {
       const ext = path.extname(filePath);
       const mimeTypes = { '.png': 'image/png', '.json': 'application/json' };
-      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+      res.writeHead(200, {
+        'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+        'Cache-Control': 'public, max-age=86400',
+      });
       res.end(fs.readFileSync(filePath));
       return;
     }
@@ -1027,6 +1039,13 @@ function handleStartMain(req, res) {
   });
 
   child.unref(); // Let hub exit without waiting for child
+
+  // Record boot commit so the updater watchdog can detect drift
+  try {
+    const commit = execSync('git rev-parse HEAD', { cwd: MAIN_DIR, encoding: 'utf-8' }).trim();
+    fs.writeFileSync('/tmp/ag2r-main-boot-commit', commit);
+  } catch { /* non-critical */ }
+
   log('Main', `Server starting on port ${MAIN_PORT} (PID ${child.pid})`);
 
   child.on('error', (err) => {
