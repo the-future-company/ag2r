@@ -56,33 +56,46 @@ No password needed for local-only use. Your phone must be on the same Wi-Fi as t
 
 ### Option 2: Remote Access (Any Network)
 
-Use a [Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to access AG2R from anywhere.
+Use a [Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to access AG2R from anywhere — no port forwarding needed.
 
 > [!WARNING]
-> **Set a strong password before exposing AG2R to the internet.**
+> **Set a strong password before exposing AG2R to the internet.** Edit `.env`:
 >
 > ```bash
-> # In .env — change these:
 > AUTH_ENABLED=true
 > APP_PASSWORD=your-strong-password-here
 > SESSION_SECRET=$(openssl rand -hex 24)
-> TUNNEL_ENABLED=true
-> TUNNEL_URL=https://ag2r.yourdomain.com
 > ```
 
-**Quick tunnel** (temporary URL, no account needed):
+**Step 1 — Start the tunnel** (gets you a public URL):
 
 ```bash
 brew install cloudflared
-node server.js
-# In a second terminal:
 cloudflared tunnel --url https://localhost:3000 --no-tls-verify
 ```
 
-**Dedicated tunnel** (stable URL with your own domain):
+Cloudflared prints a URL like `https://random-words.trycloudflare.com`.
+
+**Step 2 — Add the URL to `.env`** so push notifications work:
 
 ```bash
-# One-time setup
+TUNNEL_ENABLED=true
+TUNNEL_URL=https://random-words.trycloudflare.com   # ← paste your URL here
+```
+
+**Step 3 — Start AG2R:**
+
+```bash
+node server.js
+```
+
+Open the tunnel URL on your phone. The URL changes each time you restart the tunnel.
+
+#### Stable URL with your own domain (optional)
+
+If you have a domain on Cloudflare, you can set up a permanent tunnel so the URL never changes:
+
+```bash
 cloudflared tunnel login
 cloudflared tunnel create ag2r
 cloudflared tunnel route dns ag2r ag2r.yourdomain.com
@@ -102,12 +115,7 @@ ingress:
   - service: http_status:404
 ```
 
-Run both:
-
-```bash
-node server.js                    # Terminal 1
-cloudflared tunnel run ag2r       # Terminal 2
-```
+Set `TUNNEL_URL=https://ag2r.yourdomain.com` in `.env`, then run `node server.js` and `cloudflared tunnel run ag2r` in separate terminals.
 
 ---
 
@@ -203,17 +211,7 @@ Switch between conversations, browse files changed, artifacts, and background ta
 
 ## 🔄 Keep It Running (Optional)
 
-For always-on setups, use the included watchdog scripts. They auto-start AG2R if it crashes and auto-update from `origin/main` when code changes.
-
-```bash
-crontab -e
-
-# Add these lines:
-*/5 * * * * ~/Workspace/ag2r/scripts/main-watchdog.sh >> /tmp/ag2r-main-watchdog.log 2>&1
-*/5 * * * * ~/Workspace/ag2r/scripts/tunnel-watchdog.sh >> /tmp/ag2r-tunnel-watchdog.log 2>&1
-```
-
-See `scripts/` for what's available. The dev hub (`hub.js`) has its own watchdog for multi-worktree development — see [ONBOARDING.md](./ONBOARDING.md).
+If you have a dedicated tunnel with a stable URL, cron-based watchdog scripts can keep AG2R and the tunnel alive and auto-update from `origin/main`. See `scripts/` for the available watchdogs (`main-watchdog.sh`, `tunnel-watchdog.sh`).
 
 ---
 
