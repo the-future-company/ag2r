@@ -327,7 +327,7 @@ function renderLandingPage() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0a0e17">
+  <meta name="theme-color" content="#101010">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AG2R Hub</title>
@@ -342,16 +342,23 @@ function renderLandingPage() {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0a0e17;
-      --surface: #111827;
-      --surface-hover: #1a2332;
-      --border: #1e293b;
-      --text: #e2e8f0;
-      --text-dim: #64748b;
-      --accent: #6366f1;
+      --bg: #101010;
+      --surface: #1a1a1a;
+      --surface-hover: #222;
+      --border: #2a2a2a;
+      --border-subtle: #1f1f1f;
+      --text: #e0e0e0;
+      --text-dim: #707070;
+      --text-muted: #505050;
+      --accent: #007acc;
+      --accent-dim: rgba(0, 122, 204, 0.15);
+      --accent-glow: rgba(0, 122, 204, 0.3);
       --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
       --red: #ef4444;
-      --radius: 12px;
+      --amber: #f59e0b;
+      --radius: 14px;
+      --radius-sm: 10px;
     }
 
     body {
@@ -362,42 +369,140 @@ function renderLandingPage() {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 24px 16px;
+      padding: 20px 16px;
       -webkit-font-smoothing: antialiased;
     }
 
+    /* ── Header ── */
     .hub-header {
-      text-align: center;
-      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      width: 100%;
+      max-width: 480px;
     }
 
     .hub-header img {
-      width: 64px;
-      height: 64px;
-      border-radius: 16px;
-      margin-bottom: 12px;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
     }
 
+    .hub-header-text { display: flex; flex-direction: column; }
+
     .hub-logo {
-      font-size: 28px;
+      font-size: 22px;
       font-weight: 700;
       letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #818cf8, #6366f1);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--text);
     }
 
     .hub-subtitle {
-      font-size: 14px;
+      font-size: 12px;
       color: var(--text-dim);
-      margin-top: 4px;
+      margin-top: 1px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
     }
 
+    /* ── Control Panel (Antigravity) ── */
+    .control-panel {
+      width: 100%;
+      max-width: 480px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .control-panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), #00a0ff, var(--accent));
+      opacity: 0.8;
+    }
+
+    .control-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .control-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.running { background: var(--green); box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
+    .status-dot.stopped { background: var(--red); box-shadow: 0 0 6px rgba(239, 68, 68, 0.3); }
+    .status-dot.warning { background: var(--amber); box-shadow: 0 0 6px rgba(245, 158, 11, 0.4); }
+
+    .control-name { font-size: 14px; font-weight: 600; }
+    .control-state { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+
+    .btn-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid;
+    }
+
+    .btn-action.danger {
+      background: transparent;
+      border-color: rgba(239, 68, 68, 0.25);
+      color: var(--red);
+    }
+    .btn-action.danger:hover { background: rgba(239, 68, 68, 0.1); border-color: var(--red); }
+    .btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-action .material-symbols-rounded { font-size: 15px; }
+
+    /* ── Section Label ── */
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--text-muted);
+      width: 100%;
+      max-width: 480px;
+      margin-bottom: 10px;
+      padding-left: 2px;
+    }
+
+    /* ── Server List ── */
     .server-list {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       width: 100%;
       max-width: 480px;
     }
@@ -405,9 +510,9 @@ function renderLandingPage() {
     .server-card {
       align-self: stretch;
       background: var(--surface);
-      border: 1px solid rgba(34, 197, 94, 0.3);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 16px;
+      padding: 14px 16px;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -417,10 +522,12 @@ function renderLandingPage() {
       cursor: pointer;
     }
 
-    .server-card:hover { background: var(--surface-hover); border-color: var(--green); }
+    .server-card:hover { background: var(--surface-hover); border-color: var(--accent); }
+    .server-card.is-main { border-color: var(--accent-glow); }
+    .server-card.is-main:hover { border-color: var(--accent); }
 
     .server-dot {
-      width: 10px; height: 10px;
+      width: 8px; height: 8px;
       border-radius: 50%;
       background: var(--green);
       flex-shrink: 0;
@@ -430,48 +537,81 @@ function renderLandingPage() {
     .server-info { flex: 1; min-width: 0; }
 
     .server-name {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .server-port {
-      font-size: 12px;
+    .server-meta {
+      font-size: 11px;
       color: var(--text-dim);
       margin-top: 2px;
-      font-family: monospace;
+      font-family: 'Inter', monospace;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .server-badge {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--accent-dim);
+      color: var(--accent);
     }
 
     .server-arrow {
-      color: var(--text-dim);
-      font-size: 20px;
+      color: var(--text-muted);
+      font-size: 18px;
+      flex-shrink: 0;
     }
 
+    .btn-restart-server {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px; height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .btn-restart-server:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+    .btn-restart-server:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-restart-server .material-symbols-rounded { font-size: 16px; }
+
+    /* ── Empty State ── */
     .empty-state {
       text-align: center;
       color: var(--text-dim);
-      padding: 48px 20px;
+      padding: 40px 20px;
       max-width: 400px;
     }
 
     .empty-state .material-symbols-rounded {
-      font-size: 48px;
-      opacity: 0.25;
+      font-size: 40px;
+      opacity: 0.2;
       display: block;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     .empty-title {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 500;
       color: var(--text);
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .empty-hint {
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.5;
     }
 
@@ -479,91 +619,42 @@ function renderLandingPage() {
       background: var(--surface);
       padding: 2px 6px;
       border-radius: 4px;
-      font-size: 12px;
-    }
-
-    .scan-info {
       font-size: 11px;
-      color: var(--text-dim);
-      opacity: 0.5;
-      margin-top: 24px;
-      text-align: center;
     }
 
     .wt-btn-main {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 24px;
+      padding: 10px 20px;
       border: none;
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
       background: var(--accent);
       color: white;
       font-family: inherit;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       transition: background 0.2s, opacity 0.2s;
-      margin-top: 16px;
+      margin-top: 14px;
     }
-    .wt-btn-main:hover { background: #5558e6; }
+    .wt-btn-main:hover { background: #0090e8; }
     .wt-btn-main:disabled { opacity: 0.6; cursor: not-allowed; }
-    .wt-btn-main .material-symbols-rounded { font-size: 20px; }
+    .wt-btn-main .material-symbols-rounded { font-size: 18px; }
 
-    .ag-status {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      max-width: 480px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px 16px;
-      margin-bottom: 24px;
+    .scan-info {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 24px;
+      text-align: center;
+      letter-spacing: 0.3px;
     }
 
-    .ag-status-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .ag-status-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .ag-status-dot.running { background: var(--green); box-shadow: 0 0 6px rgba(34, 197, 94, 0.4); }
-    .ag-status-dot.stopped { background: var(--red); box-shadow: 0 0 6px rgba(239, 68, 68, 0.3); }
-    .ag-status-dot.no-debug { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.4); }
-
-    .ag-status-label { font-size: 13px; font-weight: 500; }
-    .ag-status-state { font-size: 12px; color: var(--text-dim); }
-
-    .btn-restart {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 14px;
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      border-radius: 8px;
-      background: transparent;
-      color: var(--red);
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
-    }
-    .btn-restart:hover { background: rgba(239, 68, 68, 0.1); border-color: var(--red); }
-    .btn-restart:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-restart .material-symbols-rounded { font-size: 16px; }
-
+    /* ── Modal ── */
     .modal-overlay {
       position: fixed; inset: 0;
-      background: rgba(0,0,0,0.6);
-      backdrop-filter: blur(4px);
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(6px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -624,32 +715,53 @@ function renderLandingPage() {
       transition: background 0.2s;
     }
     .btn-confirm-danger:hover { background: #dc2626; }
+
+    .btn-confirm-action {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-confirm-action:hover { background: #0090e8; }
   </style>
 </head>
 <body>
   <div class="hub-header">
     <img src="/ag2r-icon.png?v=${ICON_HASH}" alt="AG2R">
-    <div class="hub-logo">AG2R Hub</div>
-    <div class="hub-subtitle">Active Sessions</div>
-  </div>
-
-  <div id="ag-status" class="ag-status">
-    <div class="ag-status-left">
-      <div id="ag-dot" class="ag-status-dot stopped"></div>
-      <div>
-        <div class="ag-status-label">Antigravity</div>
-        <div id="ag-state" class="ag-status-state">Checking...</div>
-      </div>
+    <div class="hub-header-text">
+      <div class="hub-logo">AG2R Hub</div>
+      <div class="hub-subtitle">Command Center</div>
     </div>
-    <button id="restart-btn" class="btn-restart" onclick="showRestartModal()">
-      <span class="material-symbols-rounded">restart_alt</span>Restart
-    </button>
   </div>
 
+  <div class="control-panel">
+    <div class="control-label">Antigravity Desktop</div>
+    <div class="control-row">
+      <div class="control-left">
+        <div id="ag-dot" class="status-dot stopped"></div>
+        <div>
+          <div class="control-name">Antigravity</div>
+          <div id="ag-state" class="control-state">Checking...</div>
+        </div>
+      </div>
+      <button id="restart-btn" class="btn-action danger" onclick="showModal('restart')">
+        <span class="material-symbols-rounded">restart_alt</span>Restart
+      </button>
+    </div>
+  </div>
+
+  <div class="section-label">Active Sessions</div>
   <div id="server-list" class="server-list"></div>
 
-  <div class="scan-info">Scanning ports ${SCAN_MIN}–${SCAN_MAX} every ${SCAN_INTERVAL / 1000}s</div>
+  <div class="scan-info">Scanning ports ${SCAN_MIN}\u2013${SCAN_MAX} every ${SCAN_INTERVAL / 1000}s</div>
 
+  <!-- Restart AG Modal -->
   <div id="restart-modal" class="modal-overlay hidden">
     <div class="modal-box">
       <div class="modal-title">Restart Antigravity?</div>
@@ -658,8 +770,22 @@ function renderLandingPage() {
         All active coding sessions will be interrupted.
       </div>
       <div class="modal-actions">
-        <button class="btn-cancel" onclick="hideRestartModal()">Cancel</button>
+        <button class="btn-cancel" onclick="hideModals()">Cancel</button>
         <button class="btn-confirm-danger" onclick="confirmRestart()">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Restart Main Modal -->
+  <div id="restart-main-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-title">Restart Main Server?</div>
+      <div class="modal-body">
+        This will pull the latest code from main, reinstall dependencies if needed, and restart the server on port ${MAIN_PORT}.
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="hideModals()">Cancel</button>
+        <button class="btn-confirm-action" onclick="confirmRestartMain()">Restart</button>
       </div>
     </div>
   </div>
@@ -669,8 +795,8 @@ function renderLandingPage() {
     const agDot = document.getElementById('ag-dot');
     const agState = document.getElementById('ag-state');
     const restartBtn = document.getElementById('restart-btn');
-    const restartModal = document.getElementById('restart-modal');
     let lastData = null;
+    const MAIN_PORT = ${MAIN_PORT};
 
     async function refresh() {
       try {
@@ -688,26 +814,30 @@ function renderLandingPage() {
 
     function updateAgStatus(running, debug) {
       if (running && debug) {
-        agDot.className = 'ag-status-dot running';
+        agDot.className = 'status-dot running';
         agState.textContent = 'Running (debug)';
       } else if (running) {
-        agDot.className = 'ag-status-dot no-debug';
+        agDot.className = 'status-dot warning';
         agState.textContent = 'Running (no debug)';
       } else {
-        agDot.className = 'ag-status-dot stopped';
+        agDot.className = 'status-dot stopped';
         agState.textContent = 'Not running';
       }
     }
 
-    function showRestartModal() { restartModal.classList.remove('hidden'); }
-    function hideRestartModal() { restartModal.classList.add('hidden'); }
+    function showModal(type) {
+      document.getElementById(type + '-modal').classList.remove('hidden');
+    }
+    function hideModals() {
+      document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden'));
+    }
 
     async function confirmRestart() {
-      hideRestartModal();
+      hideModals();
       restartBtn.disabled = true;
-      restartBtn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Restarting...';
-      agState.textContent = 'Restarting...';
-      agDot.className = 'ag-status-dot stopped';
+      restartBtn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Restarting\u2026';
+      agState.textContent = 'Restarting\u2026';
+      agDot.className = 'status-dot stopped';
 
       try {
         const res = await fetch('/_hub/api/restart-antigravity', { method: 'POST' });
@@ -717,8 +847,7 @@ function renderLandingPage() {
           agState.textContent = 'Restart failed';
           return;
         }
-        agState.textContent = 'Launching...';
-        // Poll until AG comes back
+        agState.textContent = 'Launching\u2026';
         let attempts = 0;
         const poll = setInterval(async () => {
           attempts++;
@@ -732,7 +861,7 @@ function renderLandingPage() {
             clearInterval(poll);
             restartBtn.disabled = false;
             restartBtn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>Restart';
-            agState.textContent = 'May still be starting...';
+            agState.textContent = 'May still be starting\u2026';
           }
         }, 2000);
       } catch (e) {
@@ -741,10 +870,41 @@ function renderLandingPage() {
       }
     }
 
+    async function confirmRestartMain() {
+      hideModals();
+      const btn = document.querySelector('[data-restart-main]');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>'; }
+
+      try {
+        const res = await fetch('/_hub/api/restart-main', { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) {
+          if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span>';
+          setTimeout(() => { if (btn) { btn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>'; btn.disabled = false; } }, 3000);
+          return;
+        }
+        // Poll until detected
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          await refresh();
+          const status = lastData ? JSON.parse(lastData) : {};
+          const mainUp = status.servers && status.servers.some(s => s.port === MAIN_PORT);
+          if (mainUp || attempts > 15) {
+            clearInterval(poll);
+            if (btn) { btn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>'; btn.disabled = false; }
+          }
+        }, 2000);
+      } catch (e) {
+        if (btn) { btn.innerHTML = '<span class="material-symbols-rounded">error</span>'; }
+        setTimeout(() => { if (btn) { btn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>'; btn.disabled = false; } }, 3000);
+      }
+    }
+
     function render(servers, mainAvailable) {
       if (servers.length === 0) {
         let html = '<div class="empty-state">'
-          + '<span class="material-symbols-rounded">search_off</span>'
+          + '<span class="material-symbols-rounded">dns</span>'
           + '<div class="empty-title">No active sessions</div>';
         if (mainAvailable) {
           html += '<button class="wt-btn wt-btn-main" id="start-main-btn" onclick="startMain()">'
@@ -760,16 +920,23 @@ function renderLandingPage() {
         return;
       }
 
-      list.innerHTML = servers.map(s =>
-        '<a class="server-card" href="/' + escapeAttr(s.name) + '/">'
-        + '<div class="server-dot"></div>'
-        + '<div class="server-info">'
-        + '<div class="server-name">' + escapeHtml(s.name) + '</div>'
-        + '<div class="server-port">port ' + s.port + (s.cdpConnected ? ' · CDP connected' : ' · CDP disconnected') + '</div>'
-        + '</div>'
-        + '<span class="material-symbols-rounded server-arrow">chevron_right</span>'
-        + '</a>'
-      ).join('');
+      list.innerHTML = servers.map(s => {
+        const isMain = s.port === MAIN_PORT;
+        let html = '<div class="server-card' + (isMain ? ' is-main' : '') + '">';
+        html += '<div class="server-dot"></div>';
+        html += '<a href="/' + escapeAttr(s.name) + '/" style="flex:1;min-width:0;text-decoration:none;color:inherit">';
+        html += '<div class="server-name">' + escapeHtml(s.name) + '</div>';
+        html += '<div class="server-meta">';
+        if (isMain) html += '<span class="server-badge">main</span>';
+        html += 'port ' + s.port + (s.cdpConnected ? ' \u00b7 CDP connected' : ' \u00b7 CDP off');
+        html += '</div></a>';
+        if (isMain) {
+          html += '<button class="btn-restart-server" data-restart-main title="Restart main server" onclick="event.stopPropagation();showModal(\'restart-main\')"><span class="material-symbols-rounded">restart_alt</span></button>';
+        }
+        html += '<a href="/' + escapeAttr(s.name) + '/" style="text-decoration:none;color:inherit;display:flex"><span class="material-symbols-rounded server-arrow">chevron_right</span></a>';
+        html += '</div>';
+        return html;
+      }).join('');
     }
 
     function escapeHtml(s) {
@@ -781,7 +948,7 @@ function renderLandingPage() {
 
     async function startMain() {
       const btn = document.getElementById('start-main-btn');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Starting...'; }
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Starting\u2026'; }
       try {
         const res = await fetch('/_hub/api/start-main', { method: 'POST' });
         const data = await res.json();
@@ -789,7 +956,6 @@ function renderLandingPage() {
           if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span>' + escapeHtml(data.error || 'Failed');
           return;
         }
-        // Poll until detected
         const poll = setInterval(async () => {
           await refresh();
           if (lastData && JSON.parse(lastData).servers.length > 0) {
@@ -908,6 +1074,11 @@ function handleHubApi(req, res, pathname) {
   // POST /_hub/api/restart-antigravity
   if (pathname === '/_hub/api/restart-antigravity' && req.method === 'POST') {
     return handleRestartAntigravity(req, res);
+  }
+
+  // POST /_hub/api/restart-main
+  if (pathname === '/_hub/api/restart-main' && req.method === 'POST') {
+    return handleRestartMain(req, res);
   }
 
   // GET /_hub/api/clear-cookie
@@ -1055,6 +1226,90 @@ function handleStartMain(req, res) {
 
   // Give it a moment, then respond
   mainStarting = false;
+  res.writeHead(200);
+  res.end(JSON.stringify({ ok: true, port: MAIN_PORT, pid: child.pid }));
+}
+
+// ─────────────────────────────────────────────
+// Restart Main (kill + pull + restart from hub UI)
+// ─────────────────────────────────────────────
+function handleRestartMain(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+
+  log('Main', 'Restart requested from hub UI');
+
+  // Kill existing main server
+  let killed = false;
+  try {
+    const pid = execSync(`lsof -i :${MAIN_PORT} -sTCP:LISTEN -t`, {
+      encoding: 'utf-8', timeout: 3000,
+    }).trim();
+    if (pid) {
+      execSync(`kill ${pid}`, { timeout: 2000 });
+      killed = true;
+      log('Main', `Killed PID ${pid}`);
+    }
+  } catch { /* not running */ }
+
+  // Pull latest
+  try {
+    const script = `
+      cd "${MAIN_DIR}" &&
+      git fetch origin main --quiet 2>&1 &&
+      LOCAL=$(git rev-parse HEAD) &&
+      REMOTE=$(git rev-parse origin/main) &&
+      if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pulling: $LOCAL → $REMOTE" &&
+        git pull origin main --quiet 2>&1 &&
+        if git diff --name-only "$LOCAL" "$REMOTE" | grep -q "package-lock.json"; then
+          echo "DEPS_CHANGED" &&
+          npm ci --silent 2>&1
+        fi
+      else
+        echo "Already at latest"
+      fi
+    `;
+    const output = execSync(script, {
+      encoding: 'utf-8',
+      timeout: 60000,
+      env: { ...process.env, NVM_DIR: path.join(process.env.HOME, '.nvm') },
+    }).trim();
+    if (output) log('Main', output);
+  } catch (e) {
+    log('Main', `Pull failed: ${e.message}`);
+    res.writeHead(500);
+    res.end(JSON.stringify({ ok: false, error: 'git pull failed' }));
+    return;
+  }
+
+  // Wait for port to free up
+  if (killed) {
+    try { execSync('sleep 2'); } catch {}
+  }
+
+  // Start fresh server
+  const logStream = fs.openSync(MAIN_LOG, 'a');
+  const child = spawn('node', ['server.js'], {
+    cwd: MAIN_DIR,
+    env: { ...process.env, PORT: String(MAIN_PORT) },
+    stdio: ['ignore', logStream, logStream],
+    detached: true,
+  });
+  child.unref();
+
+  // Record boot commit
+  try {
+    const commit = execSync('git rev-parse HEAD', { cwd: MAIN_DIR, encoding: 'utf-8' }).trim();
+    fs.writeFileSync('/tmp/ag2r-main-boot-commit', commit);
+    log('Main', `Restarted on port ${MAIN_PORT} (PID ${child.pid}, commit ${commit.slice(0, 12)})`);
+  } catch {
+    log('Main', `Restarted on port ${MAIN_PORT} (PID ${child.pid})`);
+  }
+
+  child.on('error', (err) => {
+    log('Main', `Spawn error: ${err.message}`);
+  });
+
   res.writeHead(200);
   res.end(JSON.stringify({ ok: true, port: MAIN_PORT, pid: child.pid }));
 }
