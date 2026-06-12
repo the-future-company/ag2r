@@ -59,6 +59,7 @@
 | Anonymous usage telemetry (Firestore REST, opt-out, installId) | `src/telemetry.js` |
 | Telemetry operations (querying, schema, Firebase project) | `.telemetry/GEMINI.md` (gitignored, local only) |
 | README screenshots (product showcase) | `docs/` |
+| Push notifications (VAPID, service worker, subscription) | `server.js` — search `pushSubscriptions`; `hub.js` — search `hubPushSubscriptions`; `public/sw.js`; `public/js/app.js` — search `initPushNotifications` |
 
 ---
 
@@ -94,6 +95,8 @@
 - **Mobile SpeechRecognition produces cumulative results.** Desktop browsers produce one result per utterance (incremental). Mobile Safari/Chrome produce one result per word, and each result's `transcript` contains the FULL text from session start (cumulative). The `createVoiceInput` factory in `app.js` handles this by using ONLY the last result's transcript — never concatenating all results. Creating a new `SpeechRecognition` instance on restart (instead of reusing) causes a system ding on mobile. Calling `recognition.stop()` is async — null out `onresult`/`onend` before stopping to prevent post-stop events from refilling a cleared input.
 - **Watchdog boot-commit tracking.** Watchdog/updater scripts detect drift by comparing the commit the service booted at (`/tmp/ag2r-*-boot-commit`) against `origin/main` — NOT by comparing `HEAD` vs `origin/main`. This is because agent sessions pull latest main after committing, so HEAD advances locally and a naive comparison would see no changes. The boot-commit file is written by `hub.js handleStartMain`/`handleRestartMain` and by the watchdog scripts themselves at startup.
 - **Favicon is `ag2r-icon.png` everywhere.** There is no separate `favicon.png`. The hub, index.html, manifest, and apple-touch-icon all point to `/ag2r-icon.png`. Hub uses content-hash cache-busting (`?v=<md5>`) so browsers cache aggressively but pick up new icons on file change.
+- **iOS push requires PWA on home screen.** Web Push on iOS only works when the user has installed the PWA via "Add to Home Screen" (iOS 16.4+). Regular Safari tabs cannot receive push notifications. The app auto-subscribes on first user interaction — no UI needed.
+- **Server restart clears push subscriptions.** Push subscriptions are stored in memory (`pushSubscriptions` Map in `server.js`). On server restart, all subscriptions are lost. The client re-subscribes automatically on next page visit because `app.js` re-sends the existing browser subscription to `POST /push/subscribe` on every load.
 
 ---
 

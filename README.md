@@ -237,11 +237,15 @@ Switch between conversations, browse files changed, artifacts, and background ta
 
 ### More Features
 
+- **Push notifications** — get notified on your phone when the session needs permission approval, even with the app in the background
 - **Send messages** — type and send messages to the AI from your phone
 - **Voice input** — dictate messages using your phone's microphone
 - **Stop generation** — cancel a running generation with the stop button
 - **Auto-reconnect** — seamless reconnection when connection drops
 - **Cookie-based auth** — enter passcode once, stays logged in for 30 days
+
+> [!NOTE]
+> **iOS users:** Push notifications require the PWA to be installed to your home screen (iOS 16.4+). Open AG2R in Safari, tap the Share button, then "Add to Home Screen".
 
 ---
 

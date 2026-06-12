@@ -8,3 +8,4 @@ certs/
 !.telemetry/dashboard.html
 !.telemetry/admin.js
 _tools/
+vapid-keys.json

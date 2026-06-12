@@ -2462,3 +2462,103 @@ if (queuedComments.length > 0) updateCommentBadge();
 connectWebSocket();
 loadSnapshot();
 updateActionButton();
+
+// ─────────────────────────────────────────────
+// Push Notifications — Auto-Subscribe
+// ─────────────────────────────────────────────
+function pushDebug(msg) {
+  console.debug('[Push]', msg);
+}
+async function initPushNotifications() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    pushDebug('Not supported');
+    return;
+  }
+
+  try {
+    pushDebug('Registering SW...');
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    pushDebug('SW ok');
+
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) {
+      pushDebug('Already subscribed, re-sending');
+      await sendSubscription(existing);
+      pushDebug('Done ✓');
+      return;
+    }
+
+    pushDebug('perm=' + Notification.permission);
+    if (Notification.permission === 'denied') {
+      pushDebug('Denied, skip');
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      pushDebug('Granted, subscribing...');
+      await subscribePush(registration);
+      pushDebug('Done ✓');
+      return;
+    }
+
+    // Only request on genuine user gesture — capture phase fires before
+    // any inner stopPropagation() calls. Never request without gesture,
+    // as Chrome's "quiet UI" will auto-deny and permanently block the domain.
+    pushDebug('Waiting gesture...');
+    const handler = async () => {
+      document.removeEventListener('touchstart', handler, true);
+      document.removeEventListener('mousedown', handler, true);
+      pushDebug('Gesture! Requesting...');
+      const result = await Notification.requestPermission();
+      pushDebug('Result=' + result);
+      if (result === 'granted') {
+        await subscribePush(registration);
+        pushDebug('Done ✓');
+      } else if (result === 'default') {
+        document.addEventListener('touchstart', handler, { capture: true, once: true });
+        document.addEventListener('mousedown', handler, { capture: true, once: true });
+      }
+    };
+    document.addEventListener('touchstart', handler, { capture: true, once: true });
+    document.addEventListener('mousedown', handler, { capture: true, once: true });
+  } catch (e) {
+    pushDebug('Error: ' + e.message);
+  }
+}
+
+async function subscribePush(registration) {
+  try {
+    const res = await fetch('/push/vapid-public-key');
+    const { publicKey } = await res.json();
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+
+    await sendSubscription(subscription);
+  } catch (e) {
+    pushDebug('Sub error: ' + e.message);
+  }
+}
+
+async function sendSubscription(subscription) {
+  try {
+    await fetch('/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subscription),
+    });
+  } catch {}
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+initPushNotifications();
