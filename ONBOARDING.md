@@ -52,6 +52,8 @@
 | PWA manifest (home screen icon + app metadata) | `public/manifest.json` |
 | Multi-worktree hub (dev-only proxy) | `hub.js` |
 | Hub: Antigravity restart + status detection | `hub.js` — search `handleRestartAntigravity` and `antigravityRunning` |
+| Hub: Restart main server (kill + pull + restart) | `hub.js` — search `handleRestartMain` |
+| Hub: Icon cache-busting (content hash) | `hub.js` — search `ICON_HASH` and `fileHash` |
 | Main server watchdog + auto-updater (cron scripts) | `scripts/watchdog.sh`, `scripts/updater.sh`, `scripts/hub-watchdog.sh`, `scripts/tunnel-watchdog.sh` |
 | Voice input (shared factory for main + new session mic) | `public/js/app.js` — search `createVoiceInput` |
 | Anonymous usage telemetry (Firestore REST, opt-out, installId) | `src/telemetry.js` |
@@ -90,6 +92,8 @@
 - **Running tasks live inside the input box container.** `#antigravity.agentSidePanelInputBox` has a `.rounded-t-2xl` child (sibling of `.bg-card`) that contains the task list. This element is completely absent from the DOM when no tasks are running — it's not hidden, it doesn't exist. The capture must null-check both the input box and the task section child.
 - **Settings dismiss uses backdrop click.** `dismiss-settings` in `server.js` clicks the settings modal's backdrop overlay (`.bg-black\/80`) instead of a Go Back button, ensuring settings close in one action regardless of which tab was visited.
 - **Mobile SpeechRecognition produces cumulative results.** Desktop browsers produce one result per utterance (incremental). Mobile Safari/Chrome produce one result per word, and each result's `transcript` contains the FULL text from session start (cumulative). The `createVoiceInput` factory in `app.js` handles this by using ONLY the last result's transcript — never concatenating all results. Creating a new `SpeechRecognition` instance on restart (instead of reusing) causes a system ding on mobile. Calling `recognition.stop()` is async — null out `onresult`/`onend` before stopping to prevent post-stop events from refilling a cleared input.
+- **Watchdog boot-commit tracking.** Watchdog/updater scripts detect drift by comparing the commit the service booted at (`/tmp/ag2r-*-boot-commit`) against `origin/main` — NOT by comparing `HEAD` vs `origin/main`. This is because agent sessions pull latest main after committing, so HEAD advances locally and a naive comparison would see no changes. The boot-commit file is written by `hub.js handleStartMain`/`handleRestartMain` and by the watchdog scripts themselves at startup.
+- **Favicon is `ag2r-icon.png` everywhere.** There is no separate `favicon.png`. The hub, index.html, manifest, and apple-touch-icon all point to `/ag2r-icon.png`. Hub uses content-hash cache-busting (`?v=<md5>`) so browsers cache aggressively but pick up new icons on file change.
 
 ---
 
@@ -209,7 +213,7 @@ Gotchas or decisions the next session should know.
 
 ## 🔄 Auto-Managed Hub & Main Server
 
-> The hub landing page has a **Start Main** button that pulls latest and starts the main server on-demand. A cron job keeps the hub itself alive.
+> The hub landing page is a **Control Panel** with two sections: an "Antigravity Desktop" status card (restart AG) and an "Active Sessions" list. The main server card has a **Restart** button (kills → pulls latest → reinstalls deps if needed → restarts). A cron job keeps the hub itself alive.
 
 ### Hub Watchdog (cron)
 
@@ -221,7 +225,7 @@ crontab -e
 */5 * * * * ~/Workspace/ag2r/scripts/tunnel-watchdog.sh >> /tmp/ag2r-tunnel-watchdog.log 2>&1
 ```
 
-The hub watchdog checks if the hub is responding every 5 minutes and restarts it if down. The tunnel watchdog checks if `cloudflared` is running and restarts it if not. Once both are up, use the **Start Main** button from the landing page to start the main server on-demand.
+The hub watchdog checks if the hub is responding every 5 minutes and restarts it if down. The tunnel watchdog checks if `cloudflared` is running and restarts it if not. All watchdog scripts use boot-commit tracking (see Gotchas). Once both are up, use the **Start Main** or **Restart** button from the landing page.
 
 ### Optional: Server Watchdog + Auto-Updater (cron)
 
