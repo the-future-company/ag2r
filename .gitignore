@@ -3,3 +3,5 @@ certs/
 .env
 *.log
 .DS_Store
+.ag2r-telemetry-id
+.telemetry/

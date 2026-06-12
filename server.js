@@ -13,6 +13,7 @@ import compression from 'compression';
 import selfsigned from 'selfsigned';
 import multer from 'multer';
 import dotenv from 'dotenv';
+import { track, startSession, endSession } from './src/telemetry.js';
 
 dotenv.config();
 
@@ -191,6 +192,7 @@ async function connectCDP() {
     preferredContextId = null;
     broadcastStatus();
     scheduleReconnect();
+    track('cdp_disconnected');
   });
 
   cdpClient = client;
@@ -1475,6 +1477,7 @@ app.post('/expand-left-sidebar', async (req, res) => {
 
 // --- Copy Response (intercept AG's clipboard.writeText, return markdown) ---
 app.post('/copy-response', async (req, res) => {
+  track('code_copied');
   const { clickId } = req.body || {};
   if (!clickId || !cdpClient) {
     return res.status(400).json({ error: 'Missing clickId or CDP not connected' });
@@ -2356,6 +2359,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
   const { buffer, mimetype, originalname } = req.file;
   const base64 = buffer.toString('base64');
   const fileName = originalname || 'photo.png';
+  track('image_uploaded');
 
   log('Upload', `Received ${fileName} (${mimetype}, ${(buffer.length / 1024).toFixed(1)}KB)`);
 
@@ -2452,6 +2456,7 @@ app.post('/send', async (req, res) => {
     log('Send', 'Injecting via CDP...');
     const result = await injectMessage(message);
     log('Send', `Injection result: ${JSON.stringify(result)}`);
+    track('message_sent');
     res.json(result || { ok: true });
   } catch (e) {
     log('Send', `Injection error: ${e.message}`);
@@ -2467,6 +2472,7 @@ app.post('/stop', async (req, res) => {
 
   try {
     const result = await stopGeneration();
+    track('generation_stopped');
     res.json(result || { ok: false });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2728,6 +2734,7 @@ async function start() {
     if (TUNNEL_ENABLED && TUNNEL_URL) {
       log('Server', `Tunnel URL: ${TUNNEL_URL}`);
     }
+    startSession();
   });
 
   // Connect to CDP
@@ -2745,6 +2752,7 @@ async function start() {
   // Graceful shutdown
   const shutdown = () => {
     log('Server', 'Shutting down...');
+    endSession();
     stopPolling();
     if (reconnectTimer) clearTimeout(reconnectTimer);
     if (cdpClient) cdpClient.close();

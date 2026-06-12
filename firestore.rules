@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Telemetry events: create-only, no reads/updates/deletes from client
+    match /telemetry/{doc} {
+      allow create: if
+        // Must have required fields
+        request.resource.data.keys().hasAll(['event', 'installId', 'timestamp']) &&
+        // Event name must be a non-empty string
+        request.resource.data.event is string &&
+        request.resource.data.event.size() > 0 &&
+        request.resource.data.event.size() <= 50 &&
+        // InstallId must be a string (UUID format, ~36 chars)
+        request.resource.data.installId is string &&
+        request.resource.data.installId.size() <= 50 &&
+        // Cap total document fields to prevent abuse
+        request.resource.data.keys().size() <= 20;
+
+      allow read, update, delete: if false;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

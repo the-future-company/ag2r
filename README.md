@@ -249,6 +249,10 @@ Switch between conversations, browse files changed, artifacts, and background ta
 
 > Start with **[ONBOARDING.md](./ONBOARDING.md)** for the full technical reference (architecture, file maps, workflows). Your behavioral rules are in **[GEMINI.md](./GEMINI.md)**.
 
+## 📊 Telemetry
+
+AG2R collects anonymous usage metrics (feature counts, crash reports — no personal data) to help improve the project. Set `AG2R_TELEMETRY=false` in your `.env` to disable.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE) for details.
