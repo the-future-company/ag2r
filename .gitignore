@@ -7,3 +7,4 @@ certs/
 .telemetry/
 !.telemetry/dashboard.html
 !.telemetry/admin.js
+_tools/

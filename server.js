@@ -6,6 +6,7 @@ import { createServer as createHttpServer } from 'http';
 import { WebSocketServer } from 'ws';
 import CDP from 'chrome-remote-interface';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
@@ -2738,10 +2739,84 @@ app.get('/telemetry/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, '.telemetry', 'dashboard.html'));
 });
 
-
-
-
 // ─────────────────────────────────────────────
+// Icon Workshop (dev tool, untracked)
+// ─────────────────────────────────────────────
+
+app.get('/icon-workshop', (req, res) => {
+  const toolPath = path.join(__dirname, '_tools', 'icon-workshop.html');
+  if (!fs.existsSync(toolPath)) return res.status(404).send('Icon workshop not found');
+  res.sendFile(toolPath);
+});
+
+app.post('/icon-workshop/save', (req, res) => {
+  const chunks = [];
+  req.on('data', c => chunks.push(c));
+  req.on('end', () => {
+    try {
+      const buf = Buffer.concat(chunks);
+      // Parse multipart to extract the PNG blob
+      const boundary = req.headers['content-type']?.split('boundary=')[1];
+      if (!boundary) return res.json({ ok: false, error: 'No boundary' });
+      const parts = buf.toString('binary').split('--' + boundary);
+      for (const part of parts) {
+        if (part.includes('name="icon"')) {
+          const headerEnd = part.indexOf('\r\n\r\n');
+          if (headerEnd < 0) continue;
+          const body = Buffer.from(part.substring(headerEnd + 4).replace(/\r\n$/, ''), 'binary');
+          fs.writeFileSync(path.join(__dirname, 'public', 'ag2r-icon.png'), body);
+          return res.json({ ok: true });
+        }
+      }
+      res.json({ ok: false, error: 'No icon part found' });
+    } catch (e) { res.json({ ok: false, error: e.message }); }
+  });
+});
+
+// Browse files on the laptop
+app.get('/icon-workshop/browse', (req, res) => {
+  let dir = req.query.dir || path.join(__dirname, 'public');
+  if (dir.startsWith('~')) dir = dir.replace('~', os.homedir());
+  const IMG_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico'];
+  try {
+    const resolved = path.resolve(dir);
+    const entries = fs.readdirSync(resolved, { withFileTypes: true });
+    const items = [];
+    // Parent directory
+    const parent = path.dirname(resolved);
+    if (parent !== resolved) {
+      items.push({ name: '..', path: parent, type: 'dir' });
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const full = path.join(resolved, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name === '.git') continue;
+        items.push({ name: e.name + '/', path: full, type: 'dir' });
+      } else if (IMG_EXT.includes(path.extname(e.name).toLowerCase())) {
+        const stat = fs.statSync(full);
+        items.push({ name: e.name, path: full, type: 'file', size: stat.size });
+      }
+    }
+    items.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    res.json({ ok: true, dir: resolved, items });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
+app.get('/icon-workshop/file', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) return res.status(400).send('No path');
+  try {
+    const resolved = path.resolve(filePath);
+    if (!fs.existsSync(resolved)) return res.status(404).send('Not found');
+    res.sendFile(resolved);
+  } catch (e) { res.status(500).send(e.message); }
+});
+
+
 // Server Startup
 // ─────────────────────────────────────────────
 
