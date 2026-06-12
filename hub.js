@@ -473,6 +473,21 @@ function renderLandingPage() {
       flex-shrink: 0;
     }
 
+    .kill-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      transition: color 0.2s, background 0.2s;
+      flex-shrink: 0;
+    }
+    .kill-btn:hover { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+    .kill-btn .material-symbols-rounded { font-size: 18px; }
+
     /* ── Empty State ── */
     .empty-state {
       text-align: center;
@@ -567,6 +582,7 @@ function renderLandingPage() {
         html += '<div class="server-meta">';
         html += 'port ' + s.port + (s.cdpConnected ? ' \\u00b7 CDP connected' : ' \\u00b7 CDP off');
         html += '</div></a>';
+        html += '<button class="kill-btn" onclick="killSession(' + s.port + ', event)" title="Kill session"><span class="material-symbols-rounded">close</span></button>';
         html += '<a href="/' + escapeAttr(s.name) + '/" style="text-decoration:none;color:inherit;display:flex"><span class="material-symbols-rounded server-arrow">chevron_right</span></a>';
         html += '</div>';
         return html;
@@ -578,6 +594,36 @@ function renderLandingPage() {
     }
     function escapeAttr(s) {
       return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    async function killSession(port, e) {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      // Two-tap confirm: first tap arms, second tap kills
+      if (btn.dataset.armed !== 'true') {
+        btn.dataset.armed = 'true';
+        btn.style.color = '#ef4444';
+        btn.title = 'Tap again to confirm';
+        btn.querySelector('.material-symbols-rounded').textContent = 'delete_forever';
+        setTimeout(() => {
+          btn.dataset.armed = '';
+          btn.style.color = '';
+          btn.title = 'Kill session';
+          btn.querySelector('.material-symbols-rounded').textContent = 'close';
+        }, 3000);
+        return;
+      }
+      try {
+        const res = await fetch('/_hub/api/kill-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ port })
+        });
+        const data = await res.json();
+        if (!res.ok) { console.error('Kill failed:', data.error); return; }
+        lastData = null;
+        refresh();
+      } catch (e) { console.error('Kill error:', e); }
     }
 
     refresh();
@@ -661,6 +707,43 @@ function handleHubApi(req, res, pathname) {
     servers.sort((a, b) => a.name.localeCompare(b.name));
     res.writeHead(200);
     res.end(JSON.stringify({ servers }));
+    return;
+  }
+
+  // POST /_hub/api/kill-session
+  if (pathname === '/_hub/api/kill-session' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { port } = JSON.parse(body);
+        if (!port || port < SCAN_MIN || port > SCAN_MAX) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'Invalid port' }));
+          return;
+        }
+        // Find and kill the process on this port
+        try {
+          const pid = execSync(`lsof -i :${port} -sTCP:LISTEN -t 2>/dev/null`).toString().trim();
+          if (pid) {
+            process.kill(parseInt(pid), 'SIGTERM');
+            activeServers.delete(port);
+            log('Hub', `Killed session on port ${port} (PID ${pid})`);
+            res.writeHead(200);
+            res.end(JSON.stringify({ ok: true, port, pid: parseInt(pid) }));
+          } else {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: 'No process found on port ' + port }));
+          }
+        } catch (killErr) {
+          res.writeHead(500);
+          res.end(JSON.stringify({ error: 'Failed to kill: ' + killErr.message }));
+        }
+      } catch (parseErr) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
     return;
   }
 
