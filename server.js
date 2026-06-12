@@ -15,7 +15,7 @@ import selfsigned from 'selfsigned';
 import multer from 'multer';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
-import { track, startSession, endSession, readEvents } from './src/telemetry.js';
+import { track, startSession, endSession } from './src/telemetry.js';
 
 dotenv.config();
 
@@ -2813,19 +2813,6 @@ app.get('/health', (req, res) => {
     snapshotAvailable: !!cachedSnapshot,
     wsClients: wsClients.size,
   });
-});
-// --- Telemetry Dashboard ---
-app.get('/telemetry/events', async (req, res) => {
-  try {
-    const events = await readEvents();
-    res.json(events);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/telemetry/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, '.telemetry', 'dashboard.html'));
 });
 
 // ─────────────────────────────────────────────

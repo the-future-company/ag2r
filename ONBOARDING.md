@@ -57,7 +57,6 @@
 | Cloudflare tunnel watchdog (cron) | `scripts/tunnel-watchdog.sh` |
 | Voice input (shared factory for main + new session mic) | `public/js/app.js` — search `createVoiceInput` |
 | Anonymous usage telemetry (Firestore REST, opt-out, installId) | `src/telemetry.js` |
-| Telemetry operations (querying, schema, Firebase project) | `.telemetry/GEMINI.md` (gitignored, local only) |
 | README screenshots (product showcase) | `docs/` |
 | Push notifications (VAPID, service worker, subscription) | `server.js` — search `pushSubscriptions`; `hub.js` — search `hubPushSubscriptions`; `public/sw.js`; `public/js/app.js` — search `initPushNotifications` |
 
