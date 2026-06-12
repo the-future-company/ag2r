@@ -10,7 +10,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body || 'Session needs your attention',
     icon: '/ag2r-icon.png',
-    badge: '/ag2r-icon.png',
+    badge: '/ag2r-badge.png',
     tag: data.tag,
     data: { url: data.url },
     requireInteraction: true,
