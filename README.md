@@ -205,7 +205,9 @@ Switch between conversations, browse files changed, artifacts, and background ta
 - **Cookie-based auth** — enter passcode once, stays logged in for 30 days
 
 > [!NOTE]
-> **iOS users:** Push notifications require the PWA to be installed to your home screen (iOS 16.4+). Open AG2R in Safari, tap the Share button, then "Add to Home Screen".
+> **iOS:** Push notifications require the PWA to be installed to your home screen (iOS 16.4+). Open AG2R in Safari, tap Share → "Add to Home Screen."
+>
+> **Android:** If Chrome doesn't prompt for notifications, go to Chrome **Settings → Site settings → Notifications** and set "How to show requests" to **"Expand all requests"**. Then reload the page and tap anywhere to trigger the prompt.
 
 ---
 
