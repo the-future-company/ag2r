@@ -188,7 +188,7 @@ Gotchas or decisions the next session should know.
 
 ## 🧪 Testing
 
-> The main server (`server.js`) runs on port 3000 and is user-facing at `ag2r.omercanyy.com`. The dev hub (`hub.js`) runs on port 3100 at `dev.ag2r.omercanyy.com` and auto-detects agent servers on ports 3001–3099.
+> The main server (`server.js`) runs on port 3000 and is user-facing at `ag2r.omercanyy.com`. The dev hub (`hub.js`) runs on port 3100 at `dev-ag2r.omercanyy.com` and auto-detects agent servers on ports 3001–3099.
 
 ### Agent testing workflow
 
@@ -202,14 +202,14 @@ Gotchas or decisions the next session should know.
 |------|-------------|
 | 3000 | Main branch server (`ag2r.omercanyy.com`, managed by `main-watchdog.sh`) |
 | 3001–3099 | Agent worktree servers |
-| 3100 | Dev hub (`dev.ag2r.omercanyy.com`, managed by `hub-watchdog.sh`) |
+| 3100 | Dev hub (`dev-ag2r.omercanyy.com`, managed by `hub-watchdog.sh`) |
 
 ### How the hub works
 
 - Scans ports 3001–3099 every 5s, identifies worktrees via process CWD
 - Landing page at `/` lists active dev sessions — user clicks one to enter
 - Cookie-based routing proxies all subsequent requests to the chosen session
-- Cloudflare tunnel → `dev.ag2r.omercanyy.com` → port 3100
+- Cloudflare tunnel → `dev-ag2r.omercanyy.com` → port 3100
 - The app has zero awareness of the hub
 
 ---
