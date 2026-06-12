@@ -335,8 +335,8 @@ async function loadSnapshot() {
       inputBar.classList.toggle('hidden', hideBottomBar);
       if (hideBottomBar) quickActions.classList.add('hidden');
 
-      // Add mobile copy buttons to code blocks
-      addMobileCopyButtons();
+      // Add mobile copy buttons to code blocks (deferred to avoid forced reflow after innerHTML)
+      requestAnimationFrame(() => addMobileCopyButtons());
 
       // Wire up click proxying for interactive elements
       addClickProxyHandlers(chatContent);
@@ -825,7 +825,7 @@ chatArea.addEventListener('scroll', () => {
 scrollFab.addEventListener('click', () => {
   userScrolledAway = false;
   scrollToBottom();
-  updateScrollFab();
+  requestAnimationFrame(() => updateScrollFab());
 });
 
 // ─────────────────────────────────────────────
@@ -1042,7 +1042,9 @@ document.querySelectorAll('.quick-action-chip').forEach(chip => {
 // Auto-resize textarea
 messageInput.addEventListener('input', () => {
   messageInput.style.height = 'auto';
-  messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+  requestAnimationFrame(() => {
+    messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+  });
   updateActionButton();
 });
 
@@ -1113,7 +1115,9 @@ function createVoiceInput(inputEl, btnEl) {
 
       // Trigger auto-resize
       inputEl.style.height = 'auto';
-      inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+      requestAnimationFrame(() => {
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+      });
       updateActionButton();
     };
 
