@@ -69,7 +69,7 @@ function initVapid() {
     fs.writeFileSync(VAPID_KEYS_PATH, JSON.stringify(keys, null, 2));
     log('Push', 'Generated new VAPID keys');
   }
-  const email = process.env.VAPID_EMAIL || 'mailto:ag2r@example.com';
+  const email = process.env.VAPID_EMAIL || 'mailto:ag2r@omercanyy.com';
   webpush.setVapidDetails(email, keys.publicKey, keys.privateKey);
   return keys;
 }
@@ -88,7 +88,7 @@ async function sendPushToAll(payload) {
       if (err.statusCode === 410 || err.statusCode === 404) {
         stale.push(endpoint);
       } else {
-        console.debug('[Push] Send error:', err.message);
+        console.debug(`[Push] Send error: ${err.statusCode || 'N/A'} — ${err.body || err.message}`);
       }
     }
   }
