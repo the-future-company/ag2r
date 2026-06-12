@@ -10,6 +10,9 @@ set -euo pipefail
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 
+# Ensure system tools (lsof, kill) are in PATH — cron defaults to /usr/bin:/bin
+export PATH="/usr/sbin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+
 # Configuration
 AG2R_MAIN_DIR="${AG2R_MAIN_DIR:-$HOME/Workspace/ag2r}"
 HUB_PORT="${HUB_PORT:-3100}"
