@@ -249,6 +249,24 @@ Switch between conversations, browse files changed, artifacts, and background ta
 
 ---
 
+## 🔄 Keep It Running
+
+Use the included watchdog scripts to auto-start AG2R and keep it running. They also auto-update from `origin/main` when new code is merged.
+
+```bash
+crontab -e
+
+# Add these lines:
+*/5 * * * * ~/Workspace/ag2r/scripts/main-watchdog.sh >> /tmp/ag2r-main-watchdog.log 2>&1
+*/5 * * * * ~/Workspace/ag2r/scripts/hub-watchdog.sh >> /tmp/ag2r-hub-watchdog.log 2>&1
+*/5 * * * * ~/Workspace/ag2r/scripts/tunnel-watchdog.sh >> /tmp/ag2r-tunnel-watchdog.log 2>&1
+```
+
+> [!TIP]
+> See [ONBOARDING.md](./ONBOARDING.md) for detailed setup and configuration options.
+
+---
+
 ## 🤖 For AI Agents
 
 > Start with **[ONBOARDING.md](./ONBOARDING.md)** for the full technical reference (architecture, file maps, workflows). Your behavioral rules are in **[GEMINI.md](./GEMINI.md)**.

@@ -1,7 +1,8 @@
 #!/bin/bash
-# hub-watchdog.sh — Ensures the AG2R hub stays running and the main server stays up-to-date.
+# hub-watchdog.sh — Ensures the AG2R hub stays running and up-to-date.
+# Handles hub health check + auto-update from origin/main.
 # Designed to run as a cron job every 5 minutes.
-# See ONBOARDING.md § "Auto-Managed Main Server" for setup.
+# See ONBOARDING.md § "Auto-Managed Hub & Main Server" for setup.
 
 set -euo pipefail
 
@@ -13,9 +14,7 @@ export NVM_DIR="$HOME/.nvm"
 AG2R_MAIN_DIR="${AG2R_MAIN_DIR:-$HOME/Workspace/ag2r}"
 HUB_PORT="${HUB_PORT:-3100}"
 HUB_LOG="${HUB_LOG:-/tmp/ag2r-hub.log}"
-MAIN_PORT="${AG2R_MAIN_PORT:-3000}"
-MAIN_LOG="${MAIN_LOG:-/tmp/ag2r-main.log}"
-BOOT_COMMIT_FILE="/tmp/ag2r-main-boot-commit"
+BOOT_COMMIT_FILE="/tmp/ag2r-hub-boot-commit"
 
 # ── 1. Hub health check ──
 HEALTH=$(curl -sk --connect-timeout 2 --max-time 5 \
@@ -34,23 +33,15 @@ if ! echo "$HEALTH" | grep -q '"servers"'; then
   # Start hub from the main repo dir (where hub.js lives)
   cd "$AG2R_MAIN_DIR"
   HUB_PORT="${HUB_PORT}" nohup node hub.js >> "$HUB_LOG" 2>&1 &
-  git rev-parse HEAD > /tmp/ag2r-hub-boot-commit 2>/dev/null || true
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Hub restarted with PID $! (commit $(head -c 12 /tmp/ag2r-hub-boot-commit))"
-fi
-
-# ── 2. Auto-update main server if code changed ──
-# Only applies when the main server (port 3000) is running.
-MAIN_PID=$(lsof -i :"${MAIN_PORT}" -sTCP:LISTEN -t 2>/dev/null || true)
-if [ -z "$MAIN_PID" ]; then
-  # Main server not running — nothing to update (user starts it via hub UI)
+  git rev-parse HEAD > "$BOOT_COMMIT_FILE" 2>/dev/null || true
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Hub restarted with PID $! (commit $(head -c 12 "$BOOT_COMMIT_FILE"))"
   exit 0
 fi
 
+# ── 2. Auto-update hub if code changed ──
 cd "$AG2R_MAIN_DIR"
 git fetch origin main --quiet 2>&1 || exit 0
 
-# Compare the commit the server BOOTED with (not the current HEAD, which
-# agent sessions may have advanced via git pull after merging their PRs).
 BOOT_COMMIT=""
 if [ -f "$BOOT_COMMIT_FILE" ]; then
   BOOT_COMMIT=$(cat "$BOOT_COMMIT_FILE" 2>/dev/null || true)
@@ -65,11 +56,11 @@ fi
 REMOTE=$(git rev-parse origin/main 2>/dev/null || echo "unknown")
 
 if [ "$BOOT_COMMIT" = "$REMOTE" ]; then
-  # Server is running the latest code
+  # Hub is running the latest code
   exit 0
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Code is stale (${BOOT_COMMIT:0:12} → ${REMOTE:0:12}), updating..."
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Hub is stale (${BOOT_COMMIT:0:12} → ${REMOTE:0:12}), updating..."
 
 # Pull latest
 git pull origin main --quiet 2>&1 || { echo "[$(date '+%Y-%m-%d %H:%M:%S')] git pull failed"; exit 1; }
@@ -80,13 +71,16 @@ if git diff --name-only "$BOOT_COMMIT" "$REMOTE" | grep -q "package-lock.json"; 
   npm ci --silent 2>&1 || true
 fi
 
-# Restart the main server
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restarting main server on port ${MAIN_PORT}..."
-kill "$MAIN_PID" 2>/dev/null || true
-sleep 2
+# Restart the hub
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restarting hub on port ${HUB_PORT}..."
+HUB_PID=$(lsof -i :"${HUB_PORT}" -sTCP:LISTEN -t 2>/dev/null || true)
+if [ -n "$HUB_PID" ]; then
+  kill "$HUB_PID" 2>/dev/null || true
+  sleep 2
+fi
 
-PORT="${MAIN_PORT}" nohup node server.js >> "$MAIN_LOG" 2>&1 &
+HUB_PORT="${HUB_PORT}" nohup node hub.js >> "$HUB_LOG" 2>&1 &
 
 # Record the new boot commit
 echo "$REMOTE" > "$BOOT_COMMIT_FILE"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Main server restarted with PID $! (now at ${REMOTE:0:12})"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Hub restarted with PID $! (now at ${REMOTE:0:12})"

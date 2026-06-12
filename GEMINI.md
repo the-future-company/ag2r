@@ -33,7 +33,7 @@ Once the environment is ready, read these for context:
 4. **Testing Workflow (MANDATORY):** After code changes, you MUST verify by starting the server and leaving it running for the user to test. Follow this exact sequence:
    1. Pick an unused port in **[3001, 3099]** (port 3000 is reserved for main, 3100 for the hub). If `EADDRINUSE`, try the next port.
    2. Start the server: `PORT=<port> node server.js` — run as a **background task** so it stays alive.
-   3. **Never stop the server.** Leave it running. The hub on port 3100 auto-detects it and the user tests through the hub.
+   3. **Never stop the server.** Leave it running. The dev hub on port 3100 (`dev.ag2r.omercanyy.com`) auto-detects it and the user tests through the hub.
    4. Tell the user: "Server running on port `<port>`. Test it through the hub."
    5. **Never** ask the user to start the server themselves. **Never** open a browser or use browser subagents. **Never** stop the server after starting it.
 
@@ -157,7 +157,7 @@ ONBOARDING.md follows a strict **pointer-based context map** pattern. The princi
 
 6. **Always provide the local IP for test servers.** The user tests on their phone over the local network — `localhost` doesn't work from a phone. When starting a test server, run `ipconfig getifaddr en0` and give the full URL: `https://<ip>:<port>`.
 
-7. **Server port allocation.** Port **3000** is reserved for the main branch server. Port **3100** is reserved for the hub. Agent servers use **[3001, 3099]**. See Core Behavior #4 for the full testing workflow.
+7. **Server port allocation.** Port **3000** is reserved for the main branch server (`ag2r.omercanyy.com`). Port **3100** is reserved for the dev hub (`dev.ag2r.omercanyy.com`). Agent servers use **[3001, 3099]**. See Core Behavior #4 for the full testing workflow.
 
 8. **Hub.js changes need a test hub.** The testing workflow (Core Behavior #4) is for `server.js` changes. For `hub.js` changes (landing page, hub API), start the modified hub on a test port: `HUB_PORT=3033 node hub.js`. The production hub on 3100 runs old code from `~/Workspace/ag2r` — starting `server.js` won't test hub changes.
 

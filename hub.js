@@ -1,5 +1,5 @@
 // hub.js — AG2R Multi-Worktree Hub
-// Dev-only proxy that auto-detects running AG2R servers via port scanning
+// Dev-only proxy that auto-detects running AG2R dev servers via port scanning
 // and multiplexes them behind a single port for tunnel access.
 // The app (server.js, app.js) has zero awareness of this hub.
 // See ONBOARDING.md § "Testing Across Worktrees" for usage.
@@ -11,7 +11,7 @@ import tls from 'tls';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import selfsigned from 'selfsigned';
 import dotenv from 'dotenv';
 
@@ -23,12 +23,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Configuration
 // ─────────────────────────────────────────────
 const HUB_PORT = parseInt(process.env.HUB_PORT || '3100');
-const SCAN_MIN = parseInt(process.env.HUB_SCAN_MIN || '3000');
+const SCAN_MIN = parseInt(process.env.HUB_SCAN_MIN || '3001');
 const SCAN_MAX = parseInt(process.env.HUB_SCAN_MAX || '3099');
 const SCAN_INTERVAL = parseInt(process.env.HUB_SCAN_INTERVAL || '5000');
-const MAIN_DIR = process.env.AG2R_MAIN_DIR || path.join(process.env.HOME, 'Workspace', 'ag2r');
-const MAIN_PORT = parseInt(process.env.AG2R_MAIN_PORT || '3000');
-const MAIN_LOG = process.env.AG2R_LOG || '/tmp/ag2r-main.log';
 
 // Cache-busting hash for static assets — changes when file content changes
 function fileHash(filePath) {
@@ -256,12 +253,8 @@ function proxyRequest(req, res, childPort, wtName) {
       proxyRes.on('data', (chunk) => chunks.push(chunk));
       proxyRes.on('end', () => {
         let body = Buffer.concat(chunks).toString('utf-8');
-        // Skip injection for main branch (name is "ag2r" on port 3000)
-        const isMain = wtName === 'ag2r' && childPort === MAIN_PORT;
-        if (!isMain) {
-          const script = `<script>document.addEventListener('DOMContentLoaded',()=>{const t=document.querySelector('.header-title');if(t)t.innerHTML='AG2R <span style="font-size:0.5em;opacity:0.6;font-weight:400">:${childPort} ${wtName}</span>';})<\/script>`;
-          body = body.replace('</head>', script + '</head>');
-        }
+        const script = `<script>document.addEventListener('DOMContentLoaded',()=>{const t=document.querySelector('.header-title');if(t)t.innerHTML='AG2R <span style="font-size:0.5em;opacity:0.6;font-weight:400">:${childPort} ${wtName}<\/span>';})<\/script>`;
+        body = body.replace('</head>', script + '</head>');
         delete proxyRes.headers['content-length'];
         res.writeHead(proxyRes.statusCode, proxyRes.headers);
         res.end(body);
@@ -406,84 +399,6 @@ function renderLandingPage() {
       text-transform: uppercase;
     }
 
-    /* ── Control Panel (Antigravity) ── */
-    .control-panel {
-      width: 100%;
-      max-width: 480px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
-      margin-bottom: 20px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .control-panel::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--accent), #00a0ff, var(--accent));
-      opacity: 0.8;
-    }
-
-    .control-label {
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1.2px;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-    }
-
-    .control-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .control-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .status-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .status-dot.running { background: var(--green); box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
-    .status-dot.stopped { background: var(--red); box-shadow: 0 0 6px rgba(239, 68, 68, 0.3); }
-    .status-dot.warning { background: var(--amber); box-shadow: 0 0 6px rgba(245, 158, 11, 0.4); }
-
-    .control-name { font-size: 14px; font-weight: 600; }
-    .control-state { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
-
-    .btn-action {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 7px 14px;
-      border-radius: var(--radius-sm);
-      font-family: inherit;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: 1px solid;
-    }
-
-    .btn-action.danger {
-      background: transparent;
-      border-color: rgba(239, 68, 68, 0.25);
-      color: var(--red);
-    }
-    .btn-action.danger:hover { background: rgba(239, 68, 68, 0.1); border-color: var(--red); }
-    .btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-action .material-symbols-rounded { font-size: 15px; }
-
     /* ── Section Label ── */
     .section-label {
       font-size: 10px;
@@ -523,8 +438,6 @@ function renderLandingPage() {
     }
 
     .server-card:hover { background: var(--surface-hover); border-color: var(--accent); }
-    .server-card.is-main { border-color: var(--accent-glow); }
-    .server-card.is-main:hover { border-color: var(--accent); }
 
     .server-dot {
       width: 8px; height: 8px;
@@ -554,39 +467,11 @@ function renderLandingPage() {
       gap: 6px;
     }
 
-    .server-badge {
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: var(--accent-dim);
-      color: var(--accent);
-    }
-
     .server-arrow {
       color: var(--text-muted);
       font-size: 18px;
       flex-shrink: 0;
     }
-
-    .btn-restart-server {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px; height: 32px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text-dim);
-      cursor: pointer;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    }
-    .btn-restart-server:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-    .btn-restart-server:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-restart-server .material-symbols-rounded { font-size: 16px; }
 
     /* ── Empty State ── */
     .empty-state {
@@ -622,26 +507,6 @@ function renderLandingPage() {
       font-size: 11px;
     }
 
-    .wt-btn-main {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 20px;
-      border: none;
-      border-radius: var(--radius-sm);
-      background: var(--accent);
-      color: white;
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s, opacity 0.2s;
-      margin-top: 14px;
-    }
-    .wt-btn-main:hover { background: #0090e8; }
-    .wt-btn-main:disabled { opacity: 0.6; cursor: not-allowed; }
-    .wt-btn-main .material-symbols-rounded { font-size: 18px; }
-
     .scan-info {
       font-size: 10px;
       color: var(--text-muted);
@@ -649,86 +514,6 @@ function renderLandingPage() {
       text-align: center;
       letter-spacing: 0.3px;
     }
-
-    /* ── Modal ── */
-    .modal-overlay {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(6px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      padding: 16px;
-    }
-    .modal-overlay.hidden { display: none; }
-
-    .modal-box {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-      max-width: 380px;
-      width: 100%;
-    }
-
-    .modal-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .modal-body {
-      font-size: 13px;
-      color: var(--text-dim);
-      line-height: 1.5;
-      margin-bottom: 20px;
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-    }
-
-    .btn-cancel {
-      padding: 8px 16px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 13px;
-      cursor: pointer;
-    }
-
-    .btn-confirm-danger {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 8px;
-      background: var(--red);
-      color: white;
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn-confirm-danger:hover { background: #dc2626; }
-
-    .btn-confirm-action {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 8px;
-      background: var(--accent);
-      color: white;
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn-confirm-action:hover { background: #0090e8; }
   </style>
 </head>
 <body>
@@ -736,23 +521,7 @@ function renderLandingPage() {
     <img src="/ag2r-icon.png?v=${ICON_HASH}" alt="AG2R">
     <div class="hub-header-text">
       <div class="hub-logo">AG2R Hub</div>
-      <div class="hub-subtitle">Command Center</div>
-    </div>
-  </div>
-
-  <div class="control-panel">
-    <div class="control-label">Antigravity Desktop</div>
-    <div class="control-row">
-      <div class="control-left">
-        <div id="ag-dot" class="status-dot stopped"></div>
-        <div>
-          <div class="control-name">Antigravity</div>
-          <div id="ag-state" class="control-state">Checking...</div>
-        </div>
-      </div>
-      <button id="restart-btn" class="btn-action danger" onclick="showModal('restart')">
-        <span class="material-symbols-rounded">restart_alt</span>Restart
-      </button>
+      <div class="hub-subtitle">Dev Sessions</div>
     </div>
   </div>
 
@@ -761,42 +530,9 @@ function renderLandingPage() {
 
   <div class="scan-info">Scanning ports ${SCAN_MIN}\u2013${SCAN_MAX} every ${SCAN_INTERVAL / 1000}s</div>
 
-  <!-- Restart AG Modal -->
-  <div id="restart-modal" class="modal-overlay hidden">
-    <div class="modal-box">
-      <div class="modal-title">Restart Antigravity?</div>
-      <div class="modal-body">
-        This will force-quit the Antigravity desktop app and relaunch it with debug mode.
-        All active coding sessions will be interrupted.
-      </div>
-      <div class="modal-actions">
-        <button class="btn-cancel" onclick="hideModals()">Cancel</button>
-        <button class="btn-confirm-danger" onclick="confirmRestart()">Restart</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Restart Main Modal -->
-  <div id="restart-main-modal" class="modal-overlay hidden">
-    <div class="modal-box">
-      <div class="modal-title">Restart Main Server?</div>
-      <div class="modal-body">
-        This will pull the latest code from main, reinstall dependencies if needed, and restart the server on port ${MAIN_PORT}.
-      </div>
-      <div class="modal-actions">
-        <button class="btn-cancel" onclick="hideModals()">Cancel</button>
-        <button class="btn-confirm-action" onclick="confirmRestartMain()">Restart</button>
-      </div>
-    </div>
-  </div>
-
   <script>
     const list = document.getElementById('server-list');
-    const agDot = document.getElementById('ag-dot');
-    const agState = document.getElementById('ag-state');
-    const restartBtn = document.getElementById('restart-btn');
     let lastData = null;
-    const MAIN_PORT = ${MAIN_PORT};
 
     async function refresh() {
       try {
@@ -805,134 +541,32 @@ function renderLandingPage() {
         const json = JSON.stringify(data);
         if (json === lastData) return;
         lastData = json;
-        render(data.servers, data.mainAvailable);
-        updateAgStatus(data.antigravityRunning, data.antigravityDebug);
+        render(data.servers);
       } catch (e) {
         console.debug('Status fetch error:', e);
       }
     }
 
-    function updateAgStatus(running, debug) {
-      if (running && debug) {
-        agDot.className = 'status-dot running';
-        agState.textContent = 'Running (debug)';
-      } else if (running) {
-        agDot.className = 'status-dot warning';
-        agState.textContent = 'Running (no debug)';
-      } else {
-        agDot.className = 'status-dot stopped';
-        agState.textContent = 'Not running';
-      }
-    }
-
-    function showModal(type) {
-      document.getElementById(type + '-modal').classList.remove('hidden');
-    }
-    function hideModals() {
-      document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden'));
-    }
-
-    async function confirmRestart() {
-      hideModals();
-      restartBtn.disabled = true;
-      restartBtn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Restarting\u2026';
-      agState.textContent = 'Restarting\u2026';
-      agDot.className = 'status-dot stopped';
-
-      try {
-        const res = await fetch('/_hub/api/restart-antigravity', { method: 'POST' });
-        const data = await res.json();
-        if (!data.ok) {
-          restartBtn.innerHTML = '<span class="material-symbols-rounded">error</span>' + escapeHtml(data.error || 'Failed');
-          agState.textContent = 'Restart failed';
-          return;
-        }
-        agState.textContent = 'Launching\u2026';
-        let attempts = 0;
-        const poll = setInterval(async () => {
-          attempts++;
-          await refresh();
-          const status = lastData ? JSON.parse(lastData) : {};
-          if (status.antigravityRunning) {
-            clearInterval(poll);
-            restartBtn.disabled = false;
-            restartBtn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>Restart';
-          } else if (attempts > 30) {
-            clearInterval(poll);
-            restartBtn.disabled = false;
-            restartBtn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>Restart';
-            agState.textContent = 'May still be starting\u2026';
-          }
-        }, 2000);
-      } catch (e) {
-        restartBtn.innerHTML = '<span class="material-symbols-rounded">error</span>Error';
-        agState.textContent = 'Restart failed';
-      }
-    }
-
-    async function confirmRestartMain() {
-      hideModals();
-      const btn = document.querySelector('[data-restart-main]');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>'; }
-
-      try {
-        const res = await fetch('/_hub/api/restart-main', { method: 'POST' });
-        const data = await res.json();
-        if (!data.ok) {
-          if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span>';
-          setTimeout(() => { if (btn) { btn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>'; btn.disabled = false; } }, 3000);
-          return;
-        }
-        // Poll until detected
-        let attempts = 0;
-        const poll = setInterval(async () => {
-          attempts++;
-          await refresh();
-          const status = lastData ? JSON.parse(lastData) : {};
-          const mainUp = status.servers && status.servers.some(s => s.port === MAIN_PORT);
-          if (mainUp || attempts > 15) {
-            clearInterval(poll);
-            if (btn) { btn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>'; btn.disabled = false; }
-          }
-        }, 2000);
-      } catch (e) {
-        if (btn) { btn.innerHTML = '<span class="material-symbols-rounded">error</span>'; }
-        setTimeout(() => { if (btn) { btn.innerHTML = '<span class="material-symbols-rounded">restart_alt</span>'; btn.disabled = false; } }, 3000);
-      }
-    }
-
-    function render(servers, mainAvailable) {
+    function render(servers) {
       if (servers.length === 0) {
-        let html = '<div class="empty-state">'
+        list.innerHTML = '<div class="empty-state">'
           + '<span class="material-symbols-rounded">dns</span>'
-          + '<div class="empty-title">No active sessions</div>';
-        if (mainAvailable) {
-          html += '<button class="wt-btn wt-btn-main" id="start-main-btn" onclick="startMain()">'
-            + '<span class="material-symbols-rounded">play_arrow</span>Start Main</button>'
-            + '<div class="empty-hint" style="margin-top:12px">Pulls latest and starts the main server</div>';
-        } else {
-          html += '<div class="empty-hint">Start a server in any worktree:<br>'
-            + '<code>PORT=3001 node server.js</code><br>'
-            + 'It will appear here automatically.</div>';
-        }
-        html += '</div>';
-        list.innerHTML = html;
+          + '<div class="empty-title">No active dev sessions</div>'
+          + '<div class="empty-hint">Start a server in any worktree:<br>'
+          + '<code>PORT=3001 node server.js</code><br>'
+          + 'It will appear here automatically.</div>'
+          + '</div>';
         return;
       }
 
       list.innerHTML = servers.map(s => {
-        const isMain = s.port === MAIN_PORT;
-        let html = '<div class="server-card' + (isMain ? ' is-main' : '') + '">';
+        let html = '<div class="server-card">';
         html += '<div class="server-dot"></div>';
         html += '<a href="/' + escapeAttr(s.name) + '/" style="flex:1;min-width:0;text-decoration:none;color:inherit">';
         html += '<div class="server-name">' + escapeHtml(s.name) + '</div>';
         html += '<div class="server-meta">';
-        if (isMain) html += '<span class="server-badge">main</span>';
-        html += 'port ' + s.port + (s.cdpConnected ? ' \u00b7 CDP connected' : ' \u00b7 CDP off');
+        html += 'port ' + s.port + (s.cdpConnected ? ' \\u00b7 CDP connected' : ' \\u00b7 CDP off');
         html += '</div></a>';
-        if (isMain) {
-          html += '<button class="btn-restart-server" data-restart-main title="Restart main server" onclick="event.stopPropagation();showModal(\'restart-main\')"><span class="material-symbols-rounded">restart_alt</span></button>';
-        }
         html += '<a href="/' + escapeAttr(s.name) + '/" style="text-decoration:none;color:inherit;display:flex"><span class="material-symbols-rounded server-arrow">chevron_right</span></a>';
         html += '</div>';
         return html;
@@ -944,27 +578,6 @@ function renderLandingPage() {
     }
     function escapeAttr(s) {
       return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-    }
-
-    async function startMain() {
-      const btn = document.getElementById('start-main-btn');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Starting\u2026'; }
-      try {
-        const res = await fetch('/_hub/api/start-main', { method: 'POST' });
-        const data = await res.json();
-        if (!data.ok) {
-          if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span>' + escapeHtml(data.error || 'Failed');
-          return;
-        }
-        const poll = setInterval(async () => {
-          await refresh();
-          if (lastData && JSON.parse(lastData).servers.length > 0) {
-            clearInterval(poll);
-          }
-        }, 2000);
-      } catch (e) {
-        if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span>Error';
-      }
     }
 
     refresh();
@@ -1046,39 +659,9 @@ function handleHubApi(req, res, pathname) {
       servers.push({ name: server.name, port, cdpConnected: server.cdpConnected });
     }
     servers.sort((a, b) => a.name.localeCompare(b.name));
-    // Check if main dir exists and has server.js
-    const mainAvailable = fs.existsSync(path.join(MAIN_DIR, 'server.js'));
-    // Check if Antigravity desktop app is running (and if debug mode is on)
-    let antigravityRunning = false;
-    let antigravityDebug = false;
-    try {
-      const psOutput = execSync(
-        'ps aux | grep "[A]ntigravity.app/Contents/MacOS/Antigravity"',
-        { encoding: 'utf-8', timeout: 2000 }
-      ).trim();
-      if (psOutput) {
-        antigravityRunning = true;
-        antigravityDebug = psOutput.includes('--remote-debugging-port');
-      }
-    } catch { /* not running or grep found 0 matches (exit 1) */ }
     res.writeHead(200);
-    res.end(JSON.stringify({ servers, mainAvailable, antigravityRunning, antigravityDebug }));
+    res.end(JSON.stringify({ servers }));
     return;
-  }
-
-  // POST /_hub/api/start-main
-  if (pathname === '/_hub/api/start-main' && req.method === 'POST') {
-    return handleStartMain(req, res);
-  }
-
-  // POST /_hub/api/restart-antigravity
-  if (pathname === '/_hub/api/restart-antigravity' && req.method === 'POST') {
-    return handleRestartAntigravity(req, res);
-  }
-
-  // POST /_hub/api/restart-main
-  if (pathname === '/_hub/api/restart-main' && req.method === 'POST') {
-    return handleRestartMain(req, res);
   }
 
   // GET /_hub/api/clear-cookie
@@ -1091,227 +674,6 @@ function handleHubApi(req, res, pathname) {
 
   res.writeHead(404);
   res.end(JSON.stringify({ error: 'Not found' }));
-}
-
-// ─────────────────────────────────────────────
-// Restart Antigravity (break-glass from landing page)
-// ─────────────────────────────────────────────
-function handleRestartAntigravity(req, res) {
-  res.setHeader('Content-Type', 'application/json');
-
-  log('Antigravity', 'Restart requested');
-
-  // Respond immediately — if we kill AG, the hub process might survive but
-  // the client needs the response before we start killing things.
-  res.writeHead(200);
-  res.end(JSON.stringify({ ok: true, message: 'Antigravity restart initiated' }));
-
-  // Step 1: Kill all Antigravity processes
-  log('Antigravity', 'Step 1: Killing existing processes...');
-  try {
-    // killall works with the app name on macOS
-    const killOutput = execSync('killall "Antigravity" 2>&1 || true', {
-      encoding: 'utf-8', timeout: 5000,
-    }).trim();
-    log('Antigravity', `Kill result: ${killOutput || '(no output, likely killed)'}`);
-  } catch (e) {
-    log('Antigravity', `Kill error: ${e.message}`);
-  }
-
-  // Step 2: Wait for cleanup, then relaunch
-  setTimeout(() => {
-    log('Antigravity', 'Step 2: Relaunching with --remote-debugging-port=9000...');
-    try {
-      const child = spawn('open', ['-a', 'Antigravity', '--args', '--remote-debugging-port=9000'], {
-        detached: true,
-        stdio: 'ignore',
-      });
-      child.unref();
-      log('Antigravity', `Relaunch spawned (open PID: ${child.pid})`);
-    } catch (e) {
-      log('Antigravity', `Relaunch failed: ${e.message}`);
-    }
-  }, 2000);
-}
-
-// ─────────────────────────────────────────────
-// Start Main (on-demand from landing page)
-// ─────────────────────────────────────────────
-let mainStarting = false;
-
-function handleStartMain(req, res) {
-  res.setHeader('Content-Type', 'application/json');
-
-  if (mainStarting) {
-    res.writeHead(409);
-    res.end(JSON.stringify({ ok: false, error: 'Already starting' }));
-    return;
-  }
-
-  if (!fs.existsSync(path.join(MAIN_DIR, 'server.js'))) {
-    res.writeHead(404);
-    res.end(JSON.stringify({ ok: false, error: `Main dir not found: ${MAIN_DIR}` }));
-    return;
-  }
-
-  // Check if already running on MAIN_PORT
-  const existing = activeServers.get(MAIN_PORT);
-  if (existing) {
-    res.writeHead(200);
-    res.end(JSON.stringify({ ok: true, message: 'Already running', name: existing.name }));
-    return;
-  }
-
-  mainStarting = true;
-  log('Main', `Starting main server from ${MAIN_DIR}...`);
-
-  // Pull latest + npm ci + start, all in one shell command
-  const script = `
-    cd "${MAIN_DIR}" &&
-    git fetch origin main --quiet 2>&1 &&
-    LOCAL=$(git rev-parse HEAD) &&
-    REMOTE=$(git rev-parse origin/main) &&
-    if [ "$LOCAL" != "$REMOTE" ]; then
-      echo "[Main] Pulling: $LOCAL → $REMOTE" &&
-      git pull origin main --quiet 2>&1 &&
-      if git diff --name-only "$LOCAL" "$REMOTE" | grep -q "package-lock.json"; then
-        echo "[Main] package-lock changed, running npm ci..." &&
-        npm ci --silent 2>&1
-      fi
-    else
-      echo "[Main] Already at latest"
-    fi
-  `;
-
-  try {
-    const pullOutput = execSync(script, {
-      encoding: 'utf-8',
-      timeout: 60000,
-      env: { ...process.env, NVM_DIR: path.join(process.env.HOME, '.nvm') },
-    }).trim();
-    if (pullOutput) log('Main', pullOutput);
-  } catch (e) {
-    log('Main', `Pull/install failed: ${e.message}`);
-    mainStarting = false;
-    res.writeHead(500);
-    res.end(JSON.stringify({ ok: false, error: 'git pull failed' }));
-    return;
-  }
-
-  // Open log file for server output
-  const logStream = fs.openSync(MAIN_LOG, 'a');
-
-  // Spawn server
-  const child = spawn('node', ['server.js'], {
-    cwd: MAIN_DIR,
-    env: { ...process.env, PORT: String(MAIN_PORT) },
-    stdio: ['ignore', logStream, logStream],
-    detached: true,
-  });
-
-  child.unref(); // Let hub exit without waiting for child
-
-  // Record boot commit so the updater watchdog can detect drift
-  try {
-    const commit = execSync('git rev-parse HEAD', { cwd: MAIN_DIR, encoding: 'utf-8' }).trim();
-    fs.writeFileSync('/tmp/ag2r-main-boot-commit', commit);
-  } catch { /* non-critical */ }
-
-  log('Main', `Server starting on port ${MAIN_PORT} (PID ${child.pid})`);
-
-  child.on('error', (err) => {
-    log('Main', `Spawn error: ${err.message}`);
-    mainStarting = false;
-  });
-
-  // Give it a moment, then respond
-  mainStarting = false;
-  res.writeHead(200);
-  res.end(JSON.stringify({ ok: true, port: MAIN_PORT, pid: child.pid }));
-}
-
-// ─────────────────────────────────────────────
-// Restart Main (kill + pull + restart from hub UI)
-// ─────────────────────────────────────────────
-function handleRestartMain(req, res) {
-  res.setHeader('Content-Type', 'application/json');
-
-  log('Main', 'Restart requested from hub UI');
-
-  // Kill existing main server
-  let killed = false;
-  try {
-    const pid = execSync(`lsof -i :${MAIN_PORT} -sTCP:LISTEN -t`, {
-      encoding: 'utf-8', timeout: 3000,
-    }).trim();
-    if (pid) {
-      execSync(`kill ${pid}`, { timeout: 2000 });
-      killed = true;
-      log('Main', `Killed PID ${pid}`);
-    }
-  } catch { /* not running */ }
-
-  // Pull latest
-  try {
-    const script = `
-      cd "${MAIN_DIR}" &&
-      git fetch origin main --quiet 2>&1 &&
-      LOCAL=$(git rev-parse HEAD) &&
-      REMOTE=$(git rev-parse origin/main) &&
-      if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pulling: $LOCAL → $REMOTE" &&
-        git pull origin main --quiet 2>&1 &&
-        if git diff --name-only "$LOCAL" "$REMOTE" | grep -q "package-lock.json"; then
-          echo "DEPS_CHANGED" &&
-          npm ci --silent 2>&1
-        fi
-      else
-        echo "Already at latest"
-      fi
-    `;
-    const output = execSync(script, {
-      encoding: 'utf-8',
-      timeout: 60000,
-      env: { ...process.env, NVM_DIR: path.join(process.env.HOME, '.nvm') },
-    }).trim();
-    if (output) log('Main', output);
-  } catch (e) {
-    log('Main', `Pull failed: ${e.message}`);
-    res.writeHead(500);
-    res.end(JSON.stringify({ ok: false, error: 'git pull failed' }));
-    return;
-  }
-
-  // Wait for port to free up
-  if (killed) {
-    try { execSync('sleep 2'); } catch {}
-  }
-
-  // Start fresh server
-  const logStream = fs.openSync(MAIN_LOG, 'a');
-  const child = spawn('node', ['server.js'], {
-    cwd: MAIN_DIR,
-    env: { ...process.env, PORT: String(MAIN_PORT) },
-    stdio: ['ignore', logStream, logStream],
-    detached: true,
-  });
-  child.unref();
-
-  // Record boot commit
-  try {
-    const commit = execSync('git rev-parse HEAD', { cwd: MAIN_DIR, encoding: 'utf-8' }).trim();
-    fs.writeFileSync('/tmp/ag2r-main-boot-commit', commit);
-    log('Main', `Restarted on port ${MAIN_PORT} (PID ${child.pid}, commit ${commit.slice(0, 12)})`);
-  } catch {
-    log('Main', `Restarted on port ${MAIN_PORT} (PID ${child.pid})`);
-  }
-
-  child.on('error', (err) => {
-    log('Main', `Spawn error: ${err.message}`);
-  });
-
-  res.writeHead(200);
-  res.end(JSON.stringify({ ok: true, port: MAIN_PORT, pid: child.pid }));
 }
 
 // ─────────────────────────────────────────────
