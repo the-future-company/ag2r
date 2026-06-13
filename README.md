@@ -22,7 +22,7 @@ A lightweight mobile remote interface for monitoring and interacting with [Antig
 ### Prerequisites
 
 - Node.js 18+
-- Antigravity running (CDP is enabled by default — AG2R auto-discovers the debug port)
+- Antigravity launched with CDP enabled: `open -a Antigravity --args --remote-debugging-port=9000`
 
 ### Setup
 

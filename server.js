@@ -1877,7 +1877,7 @@ app.post('/restart-antigravity', async (req, res) => {
     // Wait for process to die, then relaunch
     setTimeout(() => {
       log('Restart', 'Relaunching Antigravity...');
-      exec('open -a Antigravity', (err) => {
+      exec('open -a Antigravity --args --remote-debugging-port=9000', (err) => {
         if (err) log('Restart', 'Relaunch error:', err.message);
         else log('Restart', 'Relaunch command sent');
       });
