@@ -621,6 +621,74 @@ body {
   background: var(--bg-hover);
 }
 
+/* ── Subagent View Bar ── */
+.subagent-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(234, 179, 8, 0.08);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.25);
+  flex-shrink: 0;
+  z-index: 50;
+}
+
+.subagent-bar.hidden {
+  display: none;
+}
+
+.subagent-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  min-width: 0;
+}
+
+.subagent-back-btn:active {
+  background: var(--bg-hover);
+}
+
+.subagent-back-btn .material-symbols-rounded {
+  font-size: 18px;
+  color: var(--yellow);
+  flex-shrink: 0;
+}
+
+.subagent-parent-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--yellow);
+  background: rgba(234, 179, 8, 0.12);
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+/* Yellow outline on chat area when viewing a subagent */
+.chat-area.subagent-view {
+  box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.2);
+}
+
 /* ── Input Bar ── */
 .input-bar {
   flex-shrink: 0;

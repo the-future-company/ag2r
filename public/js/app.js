@@ -95,6 +95,12 @@ const runningTasksHeader = document.getElementById('running-tasks-header');
 const runningTasksList = document.getElementById('running-tasks-list');
 const runningTasksCount = document.getElementById('running-tasks-count');
 let runningTasksCollapsed = false;
+// Subagent view bar
+const subagentBar = document.getElementById('subagent-bar');
+const subagentBackBtn = document.getElementById('subagent-back-btn');
+const subagentParentName = document.getElementById('subagent-parent-name');
+let isInSubagentView = false;   // Client-side tracking: set true when user clicks a task name
+let subagentViewTaskName = '';  // Name of the subagent being viewed
 // Suppression: ignore stale dialog/dropdown snapshots for a short window after user dismisses
 let overlayDismissedAt = 0;
 
@@ -121,6 +127,45 @@ runningTasksHeader.addEventListener('click', () => {
   runningTasksList.classList.toggle('collapsed', runningTasksCollapsed);
   runningTasks.querySelector('.running-tasks-arrow')
     ?.classList.toggle('rotated', runningTasksCollapsed);
+});
+
+// Subagent back button: navigate back to parent conversation
+// Clicks the first link/button in AG's breadcrumb bar above the conversation-view
+subagentBackBtn.addEventListener('click', async () => {
+  subagentBackBtn.style.opacity = '0.5';
+  subagentBackBtn.style.pointerEvents = 'none';
+  // Reset client-side flag first
+  isInSubagentView = false;
+  subagentViewTaskName = '';
+  try {
+    // Click AG's breadcrumb/back link to navigate back to parent
+    await fetchAPI('/eval', {
+      method: 'POST',
+      body: JSON.stringify({
+        script: `(() => {
+          // Strategy 1: Click breadcrumb back link above conversation-view
+          const cv = document.querySelector('[data-testid="conversation-view"]') ||
+                     document.querySelector('.scrollbar-hide[class*="overflow-y-auto"]');
+          if (cv && cv.parentElement) {
+            for (const child of cv.parentElement.children) {
+              if (child === cv) break;
+              const link = child.querySelector('a, button, [role="link"], [class*="cursor-pointer"]');
+              if (link) { link.click(); return { ok: true, strategy: 'breadcrumb' }; }
+            }
+          }
+          // Strategy 2: Click browser back button equivalent
+          window.history.back();
+          return { ok: true, strategy: 'history_back' };
+        })()`
+      }),
+    });
+  } catch {}
+  setTimeout(() => {
+    subagentBackBtn.style.opacity = '';
+    subagentBackBtn.style.pointerEvents = '';
+  }, 500);
+  setTimeout(loadSnapshot, 300);
+  setTimeout(loadSnapshot, 1000);
 });
 
 // ─────────────────────────────────────────────
@@ -337,9 +382,22 @@ async function loadSnapshot() {
       }
 
       // Hide bottom input bar + quick actions on new session page (it has its own input)
-      const hideBottomBar = data.isNewSessionPage;
+      const hideBottomBar = data.isNewSessionPage || data.isSubagentView || isInSubagentView;
       inputBar.classList.toggle('hidden', hideBottomBar);
       if (hideBottomBar) quickActions.classList.add('hidden');
+
+      // Subagent view: show back bar + yellow border indicator
+      // Uses client-side tracking (isInSubagentView) OR server-side detection as fallback
+      const showSubagentUI = isInSubagentView || data.isSubagentView;
+      if (showSubagentUI) {
+        const displayName = subagentViewTaskName || data.parentConversationName || 'Parent';
+        subagentParentName.textContent = displayName;
+        subagentBar.classList.remove('hidden');
+        chatArea.classList.add('subagent-view');
+      } else {
+        subagentBar.classList.add('hidden');
+        chatArea.classList.remove('subagent-view');
+      }
 
       // Add mobile copy buttons to code blocks (deferred to avoid forced reflow after innerHTML)
       requestAnimationFrame(() => addMobileCopyButtons());
@@ -717,13 +775,18 @@ async function loadSnapshot() {
                 body: JSON.stringify({ clickId, label: clickLabel }),
               });
             } catch {}
-            // Task name click → open right sidebar to show terminal output
-            if (isNameBtn) openRightSidebar();
+            // Task name click → enter subagent view mode
+            // The click proxy navigates AG to the subagent conversation.
+            if (isNameBtn) {
+              const nameSpan = btn.querySelector('span');
+              isInSubagentView = true;
+              subagentViewTaskName = nameSpan ? nameSpan.textContent.trim() : 'Subagent';
+            }
             setTimeout(() => {
               btn.style.opacity = '';
               btn.style.pointerEvents = '';
             }, 500);
-            // Refresh snapshot to pick up changes
+            // Refresh snapshot to pick up the subagent conversation view
             setTimeout(loadSnapshot, 300);
             setTimeout(loadSnapshot, 1000);
           });
@@ -2026,7 +2089,14 @@ function addClickProxyHandlers(container) {
         const elClass = (el.className || '').toString();
         const isConversationRow = elClass.includes('min-h-[32px]');
         const isScheduledTasks = label === 'Scheduled Tasks';
-        if (isConversationRow || isScheduledTasks) closeLeftSidebar();
+        if (isConversationRow || isScheduledTasks) {
+          closeLeftSidebar();
+          // Reset subagent view when navigating to a different conversation
+          if (isConversationRow) {
+            isInSubagentView = false;
+            subagentViewTaskName = '';
+          }
+        }
       }
 
       // Close dropdown overlay after any dropdown/dialog/scheduled-tasks-portal action

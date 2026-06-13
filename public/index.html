@@ -51,6 +51,15 @@
     </aside>
     <div id="right-sidebar-overlay" class="sidebar-overlay"></div>
 
+    <!-- Subagent back bar (shown when viewing a subagent conversation) -->
+    <div id="subagent-bar" class="subagent-bar hidden">
+      <button id="subagent-back-btn" class="subagent-back-btn" aria-label="Back to parent conversation">
+        <span class="material-symbols-rounded">arrow_back</span>
+        <span id="subagent-parent-name" class="subagent-parent-name"></span>
+      </button>
+      <span class="subagent-label">Subagent</span>
+    </div>
+
     <!-- Chat Area -->
     <main id="chat-area" class="chat-area">
       <style id="cdp-styles"></style>

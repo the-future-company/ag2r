@@ -775,7 +775,43 @@ const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Model name extraction error:', e.message);
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarSignature, isNewSessionPage, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
+  // -- 13. Detect subagent view --
+  // When viewing a subagent conversation, AG renders a breadcrumb/navigation bar
+  // above the conversation-view container. Detect this by looking for visible
+  // siblings of the container that contain clickable back links.
+  let isSubagentView = false;
+  let parentConversationName = '';
+  try {
+    if (!isNewSessionPage && container) {
+      const cvParent = container.parentElement;
+      if (cvParent) {
+        for (const child of cvParent.children) {
+          if (child === container) break; // Only check siblings BEFORE the container
+          const rect = child.getBoundingClientRect();
+          // Look for a small visible bar (breadcrumb height ~24-48px)
+          if (rect.height > 8 && rect.height < 80) {
+            const links = child.querySelectorAll('a, button, [role="link"], [class*="cursor-pointer"]');
+            const text = child.textContent.trim();
+            if (links.length > 0 && text.length > 0 && text.length < 300) {
+              isSubagentView = true;
+              // Extract parent name from breadcrumb segments (separated by / or > or ›)
+              const parts = text.split(/[/›>]/).map(s => s.trim()).filter(Boolean);
+              if (parts.length >= 2) {
+                parentConversationName = parts[parts.length - 2];
+              } else {
+                parentConversationName = parts[0] || text;
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.debug('[AG2R] Subagent detection error:', e.message);
+  }
+
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarSignature, isNewSessionPage, isSubagentView, parentConversationName, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
 })()
 `;
 
@@ -1495,6 +1531,8 @@ app.get('/snapshot', (req, res) => {
     environmentName: cachedSnapshot.environmentName || null,
     branchName: cachedSnapshot.branchName || null,
     modelName: cachedSnapshot.modelName || null,
+    isSubagentView: cachedSnapshot.isSubagentView || false,
+    parentConversationName: cachedSnapshot.parentConversationName || null,
     runningTasksHtml: cachedSnapshot.runningTasksHtml || null,
     scheduledTasksHtml: cachedSnapshot.scheduledTasksHtml || null,
     scheduledTasksDialogHtml: cachedSnapshot.scheduledTasksDialogHtml || null,
