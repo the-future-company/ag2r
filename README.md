@@ -3,13 +3,26 @@
 A lightweight mobile remote interface for monitoring and interacting with [Antigravity](https://antigravity.dev) AI coding sessions from your phone — on Wi-Fi, hotspot, or anywhere in the world.
 
 <p align="center">
-  <img src="docs/hero-mobile.png" alt="AG2R Chat" width="180" />
+  <img src="docs/hero-mobile.png" alt="AG2R Chat" width="160" />
   &nbsp;&nbsp;
-  <img src="docs/review-diff.png" alt="AG2R Code Review" width="180" />
+  <img src="docs/review-diff.png" alt="AG2R Code Review" width="160" />
   &nbsp;&nbsp;
-  <img src="docs/comment-queued.png" alt="AG2R Comments" width="180" />
+  <img src="docs/comment-queued.png" alt="AG2R Comments" width="160" />
   &nbsp;&nbsp;
-  <img src="docs/overview-panel.png" alt="AG2R Overview" width="180" />
+  <img src="docs/overview-panel.png" alt="AG2R Overview" width="160" />
+  &nbsp;&nbsp;
+  <img src="docs/notification-push.jpg" alt="AG2R Push Notifications" width="160" />
+</p>
+<p align="center">
+  <sub>Live Chat</sub>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <sub>Code Review</sub>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <sub>Commenting</sub>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <sub>Overview</sub>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <sub>Notifications</sub>
 </p>
 
 ---
@@ -195,19 +208,28 @@ Switch between conversations, browse files changed, artifacts, and background ta
 
 ---
 
-### More Features
+### Push Notifications
 
-- **Push notifications** — get notified on your phone when the session needs permission approval, even with the app in the background
-- **Send messages** — type and send messages to the AI from your phone
-- **Voice input** — dictate messages using your phone's microphone
-- **Stop generation** — cancel a running generation with the stop button
-- **Auto-reconnect** — seamless reconnection when connection drops
-- **Cookie-based auth** — enter passcode once, stays logged in for 30 days
+Get notified on your phone when the session needs permission approval — even with the app in the background. Tap the notification to jump straight to the pending request.
+
+<p align="center">
+  <img src="docs/notification-push.jpg" alt="Push notification on Android" width="320" />
+</p>
 
 > [!NOTE]
 > **iOS:** Push notifications require the PWA to be installed to your home screen (iOS 16.4+). Open AG2R in Safari, tap Share → "Add to Home Screen."
 >
 > **Android:** If Chrome doesn't prompt for notifications, go to Chrome **Settings → Site settings → Notifications** and set "How to show requests" to **"Expand all requests"**. Then reload the page and tap anywhere to trigger the prompt.
+
+---
+
+### More Features
+
+- **Send messages** — type and send messages to the AI from your phone
+- **Voice input** — dictate messages using your phone's microphone
+- **Stop generation** — cancel a running generation with the stop button
+- **Auto-reconnect** — seamless reconnection when connection drops
+- **Cookie-based auth** — enter passcode once, stays logged in for 30 days
 
 ---
 
