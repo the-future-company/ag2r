@@ -2,28 +2,18 @@
 
 A lightweight mobile remote interface for monitoring and interacting with [Antigravity](https://antigravity.dev) AI coding sessions from your phone — on Wi-Fi, hotspot, or anywhere in the world.
 
-<p align="center">
-  <img src="docs/hero-mobile.png" alt="AG2R Chat" width="160" />
-  &nbsp;&nbsp;
-  <img src="docs/review-diff.png" alt="AG2R Code Review" width="160" />
-  &nbsp;&nbsp;
-  <img src="docs/comment-queued.png" alt="AG2R Comments" width="160" />
-  &nbsp;&nbsp;
-  <img src="docs/overview-panel.png" alt="AG2R Overview" width="160" />
-  &nbsp;&nbsp;
-  <img src="docs/notification-push.jpg" alt="AG2R Push Notifications" width="160" />
-</p>
-<p align="center">
-  <sub>Live Chat</sub>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <sub>Code Review</sub>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <sub>Commenting</sub>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <sub>Overview</sub>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <sub>Notifications</sub>
-</p>
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/hero-mobile.png" alt="AG2R Chat" width="180" /><br><sub>Live Chat</sub></td>
+    <td align="center"><img src="docs/review-diff.png" alt="AG2R Code Review" width="180" /><br><sub>Code Review</sub></td>
+    <td align="center"><img src="docs/comment-queued.png" alt="AG2R Comments" width="180" /><br><sub>Commenting</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/overview-panel.png" alt="AG2R Overview" width="180" /><br><sub>Overview</sub></td>
+    <td align="center"><img src="docs/notification-push.jpg" alt="AG2R Push Notifications" width="180" /><br><sub>Notifications</sub></td>
+    <td></td>
+  </tr>
+</table>
 
 ---
 
