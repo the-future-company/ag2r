@@ -177,32 +177,61 @@ function ensureCerts() {
 // CDP Connection
 // ─────────────────────────────────────────────
 
+// Read CDP port from AG's DevToolsActivePort file (written when --remote-debugging-port=0)
+function readDevToolsPort() {
+  const dtpPath = path.join(
+    os.homedir(), 'Library', 'Application Support', 'Antigravity', 'DevToolsActivePort'
+  );
+  try {
+    const content = fs.readFileSync(dtpPath, 'utf-8').trim();
+    const port = parseInt(content.split('\n')[0], 10);
+    if (port > 0 && port < 65536) return port;
+  } catch {
+    // File doesn't exist or unreadable — AG may not be running
+  }
+  return null;
+}
+
+async function tryPortForTarget(port) {
+  try {
+    const targets = await CDP.List({ host: CDP_HOST, port });
+    if (!targets || targets.length === 0) return null;
+
+    // Priority 1: Workbench target
+    const workbench = targets.find(t =>
+      t.url?.includes('workbench.html') || t.title?.includes('workbench')
+    );
+    if (workbench) return { port, target: workbench };
+
+    // Priority 2: Jetski/Launchpad target
+    const jetski = targets.find(t =>
+      t.url?.includes('jetski') || t.title === 'Launchpad'
+    );
+    if (jetski) return { port, target: jetski };
+
+    // Priority 3: Any page target (AG2.0 fallback)
+    const page = targets.find(t => t.type === 'page');
+    if (page) return { port, target: page };
+  } catch {
+    // Port not available
+  }
+  return null;
+}
+
 async function discoverTarget() {
-  const ports = [CDP_PORT, CDP_PORT + 1, CDP_PORT + 2, CDP_PORT + 3];
+  // Build candidate port list: DevToolsActivePort first (most likely after AG update),
+  // then configured CDP_PORT range as fallback for older AG versions
+  const dtpPort = readDevToolsPort();
+  const ports = new Set();
+  if (dtpPort) ports.add(dtpPort);
+  ports.add(CDP_PORT);
+  ports.add(CDP_PORT + 1);
+  ports.add(CDP_PORT + 2);
+  ports.add(CDP_PORT + 3);
 
   for (const port of ports) {
-    try {
-      const targets = await CDP.List({ host: CDP_HOST, port });
-      if (!targets || targets.length === 0) continue;
-
-      // Priority 1: Workbench target
-      const workbench = targets.find(t =>
-        t.url?.includes('workbench.html') || t.title?.includes('workbench')
-      );
-      if (workbench) return { port, target: workbench };
-
-      // Priority 2: Jetski/Launchpad target
-      const jetski = targets.find(t =>
-        t.url?.includes('jetski') || t.title === 'Launchpad'
-      );
-      if (jetski) return { port, target: jetski };
-
-      // Priority 3: Any page target (AG2.0 fallback)
-      const page = targets.find(t => t.type === 'page');
-      if (page) return { port, target: page };
-    } catch {
-      // Port not available, try next
-    }
+    const result = await tryPortForTarget(port);
+    if (result) return result;
   }
   return null;
 }
