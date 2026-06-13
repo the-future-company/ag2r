@@ -11,7 +11,7 @@ A lightweight mobile remote interface for monitoring and interacting with [Antig
   <tr>
     <td align="center"><img src="docs/overview-panel.png" alt="AG2R Overview" width="180" /><br><sub>Overview</sub></td>
     <td align="center"><img src="docs/notification-push.jpg" alt="AG2R Push Notifications" width="180" /><br><sub>Notifications</sub></td>
-    <td></td>
+    <td align="center"><img src="docs/subagent-view.jpg" alt="AG2R Subagent View" width="180" /><br><sub>Subagents</sub></td>
   </tr>
 </table>
 
