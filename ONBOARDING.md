@@ -59,6 +59,8 @@
 | Anonymous usage telemetry (Firestore REST, opt-out, installId) | `src/telemetry.js` |
 | README screenshots (product showcase) | `docs/` |
 | Push notifications (VAPID, service worker, subscription) | `server.js` — search `pushSubscriptions`; `hub.js` — search `hubPushSubscriptions`; `public/sw.js`; `public/js/app.js` — search `initPushNotifications` |
+| Restart Antigravity (sidebar button + confirmation + API) | `server.js` — search `POST /restart-antigravity`; `public/js/app.js` — search `showRestartConfirm` |
+| Hard refresh button (PWA home screen workaround) | `public/index.html` — search `refresh-btn`; `public/js/app.js` — search `refreshBtn` |
 
 ---
 

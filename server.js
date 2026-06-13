@@ -6,6 +6,7 @@ import { createServer as createHttpServer } from 'http';
 import { WebSocketServer } from 'ws';
 import CDP from 'chrome-remote-interface';
 import fs from 'fs';
+import { execSync, exec } from 'child_process';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -1745,6 +1746,55 @@ app.post('/dismiss-settings', async (req, res) => {
   }
 });
 
+// --- Restart Antigravity (kill + relaunch the desktop app) ---
+app.post('/restart-antigravity', async (req, res) => {
+  try {
+    // Find the Antigravity Electron process PID
+    // pgrep doesn't work on macOS Electron — must use ps aux (see ONBOARDING.md gotcha)
+    let pid = null;
+    try {
+      const psOutput = execSync('ps aux', { encoding: 'utf8' });
+      for (const line of psOutput.split('\n')) {
+        if (line.includes('Antigravity.app/Contents/MacOS/Antigravity') && !line.includes('grep')) {
+          pid = parseInt(line.trim().split(/\s+/)[1], 10);
+          break;
+        }
+      }
+    } catch (e) {
+      log('Restart', 'Failed to find Antigravity process:', e.message);
+      return res.json({ ok: false, reason: 'process_not_found' });
+    }
+
+    if (!pid) {
+      log('Restart', 'Antigravity process not found');
+      return res.json({ ok: false, reason: 'process_not_found' });
+    }
+
+    log('Restart', `Killing Antigravity (PID ${pid})...`);
+    track('restart_antigravity');
+
+    // Graceful kill
+    try { process.kill(pid, 'SIGTERM'); } catch (e) {
+      log('Restart', 'Kill failed:', e.message);
+      return res.json({ ok: false, reason: 'kill_failed' });
+    }
+
+    // Wait for process to die, then relaunch
+    setTimeout(() => {
+      log('Restart', 'Relaunching Antigravity...');
+      exec('open -a Antigravity', (err) => {
+        if (err) log('Restart', 'Relaunch error:', err.message);
+        else log('Restart', 'Relaunch command sent');
+      });
+    }, 1500);
+
+    res.json({ ok: true });
+  } catch (e) {
+    log('Restart', 'Unexpected error:', e.message);
+    res.status(500).json({ ok: false, reason: e.message });
+  }
+});
+
 // --- Click Proxy (forward clicks to real AG DOM) ---
 // Click IDs are prefixed: chat:N, left:N, right:N
 // --- Client Telemetry Endpoint ---
@@ -1760,6 +1810,7 @@ app.post('/telemetry', (req, res) => {
     'voice_input_used', 'artifact_viewed', 'client_error',
     'model_changed', 'branch_changed', 'worktree_changed',
     'quick_action_used',
+    'hard_refresh',
   ]);
   if (!allowed.has(event)) {
     return res.status(400).json({ error: 'unknown event' });

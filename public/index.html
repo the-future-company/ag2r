@@ -29,6 +29,9 @@
       <img src="/ag2r-icon.png" alt="AG2R" class="header-icon" width="32" height="32">
       <h1 class="header-title">AG2R</h1>
       <div id="connection-status" class="connection-dot" data-status="disconnected" title="Disconnected"></div>
+      <button id="refresh-btn" class="icon-btn" aria-label="Refresh" title="Refresh">
+        <span class="material-symbols-rounded">refresh</span>
+      </button>
       <button id="review-toggle" class="icon-btn" aria-label="Toggle review panel" title="Review">
         <span class="material-symbols-rounded">right_panel_open</span>
       </button>
@@ -177,6 +180,20 @@
         <div class="comment-modal-actions">
           <button id="comment-cancel" class="comment-action-btn cancel">Cancel</button>
           <button id="comment-submit" class="comment-action-btn submit">Add Comment</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Restart Antigravity confirmation modal -->
+    <div id="restart-confirm" class="restart-confirm hidden">
+      <div class="restart-confirm-backdrop"></div>
+      <div class="restart-confirm-card">
+        <span class="material-symbols-rounded" style="font-size:32px;color:var(--red)">restart_alt</span>
+        <div class="restart-confirm-title">Restart Antigravity?</div>
+        <div class="restart-confirm-message">This will restart the Antigravity desktop app. All running agent sessions will be interrupted.</div>
+        <div class="restart-confirm-actions">
+          <button id="restart-cancel" class="restart-confirm-btn cancel">Cancel</button>
+          <button id="restart-go" class="restart-confirm-btn destructive">Restart</button>
         </div>
       </div>
     </div>

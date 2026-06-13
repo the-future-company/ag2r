@@ -70,6 +70,12 @@ const permissionContent = document.getElementById('permission-content');
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsContent = document.getElementById('settings-content');
 const settingsBack = document.getElementById('settings-back');
+// Restart confirmation modal
+const restartConfirm = document.getElementById('restart-confirm');
+const restartCancel = document.getElementById('restart-cancel');
+const restartGo = document.getElementById('restart-go');
+// Header refresh button
+const refreshBtn = document.getElementById('refresh-btn');
 // Scheduled Tasks overlay
 const scheduledTasksOverlay = document.getElementById('scheduled-tasks-overlay');
 const scheduledTasksContent = document.getElementById('scheduled-tasks-content');
@@ -1449,6 +1455,50 @@ settingsBack.addEventListener('click', () => {
   fetchAPI('/dismiss-settings', { method: 'POST' }).catch(() => {});
 });
 
+// Refresh button — hard reload for PWA (no pull-to-refresh on home screen)
+refreshBtn.addEventListener('click', () => {
+  track('hard_refresh');
+  location.reload();
+});
+
+// Restart Antigravity — confirmation modal + API call
+function showRestartConfirm() {
+  restartGo.disabled = false;
+  restartGo.textContent = 'Restart';
+  restartConfirm.classList.remove('hidden');
+}
+
+restartCancel.addEventListener('click', () => {
+  restartConfirm.classList.add('hidden');
+});
+
+// Dismiss on backdrop tap
+restartConfirm.querySelector('.restart-confirm-backdrop').addEventListener('click', () => {
+  restartConfirm.classList.add('hidden');
+});
+
+restartGo.addEventListener('click', async () => {
+  restartGo.disabled = true;
+  restartGo.textContent = 'Restarting...';
+  try {
+    const res = await fetchAPI('/restart-antigravity', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      // Success — AG will die, CDP disconnects, auto-reconnect kicks in
+      // Dismiss modal after a moment so the user sees the state change
+      setTimeout(() => {
+        restartConfirm.classList.add('hidden');
+      }, 2000);
+    } else {
+      restartGo.textContent = 'Failed — try again';
+      restartGo.disabled = false;
+    }
+  } catch {
+    restartGo.textContent = 'Failed — try again';
+    restartGo.disabled = false;
+  }
+});
+
 // Scheduled Tasks back button — detail view goes back to list, list view navigates to conversation
 scheduledTasksBack.addEventListener('click', async () => {
   try {
@@ -1828,6 +1878,32 @@ function renderSidebar(container, html) {
         el.style.visibility = 'visible';
       }
     });
+
+    // ── Inject native AG2R actions after Settings ──
+    // Only for the left sidebar — inject our own buttons after AG's Settings button
+    if (container === leftSidebarContent) {
+      const settingsEl = container.querySelector('[data-ag-click-label="Settings"]');
+      const target = settingsEl || container; // fallback: append to bottom
+      const restartHtml = `
+        <button class="ag2r-restart-btn" id="ag2r-restart-trigger">
+          <span class="material-symbols-rounded">restart_alt</span>
+          Restart Antigravity
+        </button>
+      `;
+      if (settingsEl) {
+        settingsEl.insertAdjacentHTML('afterend', restartHtml);
+      } else {
+        container.insertAdjacentHTML('beforeend', restartHtml);
+      }
+      // Wire the injected button
+      const restartTrigger = container.querySelector('#ag2r-restart-trigger');
+      if (restartTrigger) {
+        restartTrigger.addEventListener('click', () => {
+          closeLeftSidebar();
+          showRestartConfirm();
+        });
+      }
+    }
   }
 }
 
