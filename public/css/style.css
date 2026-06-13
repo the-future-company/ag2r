@@ -227,6 +227,20 @@ body {
   color: inherit;
 }
 
+/* Override AG's cursor-pointer on right sidebar content so text is selectable.
+   AG's injected Tailwind CSS applies .cursor-pointer { cursor: pointer } to
+   content elements (markdown blocks, file diffs). Override to text cursor so
+   users can select text for commenting. Control elements (tab buttons) keep
+   pointer cursor via the [data-ag-click-id] rule above. */
+#right-sidebar-content .cursor-pointer:not([data-ag-click-id]) {
+  cursor: text;
+}
+#right-sidebar-content a:not([data-ag-click-id]),
+#right-sidebar-content button:not([data-ag-click-id]) {
+  cursor: text;
+  pointer-events: auto;
+}
+
 /* Ensure captured AG content inherits visible colors */
 .sidebar-fill > * {
   color: inherit;
