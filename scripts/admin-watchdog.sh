@@ -2,7 +2,12 @@
 # scripts/admin-watchdog.sh — Keeps telemetry admin server alive
 # Cron: */5 * * * * ~/Workspace/ag2r/scripts/admin-watchdog.sh >> /tmp/ag2r-admin-watchdog.log 2>&1
 
-export PATH="/usr/sbin:/usr/local/bin:/usr/bin:/bin:$PATH"
+# Load nvm so `node` is available in cron context
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
+# Ensure system tools (lsof, kill) are in PATH — cron defaults to /usr/bin:/bin
+export PATH="/usr/sbin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 
 ADMIN_PORT="${ADMIN_PORT:-3200}"
 AG2R_DIR="${AG2R_MAIN_DIR:-$HOME/Workspace/ag2r}"
