@@ -717,87 +717,94 @@ async function loadSnapshot() {
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = data.runningTasksHtml;
 
-        // Extract header text (e.g., "1 task running")
-        const headerBtn = tempDiv.querySelector('button');
-        const headerSpan = headerBtn?.querySelector('span');
-        runningTasksCount.textContent = headerSpan ? headerSpan.textContent.trim() : 'Tasks running';
-
         // Extract individual task rows
-        const taskRows = tempDiv.querySelectorAll('.font-mono');
         const allButtons = tempDiv.querySelectorAll('[data-ag-click-id]');
-
-        // Build a map: for each task row, find its name button click ID and stop button click ID
-        // Button order in capture: header toggle (task:0), then for each task row:
-        //   task name button (task:1, task:3, ...), stop button (task:2, task:4, ...)
-        let rowsHtml = '';
         const buttonArray = Array.from(allButtons);
 
-        // Skip the first button (header toggle, task:0), then pair remaining buttons
-        for (let i = 1; i < buttonArray.length; i += 2) {
-          const nameBtn = buttonArray[i];
-          const stopBtn = buttonArray[i + 1];
-          const nameClickId = nameBtn?.dataset?.agClickId || '';
-          const nameLabel = nameBtn?.dataset?.agClickLabel || '';
-          const stopClickId = stopBtn?.dataset?.agClickId || '';
-          const stopLabel = stopBtn?.dataset?.agClickLabel || '';
+        // Defense-in-depth: real task sections have >= 3 tagged buttons
+        // (1 header toggle + N name/stop pairs). If AG sends a structural
+        // wrapper with no real tasks, treat as "no tasks".
+        if (buttonArray.length < 3) {
+          runningTasks.classList.add('hidden');
+          runningTasks.dataset.lastHtml = '';
+        } else {
+          // Extract header text (e.g., "1 task running")
+          const headerBtn = tempDiv.querySelector('button');
+          const headerSpan = headerBtn?.querySelector('span');
+          runningTasksCount.textContent = headerSpan ? headerSpan.textContent.trim() : 'Tasks running';
 
-          // Extract task name from the font-mono span inside the name button
-          const monoSpan = nameBtn?.querySelector('.font-mono');
-          const taskName = monoSpan ? monoSpan.textContent.trim() : (nameLabel || 'Task');
+          // Build a map: for each task row, find its name button click ID and stop button click ID
+          // Button order in capture: header toggle (task:0), then for each task row:
+          //   task name button (task:1, task:3, ...), stop button (task:2, task:4, ...)
+          let rowsHtml = '';
 
-          rowsHtml += `
-            <div class="running-task-row">
-              <button class="running-task-name" data-ag-click-id="${nameClickId}" data-ag-click-label="${nameLabel}">
-                <div class="running-task-spinner"></div>
-                <span>${taskName}</span>
-              </button>
-              <button class="running-task-stop" data-ag-click-id="${stopClickId}" data-ag-click-label="${stopLabel}" aria-label="Stop task">
-                <span class="material-symbols-rounded" style="font-size:18px">stop_circle</span>
-              </button>
-            </div>
-          `;
-        }
+          // Skip the first button (header toggle, task:0), then pair remaining buttons
+          for (let i = 1; i < buttonArray.length; i += 2) {
+            const nameBtn = buttonArray[i];
+            const stopBtn = buttonArray[i + 1];
+            const nameClickId = nameBtn?.dataset?.agClickId || '';
+            const nameLabel = nameBtn?.dataset?.agClickLabel || '';
+            const stopClickId = stopBtn?.dataset?.agClickId || '';
+            const stopLabel = stopBtn?.dataset?.agClickLabel || '';
 
-        runningTasksList.innerHTML = rowsHtml;
+            // Extract task name from the font-mono span inside the name button
+            const monoSpan = nameBtn?.querySelector('.font-mono');
+            const taskName = monoSpan ? monoSpan.textContent.trim() : (nameLabel || 'Task');
 
-        // Wire click proxying for task name (navigate) and stop (kill)
-        runningTasksList.querySelectorAll('[data-ag-click-id]').forEach(btn => {
-          const clickId = btn.dataset.agClickId;
-          const clickLabel = btn.dataset.agClickLabel;
-          const isNameBtn = btn.classList.contains('running-task-name');
-          btn.removeAttribute('data-ag-click-id');
-          btn.addEventListener('click', async () => {
-            btn.style.opacity = '0.5';
-            btn.style.pointerEvents = 'none';
-            try {
-              await fetchAPI('/click', {
-                method: 'POST',
-                body: JSON.stringify({ clickId, label: clickLabel }),
-              });
-            } catch {}
-            // Task name click → enter subagent view mode
-            // The click proxy navigates AG to the subagent conversation.
-            if (isNameBtn) {
-              const nameSpan = btn.querySelector('span');
-              isInSubagentView = true;
-              subagentViewTaskName = nameSpan ? nameSpan.textContent.trim() : 'Subagent';
-            }
-            setTimeout(() => {
-              btn.style.opacity = '';
-              btn.style.pointerEvents = '';
-            }, 500);
-            // Refresh snapshot to pick up the subagent conversation view
-            setTimeout(loadSnapshot, 300);
-            setTimeout(loadSnapshot, 1000);
+            rowsHtml += `
+              <div class="running-task-row">
+                <button class="running-task-name" data-ag-click-id="${nameClickId}" data-ag-click-label="${nameLabel}">
+                  <div class="running-task-spinner"></div>
+                  <span>${taskName}</span>
+                </button>
+                <button class="running-task-stop" data-ag-click-id="${stopClickId}" data-ag-click-label="${stopLabel}" aria-label="Stop task">
+                  <span class="material-symbols-rounded" style="font-size:18px">stop_circle</span>
+                </button>
+              </div>
+            `;
+          }
+
+          runningTasksList.innerHTML = rowsHtml;
+
+          // Wire click proxying for task name (navigate) and stop (kill)
+          runningTasksList.querySelectorAll('[data-ag-click-id]').forEach(btn => {
+            const clickId = btn.dataset.agClickId;
+            const clickLabel = btn.dataset.agClickLabel;
+            const isNameBtn = btn.classList.contains('running-task-name');
+            btn.removeAttribute('data-ag-click-id');
+            btn.addEventListener('click', async () => {
+              btn.style.opacity = '0.5';
+              btn.style.pointerEvents = 'none';
+              try {
+                await fetchAPI('/click', {
+                  method: 'POST',
+                  body: JSON.stringify({ clickId, label: clickLabel }),
+                });
+              } catch {}
+              // Task name click → enter subagent view mode
+              // The click proxy navigates AG to the subagent conversation.
+              if (isNameBtn) {
+                const nameSpan = btn.querySelector('span');
+                isInSubagentView = true;
+                subagentViewTaskName = nameSpan ? nameSpan.textContent.trim() : 'Subagent';
+              }
+              setTimeout(() => {
+                btn.style.opacity = '';
+                btn.style.pointerEvents = '';
+              }, 500);
+              // Refresh snapshot to pick up the subagent conversation view
+              setTimeout(loadSnapshot, 300);
+              setTimeout(loadSnapshot, 1000);
+            });
           });
-        });
 
-        // Restore collapse state
-        runningTasksList.classList.toggle('collapsed', runningTasksCollapsed);
-        runningTasks.querySelector('.running-tasks-arrow')
-          ?.classList.toggle('rotated', runningTasksCollapsed);
+          // Restore collapse state
+          runningTasksList.classList.toggle('collapsed', runningTasksCollapsed);
+          runningTasks.querySelector('.running-tasks-arrow')
+            ?.classList.toggle('rotated', runningTasksCollapsed);
+          runningTasks.classList.remove('hidden');
+        }
       }
-      runningTasks.classList.remove('hidden');
     } else {
       runningTasks.classList.add('hidden');
       runningTasks.dataset.lastHtml = '';

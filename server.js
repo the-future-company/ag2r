@@ -823,6 +823,11 @@ const RUNNING_TASKS_SCRIPT = `
   if (!inputBox) return null;
   const taskSection = inputBox.querySelector('.rounded-t-2xl');
   if (!taskSection || taskSection.getBoundingClientRect().height <= 0) return null;
+  // Verify this section actually contains running tasks — not just a structural wrapper.
+  // Real task sections have: 1 header toggle button + N task name buttons + N stop buttons.
+  // If fewer than 3 buttons (header + 1 name + 1 stop), there are no real tasks.
+  const allBtns = taskSection.querySelectorAll('button');
+  if (allBtns.length < 3) return null;
   let taskIdx = 0;
   const taskTagged = [];
   taskSection.querySelectorAll('button').forEach(btn => {
