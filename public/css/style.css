@@ -710,7 +710,7 @@ body {
   font-size: 15px;
   line-height: 1.4;
   resize: none;
-  min-height: 24px;
+  min-height: 63px;
   max-height: 120px;
   overflow-y: auto;
   padding: 0;
