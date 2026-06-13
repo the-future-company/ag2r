@@ -468,9 +468,11 @@ async function loadSnapshot() {
 
     // Render permission banner if AG is asking for approval
     if (data.permissionHtml) {
-      // Skip re-render if permission HTML hasn't changed (preserves selected option)
-      if (data.permissionHtml === permissionContent.dataset.lastHtml) {
-        // Already rendered, don't rebuild
+      // Skip re-render if: (a) HTML unchanged, or (b) write-in input is focused (avoids
+      // destroying the input and dismissing the keyboard when AG reflects our selection click)
+      const writeInFocused = permissionContent.querySelector('.permission-writein:focus');
+      if (data.permissionHtml === permissionContent.dataset.lastHtml || writeInFocused) {
+        // Already rendered or user is typing — don't rebuild
       } else {
       permissionContent.dataset.lastHtml = data.permissionHtml;
       const tempDiv = document.createElement('div');
@@ -507,7 +509,7 @@ async function loadSnapshot() {
 
       let optionsHtml = options.map(o => {
         const writeInHtml = o.hasWriteIn
-          ? `<input type="text" class="permission-writein" placeholder="tell the agent what to do instead" />`
+          ? `<input type="search" class="permission-writein" placeholder="tell the agent what to do instead" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" enterkeyhint="send" />`
           : '';
         return `
         <button class="permission-option${o.isSelected ? ' selected' : ''}${o.hasWriteIn ? ' has-writein' : ''}"
@@ -537,8 +539,11 @@ async function loadSnapshot() {
       // Wire option clicks: select visually + proxy to AG
       permissionContent.querySelectorAll('.permission-option').forEach(btn => {
         // Remove data-ag-click-id so addClickProxyHandlers won't double-wire these
+        // Stash on DOM node so write-in click handler can proxy the selection
         const clickId = btn.dataset.agClickId;
         const clickLabel = btn.dataset.agClickLabel;
+        btn._agClickId = clickId;
+        btn._agClickLabel = clickLabel;
         btn.removeAttribute('data-ag-click-id');
         btn.addEventListener('click', async (e) => {
           // Don't trigger option select when clicking inside the write-in input
@@ -557,9 +562,33 @@ async function loadSnapshot() {
         });
       });
 
-      // Prevent write-in input clicks from bubbling to option button
+      // Clicking write-in input: stop bubble but auto-select the parent "No" option
       permissionContent.querySelectorAll('.permission-writein').forEach(input => {
-        input.addEventListener('click', (e) => e.stopPropagation());
+        input.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const parentOption = input.closest('.permission-option');
+          if (parentOption && !parentOption.classList.contains('selected')) {
+            // Select this option visually
+            permissionContent.querySelectorAll('.permission-option').forEach(b => b.classList.remove('selected'));
+            parentOption.classList.add('selected');
+            // Proxy the selection click to AG
+            const clickId = parentOption._agClickId;
+            const clickLabel = parentOption._agClickLabel;
+            if (clickId) {
+              fetchAPI('/click', {
+                method: 'POST',
+                body: JSON.stringify({ clickId, label: clickLabel }),
+              }).catch(() => {});
+            }
+          }
+        });
+        // When write-in is focused (keyboard opens on mobile), ensure actions stay visible
+        input.addEventListener('focus', () => {
+          setTimeout(() => {
+            const actions = permissionContent.querySelector('.permission-actions');
+            if (actions) actions.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }, 300);
+        });
       });
 
       // Wire action buttons (Submit/Skip) manually — NOT via addClickProxyHandlers
