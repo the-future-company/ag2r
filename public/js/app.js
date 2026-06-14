@@ -831,6 +831,10 @@ async function loadSnapshot() {
               // Task name click: the click proxy navigates AG.
               // Subagent detection is handled server-side (inputBox absence).
               // No client-side flag needed — avoids false positives from command tasks.
+              // Auto-open right sidebar since AG opens it when clicking task names
+              if (isNameBtn) {
+                setTimeout(() => openRightSidebar(), 400);
+              }
               setTimeout(() => {
                 btn.style.opacity = '';
                 btn.style.pointerEvents = '';
@@ -2202,6 +2206,11 @@ function addClickProxyHandlers(container) {
       if (clickId.startsWith('right:')) {
         setTimeout(fetchRightSidebar, 300);
         setTimeout(fetchRightSidebar, 800);
+      }
+
+      // Subagent info clicks (e.g. "Open overview") → open right sidebar
+      if (clickId.startsWith('subinfo:')) {
+        setTimeout(() => openRightSidebar(), 400);
       }
 
       // Refresh snapshots to pick up changes
