@@ -359,7 +359,6 @@ async function connectCDP() {
     preferredContextId = null;
     broadcastStatus();
     scheduleReconnect();
-    track('cdp_disconnected');
   });
 
   cdpClient = client;
@@ -381,9 +380,9 @@ function scheduleReconnect() {
     try {
       await connectCDP();
       log('CDP', 'Reconnected successfully');
-      track('cdp_reconnected');
     } catch (e) {
       console.debug('[CDP] Reconnect failed:', e.message);
+      track('cdp_connect_failed', { isReconnect: true, error: e.message });
       scheduleReconnect();
     }
   }, 3000);
@@ -1619,6 +1618,7 @@ async function start() {
   } catch (e) {
     log('CDP', `Initial connection failed: ${e.message}`);
     log('CDP', 'Will retry every 3 seconds...');
+    track('cdp_connect_failed', { isReconnect: false, error: e.message });
     scheduleReconnect();
   }
 

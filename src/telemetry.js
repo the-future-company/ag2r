@@ -226,7 +226,7 @@ let eventCounts = {};
 
 /**
  * Track an event. Fire-and-forget — never throws, never blocks.
- * @param {string} event - Event name (e.g., 'message_sent', 'cdp_disconnected')
+ * @param {string} event - Event name (e.g., 'message_sent', 'cdp_connect_failed')
  * @param {object} [payload] - Optional metadata (no PII!)
  */
 export function track(event, payload = {}) {
