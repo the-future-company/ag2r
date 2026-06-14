@@ -67,6 +67,7 @@
 | Debug logging (`AG2R_DEBUG=1`, unified client+server stream) | `server.js` — search `DEBUG_MODE` and `POST /debug-log`; `public/js/app.js` — search `debugLog` |
 | Image send pipeline (upload, drop, wait, send) | `server.js` — search `POST /send-images` and `waitForEditorImage`; `public/js/app.js` — search `sendMessage` |
 | Native dialog rendering (AG's HTML + CSS in overlay) | `public/js/app.js` — search `ag2r-dialog-native`; `public/css/style.css` — search `ag2r-dialog-native` |
+| Detect-then-execute for side-effect CDP scripts | `server.js` — search `findEditorContext` and `evaluateInContext`; `src/cdp-scripts/has-visible-editor.js` |
 
 ---
 
@@ -109,6 +110,7 @@
 - **iOS push requires PWA on home screen.** Web Push on iOS only works when the user has installed the PWA via "Add to Home Screen" (iOS 16.4+). Regular Safari tabs cannot receive push notifications. The app auto-subscribes on first user interaction — no UI needed.
 - **Server restart clears push subscriptions.** Push subscriptions are stored in memory (`pushSubscriptions` Map in `server.js`). On server restart, all subscriptions are lost. The client re-subscribes automatically on next page visit because `app.js` re-sends the existing browser subscription to `POST /push/subscribe` on every load.
 - **CDP port is auto-discovered.** AG app uses `--remote-debugging-port=0` (random port assigned by OS). AG2R reads the actual port from `~/Library/Application Support/Antigravity/DevToolsActivePort` at connect time, falling back to `CDP_PORT` env var. If CDP connection fails after an AG restart, the port changed — AG2R's reconnect loop will re-read the file automatically.
+- **Async CDP scripts must not fall through across contexts.** `evaluateInBrowser` retries failed scripts in the next execution context. If an async script's promise gets GC'd ("Promise was collected") after its side effects already fired (paste + click), the retry runs those side effects again — causing double sends, double clicks, etc. Side-effect scripts (inject, stop, click-send) use `findEditorContext()` + `evaluateInContext()` to run in exactly one context, never falling through.
 
 ---
 

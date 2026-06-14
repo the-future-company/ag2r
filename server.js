@@ -45,6 +45,7 @@ import { DISMISS_SETTINGS_SCRIPT } from './src/cdp-scripts/dismiss-settings.js';
 import { OPEN_RIGHT_SIDEBAR_SCRIPT } from './src/cdp-scripts/open-right-sidebar.js';
 import { SELECT_OVERVIEW_TAB_SCRIPT } from './src/cdp-scripts/select-overview-tab.js';
 import { buildProxyImageScript } from './src/cdp-scripts/proxy-image.js';
+import { HAS_VISIBLE_EDITOR_SCRIPT } from './src/cdp-scripts/has-visible-editor.js';
 
 dotenv.config();
 
@@ -417,6 +418,51 @@ async function evaluateAcrossContexts(expression, opts = {}) {
   return null;
 }
 
+// Run an expression in a specific CDP context (no fallthrough).
+// Used for side-effect scripts (inject, stop, click-send) that must only
+// execute once — even if the promise gets GC'd in one context.
+async function evaluateInContext(contextId, expression) {
+  if (!cdpClient) throw new Error('CDP not connected');
+  const result = await cdpClient.Runtime.evaluate({
+    expression,
+    contextId,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (result.exceptionDetails) {
+    throw new Error(result.exceptionDetails.text || 'CDP eval exception');
+  }
+  return result.result?.value ?? null;
+}
+
+// Find which CDP execution context has a visible editor.
+// Uses a synchronous (no async promise → no GC risk) side-effect-free probe.
+// Returns the contextId, or null if no context has a visible editor.
+async function findEditorContext() {
+  if (!cdpClient) return null;
+  const sorted = [...cdpContexts].sort((a, b) => {
+    if (a.id === preferredContextId) return -1;
+    if (b.id === preferredContextId) return 1;
+    const aDefault = a.auxData?.isDefault ? 1 : 0;
+    const bDefault = b.auxData?.isDefault ? 1 : 0;
+    return bDefault - aDefault;
+  });
+  for (const ctx of sorted) {
+    try {
+      const result = await cdpClient.Runtime.evaluate({
+        expression: HAS_VISIBLE_EDITOR_SCRIPT,
+        contextId: ctx.id,
+        returnByValue: true,
+        // No awaitPromise — script is synchronous
+      });
+      if (!result.exceptionDetails && result.result?.value === true) {
+        return ctx.id;
+      }
+    } catch { continue; }
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────
 // Snapshot Capture
 // ─────────────────────────────────────────────
@@ -495,12 +541,19 @@ async function captureSnapshot() {
 
 // buildInjectScript is imported from src/cdp-scripts/inject-message.js
 
+// Detect-then-execute: find the context with a visible editor first (read-only,
+// safe to retry across contexts), then run the inject script in that one context
+// only (no fallthrough). Prevents double-send when a context's async promise
+// gets garbage collected after the inject has already pasted text + clicked send.
 async function injectMessage(text, opts = {}) {
+  const ctxId = await findEditorContext();
+  if (!ctxId) throw new Error('No editor found in any context');
+
   // JSON.stringify safely escapes quotes, newlines, backticks, unicode
   const safeText = JSON.stringify(text);
   const appendMode = opts.appendMode || false;
   const script = buildInjectScript(safeText, appendMode);
-  return await evaluateInBrowser(script);
+  return await evaluateInContext(ctxId, script);
 }
 
 // Poll AG's editor until it contains image content (img, decorator nodes).
@@ -526,9 +579,17 @@ async function waitForEditorImage(maxWaitMs = 3000) {
 // ─────────────────────────────────────────────
 
 // STOP_SCRIPT is imported from src/cdp-scripts/stop.js
+// Uses detect-then-execute (same as injectMessage) to prevent double-clicks
+// when a context's promise gets GC'd after the stop button was already clicked.
 
 async function stopGeneration() {
-  return await evaluateInBrowser(STOP_SCRIPT);
+  const ctxId = await findEditorContext();
+  if (!ctxId) {
+    // No editor context — fall back to evaluateInBrowser for stop button
+    // (stop button might be visible even without an editor)
+    return await evaluateInBrowser(STOP_SCRIPT);
+  }
+  return await evaluateInContext(ctxId, STOP_SCRIPT);
 }
 
 // ─────────────────────────────────────────────
@@ -1278,7 +1339,9 @@ app.post('/send-images', async (req, res) => {
     await new Promise(r => setTimeout(r, 500));
 
     log('SendImages', 'Clicking send...');
-    const result = await evaluateInBrowser(CLICK_SEND_BUTTON_SCRIPT);
+    const ctxId = await findEditorContext();
+    if (!ctxId) throw new Error('No editor found in any context');
+    const result = await evaluateInContext(ctxId, CLICK_SEND_BUTTON_SCRIPT);
 
     log('SendImages', `Result: ${JSON.stringify(result)}`);
     track('message_sent');
