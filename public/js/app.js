@@ -506,12 +506,17 @@ async function loadSnapshot() {
       tempDiv.innerHTML = data.dialogHtml;
       // Extract buttons with click IDs
       const dialogBtns = tempDiv.querySelectorAll('[data-ag-click-id]');
+      // AG's collapsible section headers ("Worked for 35s", "Thought for 27s", etc.)
+      // are rendered as <button> elements and get captured alongside actual dialog buttons.
+      // Filter them out so only real action buttons (Skip, Submit, options) appear.
+      const AG_SECTION_BUTTON = /^(Worked|Thought|Analyzed|Ran) for\b/i;
       if (dialogBtns.length > 0) {
         // Build buttons from tagged interactive elements
         let buttonsHtml = '';
         dialogBtns.forEach(btn => {
           const text = btn.textContent.trim();
           if (!text) return; // Skip empty buttons (e.g., close X icon)
+          if (AG_SECTION_BUTTON.test(text)) return; // Skip AG collapsible section headers
           const id = btn.dataset.agClickId;
           const label = btn.dataset.agClickLabel || text;
           const isDestructive = text.toLowerCase().includes('delete');
@@ -548,6 +553,7 @@ async function loadSnapshot() {
             const allTagged = taggedEls.length > 0 ? taggedEls : selfTagged;
             allTagged.forEach(tagged => {
               const text = tagged.textContent.trim();
+              if (AG_SECTION_BUTTON.test(text)) return; // Skip AG collapsible section headers
               const id = tagged.dataset.agClickId;
               const label = tagged.dataset.agClickLabel || text;
               const isDestructive = /delete|remove/i.test(text);
