@@ -17,6 +17,7 @@ import multer from 'multer';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { track, startSession, endSession } from './src/telemetry.js';
+import { getConfigPath, ensureConfigDir, MAIN_PORT } from './src/paths.js';
 
 // CDP scripts — browser-side JS evaluated via Runtime.evaluate
 // See src/cdp-scripts/ for the actual script content
@@ -85,30 +86,66 @@ let reconnectTimer = null;
 const wsClients = new Set();
 
 // === Push Notifications ===
-const VAPID_KEYS_PATH = path.join(__dirname, 'vapid-keys.json');
+const VAPID_KEYS_PATH = getConfigPath('vapid-keys.json');
+const LEGACY_VAPID_KEYS_PATH = path.join(__dirname, 'vapid-keys.json');
+const PUSH_SUBS_PATH = getConfigPath('push-subscriptions.json');
 const pushSubscriptions = new Map(); // endpoint → PushSubscription
 let lastPermissionState = false; // tracks whether permission banner was showing
 let publicOrigin = ''; // set from subscribe request's origin header
 
 // Load or generate VAPID keys on startup
 function initVapid() {
+  ensureConfigDir();
   let keys;
   try {
     keys = JSON.parse(fs.readFileSync(VAPID_KEYS_PATH, 'utf-8'));
   } catch {
-    keys = webpush.generateVAPIDKeys();
-    fs.writeFileSync(VAPID_KEYS_PATH, JSON.stringify(keys, null, 2));
-    log('Push', 'Generated new VAPID keys');
+    // Migrate from legacy repo-local path if it exists
+    try {
+      keys = JSON.parse(fs.readFileSync(LEGACY_VAPID_KEYS_PATH, 'utf-8'));
+      fs.writeFileSync(VAPID_KEYS_PATH, JSON.stringify(keys, null, 2));
+      log('Push', 'Migrated VAPID keys to ~/.config/ag2r/');
+    } catch {
+      keys = webpush.generateVAPIDKeys();
+      fs.writeFileSync(VAPID_KEYS_PATH, JSON.stringify(keys, null, 2));
+      log('Push', 'Generated new VAPID keys');
+    }
   }
   const email = process.env.VAPID_EMAIL || 'mailto:ag2r@omercanyy.com';
   webpush.setVapidDetails(email, keys.publicKey, keys.privateKey);
   return keys;
 }
 
-const vapidKeys = initVapid();
+// Load push subscriptions from disk
+function loadSubscriptions() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(PUSH_SUBS_PATH, 'utf-8'));
+    for (const [endpoint, sub] of raw) {
+      pushSubscriptions.set(endpoint, sub);
+    }
+    log('Push', `Loaded ${pushSubscriptions.size} subscription(s) from disk`);
+  } catch {
+    // No file yet or corrupt — start empty
+  }
+}
 
-// Send push notification to all subscribers
+// Persist push subscriptions to disk
+function saveSubscriptions() {
+  try {
+    ensureConfigDir();
+    const data = JSON.stringify([...pushSubscriptions], null, 2);
+    fs.writeFileSync(PUSH_SUBS_PATH, data);
+  } catch (e) {
+    console.debug('[Push] Failed to save subscriptions:', e.message);
+  }
+}
+
+const vapidKeys = initVapid();
+loadSubscriptions();
+
+// Send push notification to all subscribers (production only — dev servers skip)
 async function sendPushToAll(payload) {
+  if (PORT !== MAIN_PORT) return;
   if (pushSubscriptions.size === 0) return;
   const body = JSON.stringify(payload);
   const stale = [];
@@ -124,6 +161,7 @@ async function sendPushToAll(payload) {
     }
   }
   stale.forEach(ep => pushSubscriptions.delete(ep));
+  if (stale.length > 0) saveSubscriptions();
   log('Push', `Sent to ${pushSubscriptions.size} subscriber(s), removed ${stale.length} stale`);
 }
 
@@ -1396,6 +1434,7 @@ app.post('/push/subscribe', (req, res) => {
     return res.status(400).json({ error: 'Invalid subscription' });
   }
   pushSubscriptions.set(subscription.endpoint, subscription);
+  saveSubscriptions();
   // Track the public origin for notification click URLs
   const origin = req.get('origin') || req.get('referer');
   if (origin) publicOrigin = origin.replace(/\/$/, '');
@@ -1405,7 +1444,10 @@ app.post('/push/subscribe', (req, res) => {
 
 app.post('/push/unsubscribe', (req, res) => {
   const { endpoint } = req.body;
-  if (endpoint) pushSubscriptions.delete(endpoint);
+  if (endpoint) {
+    pushSubscriptions.delete(endpoint);
+    saveSubscriptions();
+  }
   log('Push', `Unsubscribed (${pushSubscriptions.size} total)`);
   res.json({ ok: true });
 });
