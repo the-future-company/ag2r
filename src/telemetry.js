@@ -48,8 +48,12 @@ function loadConfig() {
 // and clones on the same machine share a single identity.
 // ─────────────────────────────────────────────
 
-const XDG_CONFIG = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-const CONFIG_DIR = path.join(XDG_CONFIG, 'ag2r');
+const CONFIG_DIR = path.join(
+  os.platform() === 'win32'
+    ? (process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'))
+    : (process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')),
+  'ag2r'
+);
 const ID_FILE = path.join(CONFIG_DIR, 'telemetry-id');
 const LEGACY_ID_FILE = path.join(PROJECT_ROOT, '.ag2r-telemetry-id');
 
