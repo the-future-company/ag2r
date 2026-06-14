@@ -220,6 +220,26 @@ Get notified on your phone when the session needs permission approval — even w
 
 ---
 
+## 🐛 Debug Mode
+
+Start the server with `AG2R_DEBUG=1` to enable verbose logging:
+
+```bash
+AG2R_DEBUG=1 node server.js
+```
+
+When active, key client events (message sends, click proxying, WebSocket lifecycle) are relayed to the server and printed as a unified timestamped log stream:
+
+```
+[2026-06-14T00:30:00.000Z CLIENT] sendMessage-entry isSending=false text="fix the bug" images=0
+[2026-06-14T00:30:00.500Z SERVER] Click Proxying click id=chat:5 label="Undo"
+[2026-06-14T00:30:01.200Z CLIENT] sendMessage-exit
+```
+
+Useful for diagnosing mobile-specific bugs (double-submission, click failures) where you can't see the browser console.
+
+---
+
 ## 🔄 Keep It Running (Optional)
 
 If you have a dedicated tunnel with a stable URL, cron-based watchdog scripts can keep AG2R and the tunnel alive and auto-update from `origin/main`. See `scripts/` for the available watchdogs (`main-watchdog.sh`, `tunnel-watchdog.sh`).

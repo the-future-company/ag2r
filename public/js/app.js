@@ -11,6 +11,7 @@ let cdpConnected = false;
 let isRendering = false;
 let isSending = false;
 let userScrolledAway = false;
+let debugMode = false;
 
 // Telemetry: previous snapshot values for change detection
 let _prevModelName = null;
@@ -203,6 +204,19 @@ function track(event, payload = {}) {
   } catch {}
 }
 
+// Debug log — only active when server has AG2R_DEBUG=1
+// Posts events to /debug-log for unified timestamped server output
+function debugLog(event, detail) {
+  if (!debugMode) return;
+  try {
+    fetch('/debug-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, detail: detail != null ? String(detail) : '' }),
+    }).catch(() => {});
+  } catch {}
+}
+
 // Global error tracking
 window.addEventListener('error', (e) => {
   track('client_error', { message: (e.message || '').substring(0, 200) });
@@ -225,6 +239,7 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     console.debug('[WS] Connected');
+    debugLog('ws-open');
     wsReconnectDelay = 1000;
     updateConnectionStatus('connected');
   };
@@ -259,6 +274,7 @@ function connectWebSocket() {
 
         case 'connection':
           cdpConnected = data.cdpConnected;
+          if (data.debugMode !== undefined) debugMode = data.debugMode;
           updateConnectionStatus(cdpConnected ? 'connected' : 'reconnecting');
           if (!cdpConnected) {
             updateEmptyState('Waiting for Antigravity connection...');
@@ -278,6 +294,7 @@ function connectWebSocket() {
 
   ws.onclose = () => {
     console.debug('[WS] Disconnected, reconnecting in', wsReconnectDelay, 'ms');
+    debugLog('ws-close');
     updateConnectionStatus('disconnected');
     ws = null;
     setTimeout(connectWebSocket, wsReconnectDelay);
@@ -310,6 +327,9 @@ async function loadSnapshot() {
 
     // Update hash
     lastHash = data.hash;
+
+    // Pick up debug mode flag from server
+    if (data.debugMode !== undefined) debugMode = data.debugMode;
 
     // Update agent status
     // agentRunning is set exclusively by WS handlers (snapshot/status messages).
@@ -449,12 +469,16 @@ async function loadSnapshot() {
         addClickProxyHandlers(dropdownContent);
         dropdownOverlay.classList.remove('hidden');
       }
-    } else if (!data.dropdownHtml) {
+    } else if (!data.dropdownHtml && !data.dialogHtml) {
+      // Only hide overlay if neither dropdown nor dialog is active
       dropdownOverlay.classList.add('hidden');
     }
 
     // Render dialog modal if AG has one open (e.g., delete confirmation, environment selector)
     if (data.dialogHtml && !suppressOverlay) {
+      // Dedup: skip re-render if dialog HTML hasn't changed (prevents flicker from polling)
+      if (data.dialogHtml !== dropdownContent.dataset.lastDialogHtml) {
+        dropdownContent.dataset.lastDialogHtml = data.dialogHtml;
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = data.dialogHtml;
       // Extract buttons with click IDs
@@ -509,25 +533,36 @@ async function loadSnapshot() {
           }
           dropdownContent.innerHTML = popoverHtml || buttonsHtml;
         } else {
-          // Modal dialog (delete confirmation, etc.) — extract title + message
-          // Remove tagged buttons from text extraction to get the description
-          const cloneForText = tempDiv.cloneNode(true);
-          cloneForText.querySelectorAll('[data-ag-click-id]').forEach(el => el.remove());
-          const msgText = cloneForText.textContent.trim();
-          // Split into title (first line/sentence) and message (rest)
-          const lines = msgText.split(/\n/).map(l => l.trim()).filter(Boolean);
-          const title = lines[0] || 'Confirm';
-          const message = lines.slice(1).join(' ') || '';
-
+          // Modal dialog (undo confirmation, delete, etc.)
+          // Render AG's native HTML directly with AG's CSS applied.
+          // Find the inner dialog card (the visible panel, not the backdrop).
+          const root = tempDiv.firstElementChild;
+          let dialogCard = null;
+          if (root) {
+            // Walk all descendants to find the card — the deepest element
+            // with rounded corners that contains the action buttons.
+            const candidates = root.querySelectorAll('[class*="rounded"]');
+            for (const c of candidates) {
+              if (c.querySelector('[data-ag-click-id]')) {
+                dialogCard = c;
+                // Don't break — keep going deeper to find the most specific card
+              }
+            }
+          }
+          const dialogInnerHtml = dialogCard ? dialogCard.outerHTML : (root ? root.innerHTML : data.dialogHtml);
           dropdownContent.innerHTML = `
-            <div class="dialog-title">${title}</div>
-            ${message ? `<div class="dialog-message">${message}</div>` : ''}
-            <div class="dialog-buttons">${buttonsHtml}</div>
+            <style>${cdpStyles.textContent || ''}</style>
+            <div class="ag2r-dialog-native">${dialogInnerHtml}</div>
           `;
         }
         addClickProxyHandlers(dropdownContent);
-        dropdownOverlay.classList.remove('hidden');
       }
+      }
+      // Always keep overlay visible while dialog is active (even on deduped renders)
+      dropdownOverlay.classList.remove('hidden');
+    } else if (!data.dialogHtml) {
+      // Dialog dismissed in AG — clear the cached HTML so it re-renders if it comes back
+      delete dropdownContent.dataset.lastDialogHtml;
     }
 
     // Render permission banner if AG is asking for approval
@@ -1000,6 +1035,7 @@ async function sendMessage() {
   const hasImages = stagedImages.length > 0;
   if ((!text && !hasImages) || isSending) return;
 
+  debugLog('sendMessage-entry', `isSending=${isSending} text="${text.substring(0, 80)}" images=${stagedImages.length}`);
   isSending = true;
 
   // Stop any active voice recording so onresult doesn't refill the input
@@ -1025,31 +1061,33 @@ async function sendMessage() {
       return;
     }
     clearStagedImages();
-    // Brief delay to let AG process the dropped images
-    await new Promise(r => setTimeout(r, 300));
   }
 
-  // Send text message (if any)
-  if (text || !hasImages) {
-    // Prepend any queued artifact comments to the message
-    const commentBlock = drainQueuedComments();
-    const fullMessage = commentBlock ? commentBlock + '\n' + text : text;
+  // Prepend any queued artifact comments to the message
+  const commentBlock = drainQueuedComments();
+  const fullMessage = commentBlock ? commentBlock + '\n' + text : text;
 
-    try {
+  try {
+    if (hasImages && !fullMessage) {
+      // Image-only: server waits for AG to process images, then clicks send
+      debugLog('sendMessage-images-only');
+      const res = await fetchAPI('/send-images', { method: 'POST' });
+      const result = await res.json();
+      console.debug('[Send] Image-only result:', result);
+    } else if (fullMessage) {
+      // Text (possibly with images): inject text and click send
       const res = await fetchAPI('/send', {
         method: 'POST',
-        body: JSON.stringify({ message: fullMessage }),
+        body: JSON.stringify({ message: fullMessage, hasImages }),
       });
-
       const result = await res.json();
       console.debug('[Send] Result:', result);
-
       if (!result.ok) {
         console.debug('[Send] Failed:', result.reason);
       }
-    } catch (e) {
-      console.debug('[Send] Error:', e.message);
     }
+  } catch (e) {
+    console.debug('[Send] Error:', e.message);
   }
 
   // Reset scroll-away flag so AG's scroll position syncs immediately on next render
@@ -1063,6 +1101,7 @@ async function sendMessage() {
   isSending = false;
   messageInput.disabled = false;
   actionBtn.disabled = false;
+  debugLog('sendMessage-exit');
 }
 
 
@@ -1650,6 +1689,16 @@ async function fetchRightSidebar() {
       renderSidebar(rightSidebarContent, data.html);
       addClickProxyHandlers(rightSidebarContent);
       proxySidebarImages(rightSidebarContent);
+    } else if (data.wasOpened) {
+      // Server opened the sidebar in AG — re-fetch after it renders
+      setTimeout(fetchRightSidebar, 600);
+    } else {
+      // Sidebar truly unavailable — show empty state
+      rightSidebarContent.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;padding:2rem;text-align:center;opacity:0.5;">
+          <p>Sidebar not available.<br>Open it in Antigravity first.</p>
+        </div>
+      `;
     }
   } catch (e) {
     console.debug('[RightSidebar] Fetch error:', e.message);
@@ -2006,6 +2055,7 @@ function addClickProxyHandlers(container) {
       const label = el.dataset.agClickLabel || '';
 
       console.debug('[Click] id=' + clickId, 'label="' + label + '"', 'tag=' + el.tagName, 'class=' + (el.className || '').substring(0, 80));
+      debugLog('click-proxy', `id=${clickId} label="${label}" tag=${el.tagName}`);
 
       // Intercept "Edit task title" pencil icon — single-click name editing
       // Proxy the click (AG enters inline edit mode), then auto-open text input modal
@@ -2110,6 +2160,11 @@ function addClickProxyHandlers(container) {
       if (clickId.startsWith('dropdown:') || clickId.startsWith('dialog:') || (clickId.startsWith('scheddlg:') && parseInt(clickId.split(':')[1], 10) >= 100)) {
         overlayDismissedAt = Date.now();
         dropdownOverlay.classList.add('hidden');
+      }
+
+      // "View Diff" in dialog — close modal + open right sidebar to show the diff
+      if (clickId.startsWith('dialog:') && /view\s*diff/i.test(label.trim())) {
+        setTimeout(() => openRightSidebar(), 300);
       }
 
       // Only open right sidebar for explicit "Review" button clicks

@@ -1458,7 +1458,7 @@ body {
   animation: slideUpDropdown 200ms ease-out;
 }
 
-.dropdown-content button {
+.dropdown-content:not(:has(.ag2r-dialog-native)) button {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1474,11 +1474,11 @@ body {
   text-align: left;
 }
 
-.dropdown-content button:active {
+.dropdown-content:not(:has(.ag2r-dialog-native)) button:active {
   background: var(--border);
 }
 
-.dropdown-content button.destructive {
+.dropdown-content:not(:has(.ag2r-dialog-native)) button.destructive {
   color: #ef4444;
 }
 
@@ -1541,6 +1541,17 @@ body {
   background: #ef4444;
   color: #fff;
   border-color: #ef4444;
+}
+
+/* ── Native AG Dialog (rendered with AG's CSS) ── */
+.dropdown-content:has(.ag2r-dialog-native) {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  min-width: 0;
+  max-width: 92vw;
+  width: 92vw;
 }
 
 /* ── Permission Overlay ── */
@@ -2499,4 +2510,9 @@ body {
 
 #refresh-btn:active .material-symbols-rounded {
   transform: rotate(180deg);
+}
+
+/* ── Undo Buttons (force visible on mobile — AG hides via opacity-0 hover-only) ── */
+#chat-content .opacity-0:has([aria-label*="Undo"]) {
+  opacity: 1 !important;
 }

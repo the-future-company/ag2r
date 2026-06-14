@@ -33,6 +33,7 @@ const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 const TUNNEL_ENABLED = process.env.TUNNEL_ENABLED === 'true';
 const TUNNEL_URL = process.env.TUNNEL_URL || '';
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
+const DEBUG_MODE = process.env.AG2R_DEBUG === '1';
 
 // === Multer (file upload) ===
 const upload = multer({
@@ -134,6 +135,13 @@ function authToken() {
 
 function log(prefix, ...args) {
   console.log(`[${prefix}]`, ...args);
+}
+
+// Timestamped debug log — only prints when AG2R_DEBUG=1
+function debugLog(source, event, detail = '') {
+  if (!DEBUG_MODE) return;
+  const ts = new Date().toISOString();
+  console.log(`[${ts} ${source}] ${event}${detail ? ' ' + detail : ''}`);
 }
 
 // ─────────────────────────────────────────────
@@ -526,7 +534,8 @@ const CAPTURE_SCRIPT = `
   clone.querySelectorAll('[data-ag-remove]').forEach(el => {
     let isActionBar = false;
     el.querySelectorAll('button, [role="button"]').forEach(b => {
-      if (/^(Allow|Deny|Review|Run|Confirm)/i.test(b.textContent?.trim())) isActionBar = true;
+      const label = b.textContent?.trim() || b.getAttribute('aria-label') || '';
+      if (/^(Allow|Deny|Review|Run|Confirm|Undo)/i.test(label)) isActionBar = true;
     });
     if (!isActionBar) el.remove();
     else el.removeAttribute('data-ag-remove');
@@ -595,7 +604,7 @@ const CAPTURE_SCRIPT = `
   // -- 14. Capture LEFT sidebar (bg-sidebar) --
   let leftSidebarHtml = null;
   try {
-    const leftRoot = document.querySelector('[class*="bg-sidebar"]');
+    const leftRoot = document.querySelector('.bg-sidebar');
     if (leftRoot && leftRoot.offsetParent !== null) {
       const leftTagged = tagInteractives(leftRoot, 'left', true, true);
       const leftClone = leftRoot.cloneNode(true);
@@ -649,6 +658,7 @@ const CAPTURE_SCRIPT = `
         const tagged = tagInteractives(child, 'dialog', true, false);
         const clone = child.cloneNode(true);
         untagAll(tagged);
+        clone.querySelectorAll('style').forEach(s => s.remove());
         dialogHtml = clone.outerHTML;
       }
 
@@ -657,6 +667,7 @@ const CAPTURE_SCRIPT = `
         const tagged = tagInteractives(child, 'dialog', true, false);
         const clone = child.cloneNode(true);
         untagAll(tagged);
+        clone.querySelectorAll('style').forEach(s => s.remove());
         dialogHtml = clone.outerHTML;
       }
     }
@@ -676,6 +687,7 @@ const CAPTURE_SCRIPT = `
         const tagged = tagInteractives(settingsCard, 'settings', true, false);
         const clone = settingsCard.cloneNode(true);
         untagAll(tagged);
+        clone.querySelectorAll('style').forEach(s => s.remove());
         settingsHtml = clone.outerHTML;
       }
     }
@@ -1240,9 +1252,10 @@ async function captureSnapshot() {
 // Message Injection (via CDP into Lexical editor)
 // ─────────────────────────────────────────────
 
-function buildInjectScript(text) {
+function buildInjectScript(text, opts = {}) {
   // JSON.stringify safely escapes quotes, newlines, backticks, unicode
   const safeText = JSON.stringify(text);
+  const appendMode = opts.appendMode || false;
 
   return `
 (async () => {
@@ -1258,10 +1271,17 @@ function buildInjectScript(text) {
   }
   if (!editor) return { ok: false, reason: 'no_editor' };
 
-  // Focus and clear
   editor.focus();
-  document.execCommand('selectAll', false, null);
-  document.execCommand('delete', false, null);
+  if (${appendMode}) {
+    // Append mode: move cursor to end (preserve images/existing content)
+    const sel = window.getSelection();
+    sel.selectAllChildren(editor);
+    sel.collapseToEnd();
+  } else {
+    // Normal mode: clear editor first
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+  }
 
   // Insert text via clipboard paste to preserve newlines in Lexical editor
   const textVal = ${safeText};
@@ -1326,9 +1346,41 @@ function buildInjectScript(text) {
 `;
 }
 
-async function injectMessage(text) {
-  const script = buildInjectScript(text);
+async function injectMessage(text, opts = {}) {
+  const script = buildInjectScript(text, opts);
   return await evaluateInBrowser(script);
+}
+
+// Poll AG's editor until it contains image content (img, decorator nodes).
+// Returns true if image found within timeout, false otherwise.
+async function waitForEditorImage(maxWaitMs = 3000) {
+  const interval = 100;
+  const attempts = Math.ceil(maxWaitMs / interval);
+  const checkScript = `
+    (() => {
+      const editors = document.querySelectorAll(
+        '[data-lexical-editor="true"], [contenteditable="true"][role="textbox"]'
+      );
+      for (const ed of editors) {
+        if (ed.offsetParent === null) continue;
+        if (ed.querySelector('img, [data-lexical-decorator]')) return true;
+        const text = ed.textContent.trim();
+        if (text && !ed.querySelector('[data-placeholder]')?.textContent?.includes(text)) return true;
+      }
+      return false;
+    })()
+  `;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const hasImage = await evaluateInBrowser(checkScript);
+      if (hasImage) {
+        log('WaitImage', `Found after ${i * interval}ms`);
+        return true;
+      }
+    } catch { /* ignore eval errors during polling */ }
+    await new Promise(r => setTimeout(r, interval));
+  }
+  return false;
 }
 
 // ─────────────────────────────────────────────
@@ -1593,14 +1645,86 @@ app.get('/snapshot', (req, res) => {
     runningTasksHtml: cachedSnapshot.runningTasksHtml || null,
     scheduledTasksHtml: cachedSnapshot.scheduledTasksHtml || null,
     scheduledTasksDialogHtml: cachedSnapshot.scheduledTasksDialogHtml || null,
+    debugMode: DEBUG_MODE,
   });
 });
 
 // --- Right Sidebar Endpoint (on-demand) ---
+// If the sidebar is closed in AG, tries to open it first, then captures.
 app.get('/right-sidebar', async (req, res) => {
   try {
-    const html = await evaluateInBrowser(RIGHT_SIDEBAR_SCRIPT);
-    res.json({ html: html || null });
+    let html = await evaluateInBrowser(RIGHT_SIDEBAR_SCRIPT);
+    if (html) {
+      return res.json({ html });
+    }
+
+    // Sidebar is closed in AG — try to open it
+    log('RightSidebar', 'Sidebar closed in AG, attempting to open...');
+    const opened = await evaluateInBrowser(`
+      (() => {
+        // Strategy 1: Find a button whose tooltip or aria-label suggests it opens the review/aux panel.
+        // AG has data-tooltip-id attributes on toolbar buttons.
+        const candidates = [
+          ...document.querySelectorAll('[aria-label*="Review" i]'),
+          ...document.querySelectorAll('[aria-label*="Auxiliary" i]'),
+          ...document.querySelectorAll('[aria-label*="Secondary Side Bar" i]'),
+          ...document.querySelectorAll('[data-tooltip-id*="review" i]'),
+        ];
+        for (const btn of candidates) {
+          // Only click buttons/clickable elements, not content
+          if (btn.tagName === 'BUTTON' || btn.getAttribute('role') === 'button' || btn.closest('button')) {
+            (btn.closest('button') || btn).click();
+            return 'button';
+          }
+        }
+        return null;
+      })()
+    `);
+
+    if (!opened) {
+      // Strategy 2: Keyboard shortcut — Cmd+Option+B (VS Code Toggle Auxiliary Bar)
+      try {
+        await cdpClient.Input.dispatchKeyEvent({
+          type: 'keyDown',
+          key: 'b',
+          code: 'KeyB',
+          modifiers: 8 + 1, // Meta(8) + Alt(1) = Cmd+Option
+          windowsVirtualKeyCode: 66,
+        });
+        await cdpClient.Input.dispatchKeyEvent({
+          type: 'keyUp',
+          key: 'b',
+          code: 'KeyB',
+          modifiers: 8 + 1,
+          windowsVirtualKeyCode: 66,
+        });
+        log('RightSidebar', 'Sent Cmd+Option+B keyboard shortcut');
+      } catch (e) {
+        log('RightSidebar', 'Keyboard shortcut failed:', e.message);
+      }
+    } else {
+      log('RightSidebar', 'Clicked toggle button');
+    }
+
+    // Wait for sidebar to render
+    await new Promise(r => setTimeout(r, 500));
+
+    // Select the Overview tab if no tab is active
+    await evaluateInBrowser(`
+      (() => {
+        const tabs = document.querySelectorAll('[data-tab-id]');
+        const anyActive = [...tabs].some(t => (t.className || '').includes('bg-secondary'));
+        if (!anyActive) {
+          const overview = document.querySelector('[data-tab-id="overview"]');
+          if (overview) overview.click();
+        }
+      })()
+    `);
+    await new Promise(r => setTimeout(r, 200));
+
+    // Re-try capture
+    html = await evaluateInBrowser(RIGHT_SIDEBAR_SCRIPT);
+    res.json({ html: html || null, wasOpened: true });
   } catch (e) {
     console.debug('[RightSidebar] Error:', e.message);
     res.json({ html: null, error: e.message });
@@ -1662,7 +1786,7 @@ app.post('/expand-left-sidebar', async (req, res) => {
   try {
     const result = await evaluateInBrowser(`
       (async () => {
-        const leftRoot = document.querySelector('[class*="bg-sidebar"]');
+        const leftRoot = document.querySelector('.bg-sidebar');
         const isCollapsed = !leftRoot || leftRoot.offsetParent === null;
         if (!isCollapsed) return { ok: true, wasCollapsed: false };
         // Click the sidebar toggle button to expand
@@ -1789,7 +1913,7 @@ app.post('/dismiss-scheduled-tasks', async (req, res) => {
       }
 
       // We're on the list view — navigate away to a conversation
-      const sidebar = document.querySelector('[class*="bg-sidebar"]');
+      const sidebar = document.querySelector('.bg-sidebar');
       if (sidebar) {
         const row = sidebar.querySelector('[class*="min-h-[32px]"]');
         if (row) {
@@ -1911,6 +2035,17 @@ app.post('/telemetry', (req, res) => {
     return res.status(400).json({ error: 'unknown event' });
   }
   track(event, payload);
+  res.json({ ok: true });
+});
+
+// --- Debug Log Endpoint (AG2R_DEBUG=1 only) ---
+app.post('/debug-log', (req, res) => {
+  if (!DEBUG_MODE) return res.status(404).json({ error: 'Not found' });
+  const { event, detail } = req.body || {};
+  if (!event || typeof event !== 'string') {
+    return res.status(400).json({ error: 'event is required' });
+  }
+  debugLog('CLIENT', event, typeof detail === 'string' ? detail : JSON.stringify(detail));
   res.json({ ok: true });
 });
 
@@ -2237,7 +2372,7 @@ app.post('/click', async (req, res) => {
           document.getElementById('chat') ||
           document.getElementById('cascade');
       } else if (source === 'left') {
-        root = document.querySelector('[class*="bg-sidebar"]');
+        root = document.querySelector('.bg-sidebar');
       } else if (source === 'right') {
         // Anchor-based: find via tab-id buttons or close-aux-pane
         const tabBtn = document.querySelector('[data-tab-id="overview"], [data-tab-id="review"]');
@@ -2724,8 +2859,8 @@ app.use((err, req, res, next) => {
 let lastSentMessage = { text: '', time: 0 };
 
 app.post('/send', async (req, res) => {
-  const { message } = req.body;
-  log('Send', `Received: "${message?.substring(0, 50)}"`);
+  const { message, hasImages } = req.body;
+  log('Send', `Received: "${message?.substring(0, 50)}"${hasImages ? ' (with images)' : ''}`);
 
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'Message is required' });
@@ -2744,13 +2879,70 @@ app.post('/send', async (req, res) => {
   lastSentMessage = { text: message, time: now };
 
   try {
+    // When images were just uploaded, wait for AG to process them before injecting text
+    if (hasImages) {
+      log('Send', 'Waiting for AG to process dropped images...');
+      await waitForEditorImage();
+    }
+
     log('Send', 'Injecting via CDP...');
-    const result = await injectMessage(message);
+    // When images were just uploaded, use append mode to preserve them in the editor
+    const result = await injectMessage(message, { appendMode: !!hasImages });
     log('Send', `Injection result: ${JSON.stringify(result)}`);
     track('message_sent');
     res.json(result || { ok: true });
   } catch (e) {
     log('Send', `Injection error: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Send Images Only (no text) ---
+// Waits for AG's editor to process dropped images, then clicks the send button.
+app.post('/send-images', async (req, res) => {
+  if (!cdpClient) {
+    return res.status(503).json({ error: 'CDP not connected' });
+  }
+
+  try {
+    // Give AG time to process the dropped image before clicking send.
+    // The image drop already succeeded via CDP — this delay lets AG's
+    // React/Lexical editor finish updating the DOM.
+    log('SendImages', 'Waiting 500ms for AG to process dropped images...');
+    await new Promise(r => setTimeout(r, 500));
+
+    log('SendImages', 'Clicking send...');
+    const result = await evaluateInBrowser(`
+      (() => {
+        // Find and click the send/submit button
+        const selectors = [
+          'button[data-testid="send-button"]',
+          'button[aria-label*="send" i]',
+          'button[aria-label*="submit" i]',
+        ];
+        let btn = null;
+        for (const sel of selectors) {
+          btn = document.querySelector(sel);
+          if (btn && btn.offsetParent !== null) break;
+          btn = null;
+        }
+        if (!btn) {
+          const arrow = document.querySelector('svg.lucide-arrow-right, svg.lucide-arrow-up');
+          if (arrow) btn = arrow.closest('button');
+        }
+        if (btn) {
+          btn.click();
+          return { ok: true, method: 'button' };
+        }
+        return { ok: false, reason: 'no_send_button' };
+      })()
+    `);
+
+    log('SendImages', `Result: ${JSON.stringify(result)}`);
+    track('message_sent');
+    res.json(result || { ok: false });
+  } catch (e) {
+    log('SendImages', `Error: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
 });
@@ -3100,6 +3292,7 @@ async function start() {
     ws.send(JSON.stringify({
       type: 'connection',
       cdpConnected: !!cdpClient,
+      debugMode: DEBUG_MODE,
     }));
 
     if (cachedSnapshot) {
