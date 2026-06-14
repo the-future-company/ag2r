@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { execSync } from 'child_process';
 import os from 'os';
-import { CONFIG_DIR, ensureConfigDir } from './paths.js';
+import { CONFIG_DIR, ensureConfigDir, isDev } from './paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -147,6 +147,7 @@ function buildFirestoreDoc(event, payload) {
   const doc = {
     event,
     installId,
+    isDev: isDev(),
     ...appMeta,
     ...payload,
     timestamp: new Date().toISOString(),

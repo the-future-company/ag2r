@@ -58,7 +58,7 @@
 | Antigravity desktop app watchdog — ensures CDP enabled (cron) | `scripts/ag-watchdog.sh` |
 | Voice input (shared factory for main + new session mic) | `public/js/app.js` — search `createVoiceInput` |
 | Anonymous usage telemetry (Firestore REST, opt-out, installId) | `src/telemetry.js` |
-| Persistent config dir (~/.config/ag2r/) | `src/paths.js` — shared by server.js and telemetry.js |
+| Persistent config dir (~/.config/ag2r/) + isDev() utility | `src/paths.js` — shared by server.js and telemetry.js |
 | Browser-side CDP eval scripts (extracted from server.js) | `src/cdp-scripts/` — `_shared.js` has `tagInteractives`/`untagAll` |
 | README screenshots (product showcase) | `docs/` |
 | Push notifications (VAPID, service worker, subscription) | `server.js` — search `pushSubscriptions`; `public/sw.js`; `public/js/app.js` — search `initPushNotifications` |

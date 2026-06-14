@@ -17,7 +17,7 @@ import multer from 'multer';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { track, startSession, endSession } from './src/telemetry.js';
-import { getConfigPath, ensureConfigDir, MAIN_PORT } from './src/paths.js';
+import { getConfigPath, ensureConfigDir, isDev, MAIN_PORT } from './src/paths.js';
 
 // CDP scripts — browser-side JS evaluated via Runtime.evaluate
 // See src/cdp-scripts/ for the actual script content
@@ -145,7 +145,7 @@ loadSubscriptions();
 
 // Send push notification to all subscribers (production only — dev servers skip)
 async function sendPushToAll(payload) {
-  if (PORT !== MAIN_PORT) return;
+  if (isDev()) return;
   if (pushSubscriptions.size === 0) return;
   const body = JSON.stringify(payload);
   const stale = [];

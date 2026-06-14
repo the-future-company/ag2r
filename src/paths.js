@@ -11,6 +11,16 @@ import os from 'os';
 export const MAIN_PORT = 3000;
 
 /**
+ * Whether the current server instance is a dev/test server.
+ * Production runs on MAIN_PORT (3000); dev servers use 3001–3099.
+ * Reused by telemetry (isDev flag) and push notifications (skip in dev).
+ */
+export function isDev() {
+  const port = parseInt(process.env.PORT || String(MAIN_PORT));
+  return port !== MAIN_PORT;
+}
+
+/**
  * Resolved path to the persistent config directory.
  * - macOS/Linux: ~/.config/ag2r/ (respects XDG_CONFIG_HOME)
  * - Windows: %APPDATA%/ag2r/
