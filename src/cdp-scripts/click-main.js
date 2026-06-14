@@ -144,6 +144,30 @@ export function buildMainClickScript(safeClickId, safeLabel) {
           return { ok: false, reason: 'no_task_section' };
         }
         return { ok: false, reason: 'no_input_box' };
+      } else if (source === 'subinfo') {
+        // Subagent info panel: find by text content (same approach as capture)
+        const allDivs = document.querySelectorAll('div');
+        let infoPanel = null;
+        for (const div of allDivs) {
+          const txt = div.textContent.trim().toLowerCase();
+          if ((txt.includes('cannot') && txt.includes('prompt')) ||
+              (txt.includes('open') && txt.includes('overview'))) {
+            if (!infoPanel || (infoPanel.contains(div) && div !== infoPanel)) {
+              infoPanel = div;
+            }
+          }
+        }
+        if (infoPanel) {
+          const btns = infoPanel.querySelectorAll('button, a, [role="button"]');
+          if (idx >= 0 && idx < btns.length) {
+            const target = btns[idx];
+            const actualLabel = (target.textContent || '').trim().substring(0, 80);
+            target.click();
+            return { ok: true, label: actualLabel, source: 'subinfo' };
+          }
+          return { ok: false, reason: 'subinfo_index_out_of_range', total: btns.length };
+        }
+        return { ok: false, reason: 'no_subinfo_panel' };
       }
 
       if (!root) return { ok: false, reason: 'no_root_for_' + source };

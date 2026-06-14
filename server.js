@@ -616,7 +616,8 @@ function fireBurstCaptures(delays) {
             (snapshot.permissionHtml || '') +
             (snapshot.runningTasksHtml || '') +
             (snapshot.scheduledTasksHtml || '') +
-            (snapshot.scheduledTasksDialogHtml || '')
+            (snapshot.scheduledTasksDialogHtml || '') +
+            (snapshot.subagentInfoHtml || '')
           );
           if (hash !== lastSnapshotHash) {
             cachedSnapshot = snapshot;
@@ -661,7 +662,8 @@ function startPolling() {
           (snapshot.permissionHtml || '') +
           (snapshot.runningTasksHtml || '') +
           (snapshot.scheduledTasksHtml || '') +
-          (snapshot.scheduledTasksDialogHtml || '')
+          (snapshot.scheduledTasksDialogHtml || '') +
+          (snapshot.subagentInfoHtml || '')
         );
 
         // Only broadcast and update cache when content actually changes
@@ -1108,6 +1110,14 @@ app.post('/click', async (req, res) => {
       const taskClickScript = buildTaskClickScript(taskIdx);
       const result = await evaluateAcrossContexts(taskClickScript);
       log('Click', `Task result: ${JSON.stringify(result)}`);
+      return res.json(result || { ok: false, reason: 'null_result' });
+    }
+
+    // Subagent info panel clicks (e.g. "Open Overview" button)
+    if (String(clickId).startsWith('subinfo:')) {
+      const clickScript = buildMainClickScript(JSON.stringify(String(clickId)), JSON.stringify(label || ''));
+      const result = await evaluateAcrossContexts(clickScript);
+      log('Click', `SubagentInfo result: ${JSON.stringify(result)}`);
       return res.json(result || { ok: false, reason: 'null_result' });
     }
 
