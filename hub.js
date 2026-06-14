@@ -34,6 +34,7 @@ function fileHash(filePath) {
   } catch { return Date.now().toString(36); }
 }
 const ICON_HASH = fileHash(path.join(__dirname, 'public', 'ag2r-icon.png'));
+const DEV_ICON_HASH = fileHash(path.join(__dirname, 'public', 'ag2r-icon-dev.png'));
 
 function log(prefix, ...args) {
   console.log(`[${prefix}]`, ...args);
@@ -324,8 +325,8 @@ function renderLandingPage() {
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AG2R Hub</title>
-  <link rel="icon" type="image/png" href="/ag2r-icon.png?v=${ICON_HASH}">
-  <link rel="apple-touch-icon" href="/ag2r-icon.png?v=${ICON_HASH}">
+  <link rel="icon" type="image/png" href="/ag2r-icon-dev.png?v=${DEV_ICON_HASH}">
+  <link rel="apple-touch-icon" href="/ag2r-icon-dev.png?v=${DEV_ICON_HASH}">
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -533,7 +534,7 @@ function renderLandingPage() {
 </head>
 <body>
   <div class="hub-header">
-    <img src="/ag2r-icon.png?v=${ICON_HASH}" alt="AG2R">
+    <img src="/ag2r-icon-dev.png?v=${DEV_ICON_HASH}" alt="AG2R">
     <div class="hub-header-text">
       <div class="hub-logo">AG2R Hub</div>
       <div class="hub-subtitle">Dev Sessions</div>
@@ -659,7 +660,7 @@ function handleRequest(req, res) {
   }
 
   // ── PWA assets (served directly by hub for landing page) ──
-  if (pathname === '/ag2r-icon.png' || pathname === '/manifest.json' || pathname === '/favicon.png') {
+  if (pathname === '/ag2r-icon.png' || pathname === '/ag2r-icon-dev.png' || pathname === '/manifest.json' || pathname === '/favicon.png') {
     const filePath = path.join(__dirname, 'public', pathname);
     if (fs.existsSync(filePath)) {
       const ext = path.extname(filePath);
