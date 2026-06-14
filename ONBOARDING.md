@@ -55,7 +55,6 @@
 | Main server watchdog + auto-updater (cron) | `scripts/main-watchdog.sh` |
 | Hub watchdog + auto-updater (cron) | `scripts/hub-watchdog.sh` |
 | Cloudflare tunnel watchdog (cron) | `scripts/tunnel-watchdog.sh` |
-| Admin/telemetry server watchdog (cron) | `scripts/admin-watchdog.sh` |
 | Antigravity desktop app watchdog — ensures CDP enabled (cron) | `scripts/ag-watchdog.sh` |
 | Voice input (shared factory for main + new session mic) | `public/js/app.js` — search `createVoiceInput` |
 | Anonymous usage telemetry (Firestore REST, opt-out, installId) | `src/telemetry.js` |
@@ -209,7 +208,6 @@ Gotchas or decisions the next session should know.
 | 3000 | Main branch server (`ag2r.omercanyy.com`, managed by `main-watchdog.sh`) |
 | 3001–3099 | Agent worktree servers |
 | 3100 | Dev hub (`dev-ag2r.omercanyy.com`, managed by `hub-watchdog.sh`) |
-| 3200 | Admin/telemetry server (managed by `admin-watchdog.sh`) |
 
 ### How the hub works
 
@@ -223,7 +221,7 @@ Gotchas or decisions the next session should know.
 
 ## 🔄 Auto-Managed Hub & Main Server
 
-> Five cron jobs keep everything running: `main-watchdog.sh` manages the main server (port 3000), `hub-watchdog.sh` manages the dev hub (port 3100), `admin-watchdog.sh` manages the telemetry admin server (port 3200), `tunnel-watchdog.sh` keeps the Cloudflare tunnel alive, and `ag-watchdog.sh` ensures the Antigravity desktop app is running with `--debug`. Each watchdog handles both health checks and auto-updates from `origin/main` (except `ag-watchdog.sh` which only manages app lifecycle).
+> Four cron jobs keep everything running: `main-watchdog.sh` manages the main server (port 3000), `hub-watchdog.sh` manages the dev hub (port 3100), `tunnel-watchdog.sh` keeps the Cloudflare tunnel alive, and `ag-watchdog.sh` ensures the Antigravity desktop app is running with `--debug`. Each watchdog handles both health checks and auto-updates from `origin/main` (except `ag-watchdog.sh` which only manages app lifecycle).
 
 ### Cron Setup
 
@@ -234,7 +232,6 @@ crontab -e
 */5 * * * * ~/Workspace/ag2r/scripts/hub-watchdog.sh >> /tmp/ag2r-hub-watchdog.log 2>&1
 1-56/5 * * * * ~/Workspace/ag2r/scripts/main-watchdog.sh >> /tmp/ag2r-main-watchdog.log 2>&1
 2-57/5 * * * * ~/Workspace/ag2r/scripts/tunnel-watchdog.sh >> /tmp/ag2r-tunnel-watchdog.log 2>&1
-3-58/5 * * * * ~/Workspace/ag2r/scripts/admin-watchdog.sh >> /tmp/ag2r-admin-watchdog.log 2>&1
 4-59/5 * * * * ~/Workspace/ag2r/scripts/ag-watchdog.sh >> /tmp/ag2r-ag-watchdog.log 2>&1
 ```
 
@@ -247,7 +244,6 @@ All watchdog scripts use boot-commit tracking (see Gotchas) to detect code drift
 | `AG2R_MAIN_DIR` | `~/Workspace/ag2r` | Path to main repo |
 | `AG2R_MAIN_PORT` | `3000` | Port for main server |
 | `HUB_PORT` | `3100` | Port for the hub |
-| `ADMIN_PORT` | `3200` | Port for the admin/telemetry server |
 | `AG2R_LOG` | `/tmp/ag2r-main.log` | Server stdout/stderr log |
 
 
