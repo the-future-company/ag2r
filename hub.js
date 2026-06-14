@@ -254,6 +254,10 @@ function proxyRequest(req, res, childPort, wtName) {
       proxyRes.on('data', (chunk) => chunks.push(chunk));
       proxyRes.on('end', () => {
         let body = Buffer.concat(chunks).toString('utf-8');
+        // Swap prod assets to dev variants so sessions accessed via hub look "dev"
+        body = body.replaceAll('/ag2r-icon.png', '/ag2r-icon-dev.png');
+        body = body.replaceAll('/ag2r-icon-admin.png', '/ag2r-icon-dev.png');
+        body = body.replace('"/manifest.json"', '"/manifest-dev.json"');
         const script = `<script>document.addEventListener('DOMContentLoaded',()=>{const t=document.querySelector('.header-title');if(t)t.innerHTML='AG2R <span style="font-size:0.5em;opacity:0.6;font-weight:400">:${childPort} ${wtName}<\/span>';})<\/script>`;
         body = body.replace('</head>', script + '</head>');
         delete proxyRes.headers['content-length'];
@@ -640,6 +644,13 @@ function renderLandingPage() {
 function handleRequest(req, res) {
   const url = new URL(req.url, 'https://localhost');
   const pathname = url.pathname;
+
+  // ── Health endpoint (so production hub can detect a test hub) ──
+  if (pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', type: 'hub', cdpConnected: false }));
+    return;
+  }
 
   // ── Hub API routes ──
   if (pathname.startsWith('/_hub/')) {
