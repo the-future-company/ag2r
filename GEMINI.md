@@ -164,3 +164,5 @@ ONBOARDING.md follows a strict **pointer-based context map** pattern. The princi
 9. **Never trigger restart-antigravity from the agent.** Killing Antigravity kills the agent's own session. Add logging, let the user trigger the restart from their phone, and review logs after AG comes back up. The `ag-watchdog.sh` cron job handles ensuring AG is running with CDP enabled — agents don't need to worry about AG state.
 
 10. **Handover prompts in code blocks.** When producing a next-session / continuation prompt, wrap the entire prompt in a 4-backtick code block so the user can copy it from the remote app.
+
+11. **AG2R is a multi-platform product with real users.** Never assume it only runs on the developer's machine or OS. The system metadata says `OS: mac` because that's the dev machine — users run AG2R on macOS, Linux, and Windows. Always write cross-platform code and never dismiss a platform as irrelevant.
