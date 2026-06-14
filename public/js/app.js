@@ -2710,6 +2710,19 @@ updateActionButton();
 function pushDebug(msg) {
   console.debug('[Push]', msg);
 }
+async function checkVapidKeyMatch(subscription) {
+  try {
+    const res = await fetch('/push/vapid-public-key');
+    const { publicKey } = await res.json();
+    const serverKey = urlBase64ToUint8Array(publicKey);
+    const subKey = new Uint8Array(subscription.options.applicationServerKey);
+    if (serverKey.length !== subKey.length) return false;
+    return serverKey.every((b, i) => b === subKey[i]);
+  } catch {
+    // If we can't fetch the key, assume match to avoid breaking existing subscriptions
+    return true;
+  }
+}
 async function initPushNotifications() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     pushDebug('Not supported');
@@ -2723,9 +2736,19 @@ async function initPushNotifications() {
 
     const existing = await registration.pushManager.getSubscription();
     if (existing) {
-      pushDebug('Already subscribed, re-sending');
-      await sendSubscription(existing);
-      pushDebug('Done ✓');
+      // Check if the subscription's VAPID key matches the server's current key
+      const keyMatch = await checkVapidKeyMatch(existing);
+      if (keyMatch) {
+        pushDebug('Already subscribed, re-sending');
+        await sendSubscription(existing);
+        pushDebug('Done ✓');
+        return;
+      }
+      // VAPID key mismatch — stale subscription from old keys
+      pushDebug('VAPID key mismatch, re-subscribing...');
+      await existing.unsubscribe();
+      await subscribePush(registration);
+      pushDebug('Re-subscribed with current keys ✓');
       return;
     }
 

@@ -153,7 +153,7 @@ async function sendPushToAll(payload) {
     try {
       await webpush.sendNotification(sub, body);
     } catch (err) {
-      if (err.statusCode === 410 || err.statusCode === 404) {
+      if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
         stale.push(endpoint);
       } else {
         console.debug(`[Push] Send error: ${err.statusCode || 'N/A'} — ${err.body || err.message}`);
