@@ -44,24 +44,48 @@ function loadConfig() {
 
 // ─────────────────────────────────────────────
 // Install ID (persistent, anonymous)
+// Stored in ~/.config/ag2r/ (XDG convention) so all worktrees
+// and clones on the same machine share a single identity.
 // ─────────────────────────────────────────────
 
-const ID_FILE = path.join(PROJECT_ROOT, '.ag2r-telemetry-id');
+const XDG_CONFIG = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+const CONFIG_DIR = path.join(XDG_CONFIG, 'ag2r');
+const ID_FILE = path.join(CONFIG_DIR, 'telemetry-id');
+const LEGACY_ID_FILE = path.join(PROJECT_ROOT, '.ag2r-telemetry-id');
 
 function getInstallId() {
+  // 1. Try the canonical XDG location
   try {
     const existing = fs.readFileSync(ID_FILE, 'utf8').trim();
     if (existing) return existing;
   } catch {
-    // File doesn't exist yet
+    // Not there yet
   }
-  const id = randomUUID();
+
+  // 2. Migrate from legacy per-repo location if it exists
   try {
+    const legacy = fs.readFileSync(LEGACY_ID_FILE, 'utf8').trim();
+    if (legacy) {
+      writeIdFile(legacy);
+      return legacy;
+    }
+  } catch {
+    // No legacy file either
+  }
+
+  // 3. Generate a fresh ID
+  const id = randomUUID();
+  writeIdFile(id);
+  return id;
+}
+
+function writeIdFile(id) {
+  try {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
     fs.writeFileSync(ID_FILE, id + '\n');
   } catch {
     // Non-critical — use ephemeral ID this session
   }
-  return id;
 }
 
 
