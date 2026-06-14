@@ -327,7 +327,7 @@ function renderLandingPage() {
   <title>AG2R Hub</title>
   <link rel="icon" type="image/png" href="/ag2r-icon-dev.png?v=${DEV_ICON_HASH}">
   <link rel="apple-touch-icon" href="/ag2r-icon-dev.png?v=${DEV_ICON_HASH}">
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="/manifest-dev.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -660,7 +660,7 @@ function handleRequest(req, res) {
   }
 
   // ── PWA assets (served directly by hub for landing page) ──
-  if (pathname === '/ag2r-icon.png' || pathname === '/ag2r-icon-dev.png' || pathname === '/manifest.json' || pathname === '/favicon.png') {
+  if (pathname === '/ag2r-icon.png' || pathname === '/ag2r-icon-dev.png' || pathname === '/manifest.json' || pathname === '/manifest-dev.json' || pathname === '/favicon.png') {
     const filePath = path.join(__dirname, 'public', pathname);
     if (fs.existsSync(filePath)) {
       const ext = path.extname(filePath);

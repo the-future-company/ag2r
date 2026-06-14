@@ -1,0 +1,17 @@
+{
+  "name": "AG2R Dev",
+  "short_name": "AG2R Dev",
+  "description": "Dev hub for Antigravity AI coding sessions",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#101010",
+  "theme_color": "#101010",
+  "icons": [
+    {
+      "src": "/ag2r-icon-dev.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
