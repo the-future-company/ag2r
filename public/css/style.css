@@ -703,6 +703,50 @@ body {
   box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.2);
 }
 
+/* Subagent info panel — rendered AG content (cannot prompt + overview button) */
+.subagent-info {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  padding-bottom: max(12px, var(--safe-bottom));
+  background: rgba(234, 179, 8, 0.05);
+  border-top: 1px solid rgba(234, 179, 8, 0.2);
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.subagent-info.hidden {
+  display: none;
+}
+
+/* Style buttons inside the captured subagent info (e.g., "Open Overview") */
+.subagent-info button,
+.subagent-info a,
+.subagent-info [role="button"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  margin-top: 8px;
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(234, 179, 8, 0.1);
+  color: var(--yellow);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.subagent-info button:active,
+.subagent-info a:active,
+.subagent-info [role="button"]:active {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: rgba(234, 179, 8, 0.5);
+}
+
 /* ── Input Bar ── */
 .input-bar {
   flex-shrink: 0;

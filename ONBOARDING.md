@@ -64,6 +64,7 @@
 | Restart Antigravity (sidebar button + confirmation + API) | `server.js` — search `POST /restart-antigravity`; `public/js/app.js` — search `showRestartConfirm` |
 | Hard refresh button (PWA home screen workaround) | `public/index.html` — search `refresh-btn`; `public/js/app.js` — search `refreshBtn` |
 | Subagent view (detection, back button, yellow border) | `public/js/app.js` — search `isInSubagentView`; `server.js` — search `isSubagentView`; `public/css/style.css` — search `subagent` |
+| Subagent info capture ("cannot prompt" + overview button) | `server.js` — search `SUBAGENT_INFO_SCRIPT` and `subinfo:`; `public/js/app.js` — search `subagentInfo` |
 | Debug logging (`AG2R_DEBUG=1`, unified client+server stream) | `server.js` — search `DEBUG_MODE` and `POST /debug-log`; `public/js/app.js` — search `debugLog` |
 | Image send pipeline (upload, drop, wait, send) | `server.js` — search `POST /send-images` and `waitForEditorImage`; `public/js/app.js` — search `sendMessage` |
 | Native dialog rendering (AG's HTML + CSS in overlay) | `public/js/app.js` — search `ag2r-dialog-native`; `public/css/style.css` — search `ag2r-dialog-native` |

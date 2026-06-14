@@ -350,12 +350,17 @@ export const CAPTURE_SCRIPT = `
   }
 
   // -- 13. Detect subagent view --
-  // When viewing a subagent conversation, AG renders a breadcrumb/navigation bar
-  // above the conversation-view container. Detect this by looking for visible
-  // siblings of the container that contain clickable back links.
+  // Primary signal: AG removes the inputBox entirely when viewing a subagent conversation.
+  // This is state-based and survives page refresh (unlike breadcrumb detection alone).
+  // Secondary signal: breadcrumb bar above the conversation container (for parent name).
   let isSubagentView = false;
   let parentConversationName = '';
   try {
+    const inputBox = document.getElementById('antigravity.agentSidePanelInputBox');
+    if (!inputBox && !isNewSessionPage && container) {
+      isSubagentView = true;
+    }
+    // Breadcrumb detection: extract parent conversation name from navigation bar
     if (!isNewSessionPage && container) {
       const cvParent = container.parentElement;
       if (cvParent) {

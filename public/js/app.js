@@ -100,8 +100,10 @@ let runningTasksCollapsed = false;
 const subagentBar = document.getElementById('subagent-bar');
 const subagentBackBtn = document.getElementById('subagent-back-btn');
 const subagentParentName = document.getElementById('subagent-parent-name');
-let isInSubagentView = false;   // Client-side tracking: set true when user clicks a task name
-let subagentViewTaskName = '';  // Name of the subagent being viewed
+let isInSubagentView = false;   // Synced from server-side detection (inputBox absence)
+
+// Subagent info panel (cannot prompt message + overview button)
+const subagentInfo = document.getElementById('subagent-info');
 // Suppression: ignore stale dialog/dropdown snapshots for a short window after user dismisses
 let overlayDismissedAt = 0;
 
@@ -137,7 +139,7 @@ subagentBackBtn.addEventListener('click', async () => {
   subagentBackBtn.style.pointerEvents = 'none';
   // Reset client-side flag first
   isInSubagentView = false;
-  subagentViewTaskName = '';
+
   try {
     // Click AG's breadcrumb/back link to navigate back to parent
     await fetchAPI('/eval', {
@@ -257,9 +259,9 @@ function connectWebSocket() {
           if (data.agentRunning !== undefined) {
             agentRunning = data.agentRunning;
             updateActionButton();
-            // Don't show quick actions on new session page (it has its own input)
+            // Don't show quick actions on new session page or subagent view
             const isOnNewSession = !!document.getElementById('ag2r-new-session-input');
-            quickActions?.classList.toggle('hidden', agentRunning || isOnNewSession);
+            quickActions?.classList.toggle('hidden', agentRunning || isOnNewSession || isInSubagentView);
           }
           break;
 
@@ -268,7 +270,7 @@ function connectWebSocket() {
             agentRunning = data.agentRunning;
             updateActionButton();
             const isOnNewSession = !!document.getElementById('ag2r-new-session-input');
-            quickActions?.classList.toggle('hidden', agentRunning || isOnNewSession);
+            quickActions?.classList.toggle('hidden', agentRunning || isOnNewSession || isInSubagentView);
           }
           break;
 
@@ -401,22 +403,32 @@ async function loadSnapshot() {
         closeLeftSidebar();
       }
 
-      // Hide bottom input bar + quick actions on new session page (it has its own input)
-      const hideBottomBar = data.isNewSessionPage || data.isSubagentView || isInSubagentView;
+      // Hide bottom input bar + quick actions on new session page or subagent view
+      const hideBottomBar = data.isNewSessionPage || data.isSubagentView;
       inputBar.classList.toggle('hidden', hideBottomBar);
       if (hideBottomBar) quickActions.classList.add('hidden');
 
-      // Subagent view: show back bar + yellow border indicator
-      // Uses client-side tracking (isInSubagentView) OR server-side detection as fallback
-      const showSubagentUI = isInSubagentView || data.isSubagentView;
-      if (showSubagentUI) {
-        const displayName = subagentViewTaskName || data.parentConversationName || 'Parent';
+      // Update client-side flag from server detection (used by WS handlers)
+      isInSubagentView = !!data.isSubagentView;
+
+      // Subagent view: show back bar + yellow border indicator + info panel
+      if (data.isSubagentView) {
+        const displayName = data.parentConversationName || 'Parent';
         subagentParentName.textContent = displayName;
         subagentBar.classList.remove('hidden');
         chatArea.classList.add('subagent-view');
+        // Render captured subagent info (cannot prompt + overview button)
+        if (data.subagentInfoHtml && data.subagentInfoHtml !== subagentInfo.dataset.lastHtml) {
+          subagentInfo.dataset.lastHtml = data.subagentInfoHtml;
+          subagentInfo.innerHTML = data.subagentInfoHtml;
+          addClickProxyHandlers(subagentInfo);
+        }
+        subagentInfo.classList.toggle('hidden', !data.subagentInfoHtml);
       } else {
         subagentBar.classList.add('hidden');
         chatArea.classList.remove('subagent-view');
+        subagentInfo.classList.add('hidden');
+        subagentInfo.dataset.lastHtml = '';
       }
 
       // Add mobile copy buttons to code blocks (deferred to avoid forced reflow after innerHTML)
@@ -816,13 +828,9 @@ async function loadSnapshot() {
                   body: JSON.stringify({ clickId, label: clickLabel }),
                 });
               } catch {}
-              // Task name click → enter subagent view mode
-              // The click proxy navigates AG to the subagent conversation.
-              if (isNameBtn) {
-                const nameSpan = btn.querySelector('span');
-                isInSubagentView = true;
-                subagentViewTaskName = nameSpan ? nameSpan.textContent.trim() : 'Subagent';
-              }
+              // Task name click: the click proxy navigates AG.
+              // Subagent detection is handled server-side (inputBox absence).
+              // No client-side flag needed — avoids false positives from command tasks.
               setTimeout(() => {
                 btn.style.opacity = '';
                 btn.style.pointerEvents = '';
@@ -2151,7 +2159,7 @@ function addClickProxyHandlers(container) {
           // Reset subagent view when navigating to a different conversation
           if (isConversationRow) {
             isInSubagentView = false;
-            subagentViewTaskName = '';
+
           }
         }
       }
