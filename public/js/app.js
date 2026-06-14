@@ -1817,7 +1817,7 @@ function renderNewSessionPage(container, data) {
           <div id="ag2r-ns-image-preview" class="image-preview-strip hidden"></div>
           <textarea
             id="ag2r-new-session-input"
-            placeholder="Ask anything, @ to mention, / for actions"
+            placeholder="Ask anything..."
             rows="3"
           ></textarea>
           <div class="ag2r-new-session-controls">
