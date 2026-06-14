@@ -1,5 +1,7 @@
 // src/telemetry.js — Anonymous usage telemetry for AG2R
 // Sends anonymous events to Firebase Firestore via REST API.
+// Events are batched in memory and flushed periodically to stay within
+// Firestore's 60 req/min REST API quota (Spark plan).
 // No PII collected. Opt out: AG2R_TELEMETRY=false in .env
 //
 // Firestore project config → .env (see .env.example for template)
@@ -33,6 +35,8 @@ let FIREBASE_PROJECT_ID = '';
 let FIREBASE_API_KEY = '';
 const COLLECTION = 'telemetry';
 const HEARTBEAT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const FLUSH_INTERVAL_MS = 60 * 1000; // 60s — long enough to batch, short enough to limit crash-loss
+const FLUSH_THRESHOLD = 20;          // flush immediately on burst
 
 function loadConfig() {
   if (_configLoaded) return;
@@ -131,17 +135,56 @@ function buildFirestoreDoc(event, payload) {
   return { fields };
 }
 
-async function sendToFirestore(event, payload = {}) {
+// ─────────────────────────────────────────────
+// Batch buffer — events accumulate here, flushed periodically
+// via documents:commit (single HTTP request for N writes)
+// ─────────────────────────────────────────────
+
+const batchBuffer = [];
+let flushTimer = null;
+let totalFlushes = 0;
+let totalEventsFlushed = 0;
+
+async function flushBatch() {
+  if (!batchBuffer.length) return;
   if (!FIREBASE_PROJECT_ID || !FIREBASE_API_KEY) return;
 
-  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION}?key=${FIREBASE_API_KEY}`;
+  // Drain atomically — if flush fails, events are lost (acceptable for telemetry)
+  const docs = batchBuffer.splice(0);
+
+  // Track average batch size
+  totalFlushes++;
+  totalEventsFlushed += docs.length;
+  const avgBatchSize = +(totalEventsFlushed / totalFlushes).toFixed(1);
+
+  const writes = docs.map(doc => ({
+    update: {
+      name: `projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION}/${randomUUID()}`,
+      fields: doc.fields,
+    },
+  }));
+
+  // Add batch_flush meta-event to the same commit — no extra HTTP request
+  writes.push({
+    update: {
+      name: `projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION}/${randomUUID()}`,
+      fields: buildFirestoreDoc('batch_flush', {
+        batchSize: docs.length,
+        avgBatchSize,
+        totalFlushes,
+        totalEventsFlushed,
+      }).fields,
+    },
+  });
+
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:commit?key=${FIREBASE_API_KEY}`;
 
   try {
     await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildFirestoreDoc(event, payload)),
-      signal: AbortSignal.timeout(5000), // 5s timeout — never block the app
+      body: JSON.stringify({ writes }),
+      signal: AbortSignal.timeout(10000), // 10s for batch (larger payload than single doc)
     });
   } catch {
     // Fire-and-forget — never let telemetry break the app
@@ -164,8 +207,12 @@ let eventCounts = {};
 export function track(event, payload = {}) {
   loadConfig();
   if (!ENABLED) return;
+  if (!installId) installId = getInstallId();
   eventCounts[event] = (eventCounts[event] || 0) + 1;
-  sendToFirestore(event, payload);
+  batchBuffer.push(buildFirestoreDoc(event, payload));
+  if (batchBuffer.length >= FLUSH_THRESHOLD) {
+    flushBatch();
+  }
 }
 
 /**
@@ -189,12 +236,24 @@ export function startSession() {
     });
   }, HEARTBEAT_INTERVAL_MS);
 
-  // Don't keep the process alive just for heartbeat
+  // Batch flush timer — drains the event buffer periodically
+  flushTimer = setInterval(() => flushBatch(), FLUSH_INTERVAL_MS);
+
+  // Don't keep the process alive just for timers
   if (heartbeatTimer.unref) heartbeatTimer.unref();
+  if (flushTimer.unref) flushTimer.unref();
+
+  // Best-effort flush on crash — starts the async request,
+  // process may exit before it completes (acceptable loss for telemetry)
+  process.once('uncaughtException', (err) => {
+    flushBatch();
+    console.error('Uncaught exception:', err);
+    setTimeout(() => process.exit(1), 1000).unref();
+  });
 }
 
 /**
- * Send session_end event and stop heartbeat.
+ * Flush remaining events + session_end, stop timers.
  * Call on graceful shutdown.
  */
 export function endSession() {
@@ -204,13 +263,19 @@ export function endSession() {
     clearInterval(heartbeatTimer);
     heartbeatTimer = null;
   }
+  if (flushTimer) {
+    clearInterval(flushTimer);
+    flushTimer = null;
+  }
 
   const uptimeMinutes = Math.round((Date.now() - startTime) / 60000);
-  // Synchronous-ish — we send and hope it lands before process exits
-  sendToFirestore('session_end', {
+  // Bypass track() to avoid incrementing eventCounts for session_end itself
+  batchBuffer.push(buildFirestoreDoc('session_end', {
     uptimeMinutes,
     eventCounts: { ...eventCounts },
-  });
+  }));
+  // Fire-and-forget — same as previous sendToFirestore behavior
+  flushBatch();
 }
 
 /**
@@ -220,4 +285,3 @@ export function isEnabled() {
   loadConfig();
   return ENABLED;
 }
-
