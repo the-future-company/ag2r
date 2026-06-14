@@ -104,6 +104,9 @@ let isInSubagentView = false;   // Synced from server-side detection (inputBox a
 
 // Subagent info panel (cannot prompt message + overview button)
 const subagentInfo = document.getElementById('subagent-info');
+// Deferred sidebar open: set true when user clicks a task name.
+// loadSnapshot checks this flag after detecting subagent vs command view.
+let pendingTaskClick = false;
 // Suppression: ignore stale dialog/dropdown snapshots for a short window after user dismisses
 let overlayDismissedAt = 0;
 
@@ -429,6 +432,14 @@ async function loadSnapshot() {
         chatArea.classList.remove('subagent-view');
         subagentInfo.classList.add('hidden');
         subagentInfo.dataset.lastHtml = '';
+      }
+
+      // Deferred task click: open sidebar only for command tasks (not subagents)
+      if (pendingTaskClick) {
+        pendingTaskClick = false;
+        if (!data.isSubagentView) {
+          openRightSidebar();
+        }
       }
 
       // Add mobile copy buttons to code blocks (deferred to avoid forced reflow after innerHTML)
@@ -830,10 +841,10 @@ async function loadSnapshot() {
               } catch {}
               // Task name click: the click proxy navigates AG.
               // Subagent detection is handled server-side (inputBox absence).
-              // No client-side flag needed — avoids false positives from command tasks.
-              // Auto-open right sidebar since AG opens it when clicking task names
+              // Defer sidebar decision: loadSnapshot will open sidebar only for
+              // command tasks (not subagents) after checking isSubagentView.
               if (isNameBtn) {
-                setTimeout(() => openRightSidebar(), 400);
+                pendingTaskClick = true;
               }
               setTimeout(() => {
                 btn.style.opacity = '';
