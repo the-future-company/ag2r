@@ -1452,12 +1452,19 @@ app.post('/push/subscribe', (req, res) => {
     log('Push', 'Dev server — skipping subscription persist');
     return res.json({ ok: true });
   }
+  // Reject subscriptions from dev-hub origins to prevent duplicate notifications.
+  // The dev-ag2r PWA has its own service worker + push subscription; if we accept
+  // it, the user gets one notification per origin.
+  const origin = req.get('origin') || req.get('referer') || '';
+  if (/dev-ag2r/i.test(origin)) {
+    log('Push', `Rejected dev-origin subscription (origin: ${origin})`);
+    return res.json({ ok: true });
+  }
   pushSubscriptions.set(subscription.endpoint, subscription);
   saveSubscriptions();
   // Track the public origin for notification click URLs
-  const origin = req.get('origin') || req.get('referer');
   if (origin) publicOrigin = origin.replace(/\/$/, '');
-  log('Push', `Subscribed (${pushSubscriptions.size} total)`);
+  log('Push', `Subscribed (${pushSubscriptions.size} total) from ${origin}`);
   res.json({ ok: true });
 });
 
