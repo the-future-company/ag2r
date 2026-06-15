@@ -350,17 +350,19 @@ export const CAPTURE_SCRIPT = `
   }
 
   // -- 13. Detect subagent view --
-  // Primary signal: AG removes the inputBox entirely when viewing a subagent conversation.
-  // This is state-based and survives page refresh (unlike breadcrumb detection alone).
-  // Secondary signal: breadcrumb bar above the conversation container (for parent name).
+  // Two independent signals, both required to confirm subagent view:
+  //   1. AG removes the inputBox entirely when viewing a subagent conversation.
+  //   2. A breadcrumb navigation bar appears above the conversation container.
+  // Requiring both prevents false positives during transient states (e.g., permission
+  // prompt submission briefly removes the inputBox).
   let isSubagentView = false;
   let parentConversationName = '';
   try {
     const inputBox = document.getElementById('antigravity.agentSidePanelInputBox');
-    if (!inputBox && !isNewSessionPage && container) {
-      isSubagentView = true;
-    }
+    const noInputBox = !inputBox && !isNewSessionPage && !!container;
+
     // Breadcrumb detection: extract parent conversation name from navigation bar
+    let hasBreadcrumb = false;
     if (!isNewSessionPage && container) {
       const cvParent = container.parentElement;
       if (cvParent) {
@@ -372,7 +374,7 @@ export const CAPTURE_SCRIPT = `
             const links = child.querySelectorAll('a, button, [role="link"], [class*="cursor-pointer"]');
             const text = child.textContent.trim();
             if (links.length > 0 && text.length > 0 && text.length < 300) {
-              isSubagentView = true;
+              hasBreadcrumb = true;
               // Extract parent name from breadcrumb segments (separated by / or > or ›)
               const parts = text.split(/[/›>]/).map(s => s.trim()).filter(Boolean);
               if (parts.length >= 2) {
@@ -386,6 +388,9 @@ export const CAPTURE_SCRIPT = `
         }
       }
     }
+
+    // Both signals required to confirm subagent view
+    isSubagentView = noInputBox && hasBreadcrumb;
   } catch (e) {
     console.debug('[AG2R] Subagent detection error:', e.message);
   }
