@@ -1,3 +1,5 @@
+<a href="https://buymeacoffee.com/omercanyy" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" align="right" alt="Buy Me A Coffee" /></a>
+
 # AG2R — Antigravity 2.0 Remote
 
 A lightweight mobile remote interface for monitoring and interacting with [Antigravity](https://antigravity.dev) AI coding sessions from your phone — on Wi-Fi, hotspot, or anywhere in the world.
