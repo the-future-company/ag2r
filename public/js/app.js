@@ -12,6 +12,7 @@ let isRendering = false;
 let isSending = false;
 let userScrolledAway = false;
 let debugMode = false;
+let featureFlags = { showCoffeeLink: true }; // optimistic default — hidden only if flag is explicitly false
 
 // Telemetry: previous snapshot values for change detection
 let _prevModelName = null;
@@ -280,6 +281,7 @@ function connectWebSocket() {
         case 'connection':
           cdpConnected = data.cdpConnected;
           if (data.debugMode !== undefined) debugMode = data.debugMode;
+          if (data.featureFlags) featureFlags = data.featureFlags;
           updateConnectionStatus(cdpConnected ? 'connected' : 'reconnecting');
           if (!cdpConnected) {
             updateEmptyState('Waiting for Antigravity connection...');
@@ -2032,16 +2034,24 @@ function renderSidebar(container, html) {
     if (container === leftSidebarContent) {
       const settingsEl = container.querySelector('[data-ag-click-label="Settings"]');
       const target = settingsEl || container; // fallback: append to bottom
-      const restartHtml = `
+      let injectHtml = `
         <button class="ag2r-restart-btn" id="ag2r-restart-trigger">
           <span class="material-symbols-rounded">restart_alt</span>
           Restart Antigravity
         </button>
       `;
+      if (featureFlags.showCoffeeLink) {
+        injectHtml += `
+          <a class="ag2r-coffee-sidebar-btn" href="https://buymeacoffee.com/omercanyy" target="_blank">
+            <span class="material-symbols-rounded">local_cafe</span>
+            Buy me a coffee
+          </a>
+        `;
+      }
       if (settingsEl) {
-        settingsEl.insertAdjacentHTML('afterend', restartHtml);
+        settingsEl.insertAdjacentHTML('afterend', injectHtml);
       } else {
-        container.insertAdjacentHTML('beforeend', restartHtml);
+        container.insertAdjacentHTML('beforeend', injectHtml);
       }
       // Wire the injected button
       const restartTrigger = container.querySelector('#ag2r-restart-trigger');

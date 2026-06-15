@@ -13,6 +13,7 @@ import { randomUUID } from 'crypto';
 import { execSync } from 'child_process';
 import os from 'os';
 import { CONFIG_DIR, ensureConfigDir, isDev } from './paths.js';
+import { loadFirebaseConfig } from './firebase-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -20,15 +21,8 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 // ─────────────────────────────────────────────
 // Configuration — read lazily so dotenv.config() in server.js runs first
 // (ESM hoists imports, so module-scope reads would see empty env vars)
+// Firebase project config → src/firebase-config.js
 // ─────────────────────────────────────────────
-
-// Default Firebase config for centralized telemetry.
-// These are intentionally public — Firebase API keys are project identifiers,
-// not secrets. Firestore security rules enforce create-only access with schema
-// validation. The Spark (free) plan has hard daily caps preventing abuse.
-// Override via .env to send telemetry to your own Firebase project.
-const DEFAULT_PROJECT_ID = 'ag2r-telemetry';
-const DEFAULT_API_KEY = 'AIzaSyDyV0ywPHpqzuYrk72GYSibxTAd6gKpn4w';
 
 let _configLoaded = false;
 let ENABLED = true;
@@ -43,8 +37,9 @@ function loadConfig() {
   if (_configLoaded) return;
   _configLoaded = true;
   ENABLED = process.env.AG2R_TELEMETRY !== 'false';
-  FIREBASE_PROJECT_ID = process.env.TELEMETRY_FIREBASE_PROJECT_ID || DEFAULT_PROJECT_ID;
-  FIREBASE_API_KEY = process.env.TELEMETRY_FIREBASE_API_KEY || DEFAULT_API_KEY;
+  const fb = loadFirebaseConfig();
+  FIREBASE_PROJECT_ID = fb.projectId;
+  FIREBASE_API_KEY = fb.apiKey;
 }
 
 // ─────────────────────────────────────────────

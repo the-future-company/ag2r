@@ -2454,6 +2454,36 @@ body {
   font-size: 18px;
 }
 
+/* ── Sidebar Coffee Button (Option 2, injected dynamically) ── */
+.ag2r-coffee-sidebar-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fbbf24; /* Amber yellow */
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ag2r-coffee-sidebar-btn:active {
+  background: rgba(251, 191, 36, 0.1);
+  color: #f59e0b;
+}
+
+.ag2r-coffee-sidebar-btn .material-symbols-rounded {
+  font-size: 18px;
+}
+
 /* ── Restart Confirmation Modal ── */
 .restart-confirm {
   position: fixed;

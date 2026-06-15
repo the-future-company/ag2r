@@ -17,6 +17,7 @@ import multer from 'multer';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { track, startSession, endSession } from './src/telemetry.js';
+import { fetchFlags, getFlags } from './src/feature-flags.js';
 import { getConfigPath, ensureConfigDir, isDev, MAIN_PORT } from './src/paths.js';
 
 // CDP scripts — browser-side JS evaluated via Runtime.evaluate
@@ -1582,6 +1583,7 @@ async function start() {
       type: 'connection',
       cdpConnected: !!cdpClient,
       debugMode: DEBUG_MODE,
+      featureFlags: getFlags(),
     }));
 
     if (cachedSnapshot) {
@@ -1610,6 +1612,9 @@ async function start() {
       log('Server', `Tunnel URL: ${TUNNEL_URL}`);
     }
     startSession();
+    // Fetch feature flags in the background — never blocks startup.
+    // Defaults (showCoffeeLink: true) are used until fetch completes.
+    fetchFlags();
   });
 
   // Connect to CDP

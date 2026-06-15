@@ -19,6 +19,13 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // Feature flags & config: public-read, no client writes.
+    // Admin writes via Firebase Console or Admin SDK (bypasses rules).
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Deny everything else
     match /{document=**} {
       allow read, write: if false;

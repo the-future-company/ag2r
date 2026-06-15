@@ -70,6 +70,8 @@
 | Image send pipeline (upload, drop, wait, send) | `server.js` — search `POST /send-images` and `waitForEditorImage`; `public/js/app.js` — search `sendMessage` |
 | Native dialog rendering (AG's HTML + CSS in overlay) | `public/js/app.js` — search `ag2r-dialog-native`; `public/css/style.css` — search `ag2r-dialog-native` |
 | Detect-then-execute for side-effect CDP scripts | `server.js` — search `findEditorContext` and `evaluateInContext`; `src/cdp-scripts/has-visible-editor.js` |
+| Shared Firebase config (project ID, API key) | `src/firebase-config.js` — used by telemetry.js and feature-flags.js |
+| Feature flags (Firestore read-only, cached per session) | `src/feature-flags.js` — fetched on boot, sent to client via WS |
 
 ---
 
