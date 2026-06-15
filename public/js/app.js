@@ -12,7 +12,7 @@ let isRendering = false;
 let isSending = false;
 let userScrolledAway = false;
 let debugMode = false;
-let featureFlags = { showCoffeeLink: true }; // optimistic default — hidden only if flag is explicitly false
+let featureFlags = {}; // populated from server on WS connect
 
 // Telemetry: previous snapshot values for change detection
 let _prevModelName = null;
@@ -2059,6 +2059,12 @@ function renderSidebar(container, html) {
         restartTrigger.addEventListener('click', () => {
           closeLeftSidebar();
           showRestartConfirm();
+        });
+      }
+      const coffeeLink = container.querySelector('.ag2r-coffee-sidebar-btn');
+      if (coffeeLink) {
+        coffeeLink.addEventListener('click', () => {
+          track('coffee_link_clicked');
         });
       }
     }

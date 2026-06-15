@@ -1095,6 +1095,7 @@ app.post('/telemetry', (req, res) => {
     'model_changed', 'branch_changed', 'worktree_changed',
     'quick_action_used',
     'hard_refresh',
+    'coffee_link_clicked',
   ]);
   if (!allowed.has(event)) {
     return res.status(400).json({ error: 'unknown event' });
@@ -1554,6 +1555,9 @@ app.get('/icon-workshop/file', (req, res) => {
 // ─────────────────────────────────────────────
 
 async function start() {
+  // Kick off flag fetch immediately — runs in parallel with SSL/server setup
+  const flagsReady = fetchFlags();
+
   // Generate/load SSL certs
   const sslOpts = ensureCerts();
 
@@ -1605,16 +1609,15 @@ async function start() {
     });
   });
 
-  // Start listening
+  // Ensure flags are loaded before accepting connections
+  await flagsReady;
+
   server.listen(PORT, () => {
     log('Server', `AG2R running on https://localhost:${PORT}`);
     if (TUNNEL_ENABLED && TUNNEL_URL) {
       log('Server', `Tunnel URL: ${TUNNEL_URL}`);
     }
     startSession();
-    // Fetch feature flags in the background — never blocks startup.
-    // Defaults (showCoffeeLink: true) are used until fetch completes.
-    fetchFlags();
   });
 
   // Connect to CDP

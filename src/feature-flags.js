@@ -1,5 +1,5 @@
 // src/feature-flags.js — Read-only feature flags from Firestore
-// Fetches /config/features on server startup. Cached for the session lifetime.
+// Fetched once on server boot. Cached for the session lifetime.
 // Security: Firestore rules enforce read-only for public API key.
 // Admin writes happen via Firebase Console or Admin SDK (bypasses rules).
 // Firebase project config → src/firebase-config.js
