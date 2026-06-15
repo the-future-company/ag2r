@@ -1444,6 +1444,14 @@ app.post('/push/subscribe', (req, res) => {
   if (!subscription?.endpoint) {
     return res.status(400).json({ error: 'Invalid subscription' });
   }
+  // Dev servers must NOT persist subscriptions — the shared config file is read
+  // by the main server, which would then send duplicate notifications to both
+  // the prod and dev-origin service workers. Accept silently so the client
+  // doesn't error.
+  if (isDev()) {
+    log('Push', 'Dev server — skipping subscription persist');
+    return res.json({ ok: true });
+  }
   pushSubscriptions.set(subscription.endpoint, subscription);
   saveSubscriptions();
   // Track the public origin for notification click URLs
