@@ -102,12 +102,13 @@ const subagentBar = document.getElementById('subagent-bar');
 const subagentBackBtn = document.getElementById('subagent-back-btn');
 const subagentParentName = document.getElementById('subagent-parent-name');
 let isInSubagentView = false;   // Synced from server-side detection (inputBox absence)
+let isInputBoxHidden = false;   // Synced from server-side detection (AG's input box invisible)
 
 // Subagent info panel (cannot prompt message + overview button)
 const subagentInfo = document.getElementById('subagent-info');
 // Deferred sidebar open: set true when user clicks a task name.
 // loadSnapshot checks this flag after detecting subagent vs command view.
-let pendingTaskClick = false;
+
 // Suppression: ignore stale dialog/dropdown snapshots for a short window after user dismisses
 let overlayDismissedAt = 0;
 
@@ -143,6 +144,7 @@ subagentBackBtn.addEventListener('click', async () => {
   subagentBackBtn.style.pointerEvents = 'none';
   // Reset client-side flag first
   isInSubagentView = false;
+  isInputBoxHidden = false;
 
   try {
     // Click AG's breadcrumb/back link to navigate back to parent
@@ -264,8 +266,7 @@ function connectWebSocket() {
             agentRunning = data.agentRunning;
             updateActionButton();
             // Don't show quick actions on new session page or subagent view
-            const isOnNewSession = !!document.getElementById('ag2r-new-session-input');
-            quickActions?.classList.toggle('hidden', agentRunning || isOnNewSession || isInSubagentView);
+            quickActions?.classList.toggle('hidden', agentRunning || isInputBoxHidden);
           }
           break;
 
@@ -273,8 +274,7 @@ function connectWebSocket() {
           if (data.agentRunning !== undefined) {
             agentRunning = data.agentRunning;
             updateActionButton();
-            const isOnNewSession = !!document.getElementById('ag2r-new-session-input');
-            quickActions?.classList.toggle('hidden', agentRunning || isOnNewSession || isInSubagentView);
+            quickActions?.classList.toggle('hidden', agentRunning || isInputBoxHidden);
           }
           break;
 
@@ -422,8 +422,9 @@ async function loadSnapshot() {
       inputBar.classList.toggle('hidden', hideBottomBar);
       if (hideBottomBar) quickActions.classList.add('hidden');
 
-      // Update client-side flag from server detection (used by WS handlers)
+      // Update client-side flags from server detection (used by WS handlers)
       isInSubagentView = !!data.isSubagentView;
+      isInputBoxHidden = !!(data.isNewSessionPage || data.isInputBoxHidden);
 
       // Subagent view: show back bar + yellow border indicator + info panel
       if (data.isSubagentView) {
@@ -445,8 +446,6 @@ async function loadSnapshot() {
         subagentInfo.dataset.lastHtml = '';
       }
 
-      // pendingTaskClick consumed — sidebar mirroring handles open/close.
-      if (pendingTaskClick) pendingTaskClick = false;
 
       // Add mobile copy buttons to code blocks (deferred to avoid forced reflow after innerHTML)
       requestAnimationFrame(() => addMobileCopyButtons());
@@ -865,12 +864,7 @@ async function loadSnapshot() {
                 });
               } catch {}
               // Task name click: the click proxy navigates AG.
-              // Subagent detection is handled server-side (inputBox absence).
-              // Defer sidebar decision: loadSnapshot will open sidebar only for
-              // command tasks (not subagents) after checking isSubagentView.
-              if (isNameBtn) {
-                pendingTaskClick = true;
-              }
+
               setTimeout(() => {
                 btn.style.opacity = '';
                 btn.style.pointerEvents = '';
