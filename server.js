@@ -649,6 +649,7 @@ function fireBurstCaptures(delays) {
             snapshot.html +
             (snapshot.leftSidebarHtml || '') +
             (snapshot.sidebarSignature || '') +
+            (snapshot.isSidebarOpen ? '1' : '0') +
             (snapshot.dropdownHtml || '') +
             (snapshot.dialogHtml || '') +
             (snapshot.settingsHtml || '') +
@@ -695,6 +696,7 @@ function startPolling() {
           snapshot.html +
           (snapshot.leftSidebarHtml || '') +
           (snapshot.sidebarSignature || '') +
+          (snapshot.isSidebarOpen ? '1' : '0') +
           (snapshot.dropdownHtml || '') +
           (snapshot.dialogHtml || '') +
           (snapshot.settingsHtml || '') +
@@ -707,6 +709,7 @@ function startPolling() {
 
         // Only broadcast and update cache when content actually changes
         if (hash !== lastSnapshotHash) {
+          console.debug('[SidebarMirror:server] isSidebarOpen:', snapshot.isSidebarOpen, 'sig:', snapshot.sidebarSignature);
           cachedSnapshot = snapshot;
           cachedSnapshot.hash = hash;
           lastSnapshotHash = hash;
@@ -891,50 +894,10 @@ app.get('/snapshot', (req, res) => {
 // --- Right Sidebar (on-demand capture) ---
 app.get('/right-sidebar', async (req, res) => {
   try {
-    let html = await evaluateInBrowser(RIGHT_SIDEBAR_SCRIPT);
-    if (html) {
-      return res.json({ html });
-    }
-
-    // Sidebar is closed in AG — try to open it
-    log('RightSidebar', 'Sidebar closed in AG, attempting to open...');
-    const opened = await evaluateInBrowser(OPEN_RIGHT_SIDEBAR_SCRIPT);
-
-    if (!opened) {
-      // Strategy 2: Keyboard shortcut — Cmd+Option+B (VS Code Toggle Auxiliary Bar)
-      try {
-        await cdpClient.Input.dispatchKeyEvent({
-          type: 'keyDown',
-          key: 'b',
-          code: 'KeyB',
-          modifiers: 8 + 1, // Meta(8) + Alt(1) = Cmd+Option
-          windowsVirtualKeyCode: 66,
-        });
-        await cdpClient.Input.dispatchKeyEvent({
-          type: 'keyUp',
-          key: 'b',
-          code: 'KeyB',
-          modifiers: 8 + 1,
-          windowsVirtualKeyCode: 66,
-        });
-        log('RightSidebar', 'Sent Cmd+Option+B keyboard shortcut');
-      } catch (e) {
-        log('RightSidebar', 'Keyboard shortcut failed:', e.message);
-      }
-    } else {
-      log('RightSidebar', 'Clicked toggle button');
-    }
-
-    // Wait for sidebar to render
-    await new Promise(r => setTimeout(r, 500));
-
-    // Select the Overview tab if no tab is active
-    await evaluateInBrowser(SELECT_OVERVIEW_TAB_SCRIPT);
-    await new Promise(r => setTimeout(r, 200));
-
-    // Re-try capture
-    html = await evaluateInBrowser(RIGHT_SIDEBAR_SCRIPT);
-    res.json({ html: html || null, wasOpened: true });
+    // Read-only: capture sidebar content if AG's sidebar is open.
+    // Never open AG's sidebar — AG2R mirrors AG's state, it doesn't drive it.
+    const html = await evaluateInBrowser(RIGHT_SIDEBAR_SCRIPT);
+    res.json({ html: html || null });
   } catch (e) {
     console.debug('[RightSidebar] Error:', e.message);
     res.json({ html: null, error: e.message });

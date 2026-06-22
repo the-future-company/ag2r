@@ -233,35 +233,9 @@ export function buildMainClickScript(safeClickId, safeLabel) {
         return { ok: false, reason: 'label_mismatch', expected: expectedLabel, actual: actualLabel, total: visible.length, debugNearby };
       }
 
-      // Track right-sidebar tab signature before click.
-      // Full signature (all tabs + active state) instead of just active tab ID —
-      // detects new tabs appearing, tabs closing, and active tab switches.
-      const getTabSignature = () => {
-        const tabs = [];
-        for (const t of document.querySelectorAll('[data-tab-id]')) {
-          const id = t.getAttribute('data-tab-id');
-          const active = (t.className || '').includes('bg-secondary') ? '*' : '';
-          tabs.push(id + active);
-        }
-        return tabs.join(',');
-      };
-      const sigBefore = getTabSignature();
-
       target.click();
 
-      // Detect if this click navigated to a file/artifact view.
-      // Compare tab signature before/after — any change means navigation happened.
-      let navigatedToFile = false;
-      if (source === 'chat') {
-        // Wait for React state updates from target.click()
-        await new Promise(r => setTimeout(r, 300));
-        const sigAfter = getTabSignature();
-        if (sigAfter !== sigBefore) {
-          navigatedToFile = true;
-        }
-      }
-
-      return { ok: true, label: actualLabel, source, navigatedToFile, debugNearby };
+      return { ok: true, label: actualLabel, source, debugNearby };
     })()
 `;
 }

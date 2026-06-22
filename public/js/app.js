@@ -445,13 +445,8 @@ async function loadSnapshot() {
         subagentInfo.dataset.lastHtml = '';
       }
 
-      // Deferred task click: open sidebar only for command tasks (not subagents)
-      if (pendingTaskClick) {
-        pendingTaskClick = false;
-        if (!data.isSubagentView) {
-          openRightSidebar();
-        }
-      }
+      // pendingTaskClick consumed — sidebar mirroring handles open/close.
+      if (pendingTaskClick) pendingTaskClick = false;
 
       // Add mobile copy buttons to code blocks (deferred to avoid forced reflow after innerHTML)
       requestAnimationFrame(() => addMobileCopyButtons());
@@ -468,14 +463,27 @@ async function loadSnapshot() {
     renderSidebar(leftSidebarContent, data.leftSidebarHtml);
     addClickProxyHandlers(leftSidebarContent);
 
-    // Right sidebar is on-demand — don't render here.
-    // Track the sidebarSignature so we know when to re-fetch.
+    // Right sidebar: mirror AG's sidebar state from snapshots.
+    // This is the same pattern as chat content — just show what AG shows.
     if (data.sidebarSignature !== undefined) {
       const sigChanged = data.sidebarSignature !== lastSidebarSignature;
       lastSidebarSignature = data.sidebarSignature;
-      // Auto-refresh sidebar if it's open and the signature changed
+      // Refresh content if sidebar is open and tabs changed
       if (sigChanged && rightSidebar.classList.contains('open')) {
         fetchRightSidebar();
+      }
+    }
+    if (data.isSidebarOpen !== undefined) {
+      const ag2rIsOpen = rightSidebar.classList.contains('open');
+      console.debug('[SidebarMirror] AG:', data.isSidebarOpen, 'AG2R:', ag2rIsOpen, 'sig:', data.sidebarSignature);
+      if (data.isSidebarOpen && !ag2rIsOpen) {
+        console.debug('[SidebarMirror] Opening AG2R sidebar');
+        openRightSidebar();
+      } else if (!data.isSidebarOpen && ag2rIsOpen) {
+        console.debug('[SidebarMirror] Closing AG2R sidebar');
+        rightSidebar.classList.remove('open');
+        rightSidebar.inert = true;
+        rightSidebarOverlay.classList.remove('visible');
       }
     }
 
@@ -2226,37 +2234,18 @@ function addClickProxyHandlers(container) {
         dropdownOverlay.classList.add('hidden');
       }
 
-      // "View Diff" in dialog — close modal + open right sidebar to show the diff
-      if (clickId.startsWith('dialog:') && /view\s*diff/i.test(label.trim())) {
-        setTimeout(() => openRightSidebar(), 300);
-      }
-
-      // Only open right sidebar for explicit "Review" button clicks
-      if (/^Review$/i.test(label.trim())) {
-        openRightSidebar();
-      }
-
-      // Open right sidebar when a file row click navigated to a file tab
-      if (result?.navigatedToFile) {
-        openRightSidebar();
-      }
-
-      // Deferred detection: if the CDP 300ms wasn't enough to detect the tab
-      // change, record the click time so updateActiveArtifact() can catch it
-      // when the next snapshot arrives with the new activeArtifactUri/activeFileUri.
-      if (clickId.startsWith('chat:') && result?.ok && !result?.navigatedToFile) {
-        lastChatClickAt = Date.now();
+      // All sidebar open/close is handled by snapshot mirroring.
+      // Just schedule snapshot refreshes after clicks so mirroring picks up
+      // AG's state change quickly.
+      if (clickId.startsWith('chat:') || clickId.startsWith('dialog:') || clickId.startsWith('subinfo:')) {
+        setTimeout(loadSnapshot, 300);
+        setTimeout(loadSnapshot, 800);
       }
 
       // Re-fetch right sidebar after right-sidebar clicks (tab switches, etc.)
       if (clickId.startsWith('right:')) {
         setTimeout(fetchRightSidebar, 300);
         setTimeout(fetchRightSidebar, 800);
-      }
-
-      // Subagent info clicks (e.g. "Open overview") → open right sidebar
-      if (clickId.startsWith('subinfo:')) {
-        setTimeout(() => openRightSidebar(), 400);
       }
 
       // Refresh snapshots to pick up changes
@@ -2432,7 +2421,6 @@ function hasActiveSelectionInRightSidebar() {
 
 let activeArtifactUri = null;
 let activeFileUri = null;
-let lastChatClickAt = 0; // Timestamp of last chat click for deferred sidebar detection
 let pendingCommentSelection = '';
 let pendingCommentUri = '';
 let queuedComments = JSON.parse(localStorage.getItem('ag2r_queued_comments') || '[]');
@@ -2443,11 +2431,7 @@ function saveComments() {
 
 // Track active artifact URI from snapshots
 function updateActiveArtifact(data) {
-  const prevArtifact = activeArtifactUri;
-  const prevFile = activeFileUri;
-
   if (data.activeArtifactUri) {
-    // Track artifact views — deduplicate by checking if URI changed
     if (data.activeArtifactUri !== activeArtifactUri) {
       const uri = data.activeArtifactUri;
       let type = 'other';
@@ -2465,17 +2449,6 @@ function updateActiveArtifact(data) {
     }
     activeFileUri = data.activeFileUri;
     activeArtifactUri = null;
-  }
-
-  // Deferred sidebar open: if a chat click happened recently and the
-  // active artifact/file just changed, open the sidebar. This catches
-  // cases where AG's tab change took longer than the CDP 300ms wait.
-  if (lastChatClickAt && (Date.now() - lastChatClickAt < 3000)) {
-    const uriChanged = (activeArtifactUri !== prevArtifact) || (activeFileUri !== prevFile);
-    if (uriChanged && !rightSidebar.classList.contains('open')) {
-      openRightSidebar();
-      lastChatClickAt = 0; // Consume the flag
-    }
   }
 }
 
