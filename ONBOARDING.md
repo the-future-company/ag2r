@@ -63,6 +63,7 @@
 | Close AG's right sidebar (sync AG2R close) | `src/cdp-scripts/close-right-sidebar.js` |
 | README screenshots (product showcase) | `docs/` |
 | Push notifications (VAPID, service worker, subscription) | `server.js` — search `pushSubscriptions`; `public/sw.js`; `public/js/app.js` — search `initPushNotifications` |
+| Sidebar attention detection (notify for all conversations) | `src/cdp-scripts/capture.js` — search `sidebarHasAttention`; `server.js` — search `lastSidebarAttention` |
 | Restart Antigravity (sidebar button + confirmation + API) | `server.js` — search `POST /restart-antigravity`; `public/js/app.js` — search `showRestartConfirm` |
 | Hard refresh button (PWA home screen workaround) | `public/index.html` — search `refresh-btn`; `public/js/app.js` — search `refreshBtn` |
 | Subagent view (detection, back button, yellow border) | `public/js/app.js` — search `isInSubagentView`; `server.js` — search `isSubagentView`; `public/css/style.css` — search `subagent` |

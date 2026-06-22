@@ -112,6 +112,26 @@ const subagentInfo = document.getElementById('subagent-info');
 // Suppression: ignore stale dialog/dropdown snapshots for a short window after user dismisses
 let overlayDismissedAt = 0;
 
+// Handle ?sidebar=open URL param (from push notification clicks)
+// Opens the left sidebar so the user can see which conversation needs attention.
+const _urlParams = new URLSearchParams(window.location.search);
+if (_urlParams.get('sidebar') === 'open') {
+  // Defer until first snapshot loads (sidebar content needs to be populated)
+  let _sidebarOpenPending = true;
+  const _origLoadSnapshot = window._ag2rSidebarOpenHook = () => {
+    if (_sidebarOpenPending) {
+      _sidebarOpenPending = false;
+      openLeftSidebar();
+    }
+  };
+  // Clean URL so refresh doesn't re-trigger
+  _urlParams.delete('sidebar');
+  const cleanUrl = _urlParams.toString()
+    ? `${window.location.pathname}?${_urlParams.toString()}`
+    : window.location.pathname;
+  window.history.replaceState({}, '', cleanUrl);
+}
+
 // ─────────────────────────────────────────────
 // Dynamic Input Bar Height Tracking
 // ─────────────────────────────────────────────
@@ -461,6 +481,8 @@ async function loadSnapshot() {
     isRendering = true;
     renderSidebar(leftSidebarContent, data.leftSidebarHtml);
     addClickProxyHandlers(leftSidebarContent);
+    // Trigger deferred sidebar open from ?sidebar=open URL param (push notification click)
+    if (window._ag2rSidebarOpenHook) window._ag2rSidebarOpenHook();
 
     // Right sidebar: mirror AG's sidebar state from snapshots.
     // This is the same pattern as chat content — just show what AG shows.

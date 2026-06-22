@@ -93,6 +93,7 @@ const LEGACY_VAPID_KEYS_PATH = path.join(__dirname, 'vapid-keys.json');
 const PUSH_SUBS_PATH = getConfigPath('push-subscriptions.json');
 const pushSubscriptions = new Map(); // endpoint → PushSubscription
 let lastPermissionState = false; // tracks whether permission banner was showing
+let lastSidebarAttention = false; // tracks whether any sidebar conversation needs attention
 let publicOrigin = ''; // set from subscribe request's origin header
 
 // Load or generate VAPID keys on startup
@@ -169,10 +170,13 @@ async function sendPushToAll(payload) {
 
 // Check permission state and send push on transition
 function checkAttentionState(snapshot) {
+  // Notification URL: prefer TUNNEL_URL (stable, configured by user) over
+  // publicOrigin (fragile, lost on server restart, set from last subscribe request)
+  const url = (TUNNEL_ENABLED && TUNNEL_URL) ? TUNNEL_URL : publicOrigin || `https://localhost:${PORT}`;
+
+  // 1. Active conversation permission banner (existing behavior)
   const hasPermission = !!snapshot.permissionHtml;
   if (hasPermission && !lastPermissionState) {
-    // Transition: no permission → permission needed
-    const url = publicOrigin || (TUNNEL_ENABLED && TUNNEL_URL ? TUNNEL_URL : `https://localhost:${PORT}`);
     sendPushToAll({
       title: 'AG2R — Permission needed',
       body: 'Session is waiting for your approval',
@@ -182,6 +186,22 @@ function checkAttentionState(snapshot) {
     track('push_notification_sent', { reason: 'permission' });
   }
   lastPermissionState = hasPermission;
+
+  // 2. Sidebar-based attention detection (covers ALL conversations)
+  // AG shows animate-unread-ping on sidebar items that need attention
+  const hasSidebarAttention = !!snapshot.sidebarHasAttention;
+  if (hasSidebarAttention && !lastSidebarAttention) {
+    // Append ?sidebar=open so the client opens the left sidebar on load
+    const sidebarUrl = url + (url.includes('?') ? '&' : '?') + 'sidebar=open';
+    sendPushToAll({
+      title: 'AG2R',
+      body: 'An agent needs your attention',
+      url: sidebarUrl,
+      tag: 'ag2r-attention',
+    });
+    track('push_notification_sent', { reason: 'sidebar_attention' });
+  }
+  lastSidebarAttention = hasSidebarAttention;
 }
 
 // ─────────────────────────────────────────────
