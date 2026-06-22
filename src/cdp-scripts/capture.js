@@ -165,6 +165,7 @@ export const CAPTURE_SCRIPT = `
 
   // -- 14. Capture LEFT sidebar (bg-sidebar) --
   let leftSidebarHtml = null;
+  let sidebarHasAttention = false;
   try {
     const leftRoot = document.querySelector('.bg-sidebar');
     if (leftRoot && leftRoot.offsetParent !== null) {
@@ -172,6 +173,8 @@ export const CAPTURE_SCRIPT = `
       const leftClone = leftRoot.cloneNode(true);
       untagAll(leftTagged);
       leftSidebarHtml = leftClone.outerHTML;
+      // Detect if any conversation in the sidebar needs attention (unread/permission)
+      sidebarHasAttention = !!leftRoot.querySelector('.animate-unread-ping');
     }
   } catch (e) {
     console.debug('[AG2R] Left sidebar capture error:', e.message);
@@ -457,6 +460,6 @@ export const CAPTURE_SCRIPT = `
     }
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarHasAttention, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
 })()
 `;
