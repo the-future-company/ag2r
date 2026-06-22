@@ -165,7 +165,7 @@ export const CAPTURE_SCRIPT = `
 
   // -- 14. Capture LEFT sidebar (bg-sidebar) --
   let leftSidebarHtml = null;
-  let sidebarHasAttention = false;
+  let sidebarAttentionIds = [];
   try {
     const leftRoot = document.querySelector('.bg-sidebar');
     if (leftRoot && leftRoot.offsetParent !== null) {
@@ -173,8 +173,21 @@ export const CAPTURE_SCRIPT = `
       const leftClone = leftRoot.cloneNode(true);
       untagAll(leftTagged);
       leftSidebarHtml = leftClone.outerHTML;
-      // Detect if any conversation in the sidebar needs attention (unread/permission)
-      sidebarHasAttention = !!leftRoot.querySelector('.animate-unread-ping');
+      // Extract conversation IDs that need attention (unread/permission)
+      // Each ping dot is inside a sidebar item whose descendant has data-testid="convo-pill-<uuid>"
+      leftRoot.querySelectorAll('.animate-unread-ping').forEach(ping => {
+        // Walk up to the sidebar item (role="button"), then find the convo-pill testid
+        let el = ping;
+        for (let i = 0; i < 10 && el; i++) {
+          const pill = el.querySelector('[data-testid^="convo-pill-"]');
+          if (pill) {
+            const id = pill.getAttribute('data-testid').replace('convo-pill-', '');
+            if (id && !sidebarAttentionIds.includes(id)) sidebarAttentionIds.push(id);
+            break;
+          }
+          el = el.parentElement;
+        }
+      });
     }
   } catch (e) {
     console.debug('[AG2R] Left sidebar capture error:', e.message);
@@ -460,6 +473,6 @@ export const CAPTURE_SCRIPT = `
     }
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarHasAttention, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarAttentionIds, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
 })()
 `;

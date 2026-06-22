@@ -93,7 +93,9 @@ const LEGACY_VAPID_KEYS_PATH = path.join(__dirname, 'vapid-keys.json');
 const PUSH_SUBS_PATH = getConfigPath('push-subscriptions.json');
 const pushSubscriptions = new Map(); // endpoint → PushSubscription
 let lastPermissionState = false; // tracks whether permission banner was showing
-let lastSidebarAttention = false; // tracks whether any sidebar conversation needs attention
+const notifiedAttentionIds = new Set(); // conversation IDs we've already notified about
+let lastAttentionReminderTime = Date.now(); // for 2-hour reminder reset
+const ATTENTION_REMINDER_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
 let publicOrigin = ''; // set from subscribe request's origin header
 
 // Load or generate VAPID keys on startup
@@ -168,11 +170,12 @@ async function sendPushToAll(payload) {
   log('Push', `Sent to ${pushSubscriptions.size} subscriber(s), removed ${stale.length} stale`);
 }
 
-// Check permission state and send push on transition
+// Check attention state and send push notifications
 function checkAttentionState(snapshot) {
   // Notification URL: prefer TUNNEL_URL (stable, configured by user) over
   // publicOrigin (fragile, lost on server restart, set from last subscribe request)
   const url = (TUNNEL_ENABLED && TUNNEL_URL) ? TUNNEL_URL : publicOrigin || `https://localhost:${PORT}`;
+  const sidebarUrl = url + (url.includes('?') ? '&' : '?') + 'sidebar=open';
 
   // 1. Active conversation permission banner (existing behavior)
   const hasPermission = !!snapshot.permissionHtml;
@@ -188,20 +191,37 @@ function checkAttentionState(snapshot) {
   lastPermissionState = hasPermission;
 
   // 2. Sidebar-based attention detection (covers ALL conversations)
-  // AG shows animate-unread-ping on sidebar items that need attention
-  const hasSidebarAttention = !!snapshot.sidebarHasAttention;
-  if (hasSidebarAttention && !lastSidebarAttention) {
-    // Append ?sidebar=open so the client opens the left sidebar on load
-    const sidebarUrl = url + (url.includes('?') ? '&' : '?') + 'sidebar=open';
+  const currentAttentionIds = new Set(snapshot.sidebarAttentionIds || []);
+  const userIsActive = wsClients.size > 0;
+
+  // 2a. Remove notified IDs that are no longer needing attention (user attended to them)
+  for (const id of notifiedAttentionIds) {
+    if (!currentAttentionIds.has(id)) notifiedAttentionIds.delete(id);
+  }
+
+  // 2b. 2-hour reminder: clear notified set so forgotten conversations re-trigger
+  if (Date.now() - lastAttentionReminderTime > ATTENTION_REMINDER_INTERVAL_MS) {
+    notifiedAttentionIds.clear();
+    lastAttentionReminderTime = Date.now();
+  }
+
+  // 2c. Find new attention IDs we haven't notified about yet
+  const newIds = [];
+  for (const id of currentAttentionIds) {
+    if (!notifiedAttentionIds.has(id)) newIds.push(id);
+  }
+
+  // 2d. If user is away and there are new attention items, notify
+  if (!userIsActive && newIds.length > 0) {
+    for (const id of newIds) notifiedAttentionIds.add(id);
     sendPushToAll({
       title: 'AG2R',
       body: 'An agent needs your attention',
       url: sidebarUrl,
       tag: 'ag2r-attention',
     });
-    track('push_notification_sent', { reason: 'sidebar_attention' });
+    track('push_notification_sent', { reason: 'sidebar_attention', newCount: newIds.length });
   }
-  lastSidebarAttention = hasSidebarAttention;
 }
 
 // ─────────────────────────────────────────────
