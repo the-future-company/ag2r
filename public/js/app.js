@@ -417,8 +417,8 @@ async function loadSnapshot() {
         closeLeftSidebar();
       }
 
-      // Hide bottom input bar + quick actions on new session page or subagent view
-      const hideBottomBar = data.isNewSessionPage || data.isSubagentView;
+      // Hide bottom input bar when AG's input box is hidden (subagent view, etc.)
+      const hideBottomBar = data.isNewSessionPage || data.isInputBoxHidden;
       inputBar.classList.toggle('hidden', hideBottomBar);
       if (hideBottomBar) quickActions.classList.add('hidden');
 

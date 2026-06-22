@@ -357,31 +357,48 @@ export const CAPTURE_SCRIPT = `
 
   // -- 13. Detect subagent view --
   // Two independent signals, both required to confirm subagent view:
-  //   1. AG removes the inputBox entirely when viewing a subagent conversation.
-  //   2. A breadcrumb navigation bar appears above the conversation container.
-  // Requiring both prevents false positives during transient states (e.g., permission
-  // prompt submission briefly removes the inputBox).
+  // -- 13a. Subagent view detection --
+  // Two independent heuristics:
+  //   1. isInputBoxHidden: AG's input box is missing or invisible → hide AG2R's text box
+  //   2. isSubagentView: "Cannot send" text found → show yellow border + subagent banner
+  let isInputBoxHidden = false;
   let isSubagentView = false;
   let parentConversationName = '';
   try {
     const inputBox = document.getElementById('antigravity.agentSidePanelInputBox');
-    const noInputBox = !inputBox && !isNewSessionPage && !!container;
+    if (!inputBox) {
+      isInputBoxHidden = !isNewSessionPage && !!container;
+    } else {
+      // Input box exists in DOM — check if it's actually visible
+      isInputBoxHidden = inputBox.offsetParent === null || inputBox.getBoundingClientRect().height === 0;
+    }
 
-    // Breadcrumb detection: extract parent conversation name from navigation bar
-    let hasBreadcrumb = false;
-    if (!isNewSessionPage && container) {
+    // "Cannot send" detection: search for short-text elements that aren't inside
+    // the chat container. The "Cannot send message" label is a small UI element,
+    // not a chat message (which would be long and inside the scrollable container).
+    if (isInputBoxHidden) {
+      const candidates = document.querySelectorAll('div, span, p');
+      for (const el of candidates) {
+        if (container && container.contains(el)) continue; // skip chat content
+        const txt = (el.textContent || '').trim();
+        if (txt.length > 5 && txt.length < 100 &&
+            (txt.toLowerCase().includes('cannot send') || txt.toLowerCase().includes('cannot prompt'))) {
+          isSubagentView = true;
+          break;
+        }
+      }
+    }
+
+    // Breadcrumb: extract parent conversation name from navigation bar above container
+    if (isSubagentView && container) {
       const cvParent = container.parentElement;
       if (cvParent) {
         for (const child of cvParent.children) {
-          if (child === container) break; // Only check siblings BEFORE the container
+          if (child === container) break;
           const rect = child.getBoundingClientRect();
-          // Look for a small visible bar (breadcrumb height ~24-48px)
           if (rect.height > 8 && rect.height < 80) {
-            const links = child.querySelectorAll('a, button, [role="link"], [class*="cursor-pointer"]');
             const text = child.textContent.trim();
-            if (links.length > 0 && text.length > 0 && text.length < 300) {
-              hasBreadcrumb = true;
-              // Extract parent name from breadcrumb segments (separated by / or > or ›)
+            if (text.length > 0 && text.length < 300) {
               const parts = text.split(/[/›>]/).map(s => s.trim()).filter(Boolean);
               if (parts.length >= 2) {
                 parentConversationName = parts[parts.length - 2];
@@ -394,9 +411,7 @@ export const CAPTURE_SCRIPT = `
         }
       }
     }
-
-    // Both signals required to confirm subagent view
-    isSubagentView = noInputBox && hasBreadcrumb;
+    console.debug('[SubagentDetect] inputBox:', inputBox ? 'exists' : 'null', 'isInputBoxHidden:', isInputBoxHidden, 'isSubagentView:', isSubagentView);
   } catch (e) {
     console.debug('[AG2R] Subagent detection error:', e.message);
   }
@@ -442,6 +457,6 @@ export const CAPTURE_SCRIPT = `
     }
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarSignature, isSidebarOpen, isNewSessionPage, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
 })()
 `;
