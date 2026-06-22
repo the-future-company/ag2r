@@ -1759,6 +1759,8 @@ function closeRightSidebar() {
   rightSidebar.classList.remove('open');
   rightSidebar.inert = true;
   rightSidebarOverlay.classList.remove('visible');
+  // Sync: close AG's sidebar too so re-clicks produce a detectable tab change
+  fetchAPI('/close-sidebar', { method: 'POST' }).catch(() => {});
 }
 
 function toggleRightSidebar() {
@@ -2176,6 +2178,16 @@ function addClickProxyHandlers(container) {
         }
         return;
       }
+
+      // Intercept external URL links — open on client device, don't proxy to AG
+      if (el.tagName === 'A') {
+        const href = el.getAttribute('href') || '';
+        if (/^https?:\/\//i.test(href)) {
+          window.open(href, '_blank', 'noopener');
+          return;
+        }
+      }
+
       el.classList.add('ag-clicking');
       let result = null;
       try {
@@ -2229,17 +2241,11 @@ function addClickProxyHandlers(container) {
         openRightSidebar();
       }
 
-      // Fallback: if clicking an artifact/file card in chat (cursor-pointer DIV)
-      // but AG didn't navigate (panel was already showing it), still open the
-      // remote's right sidebar to show what AG already has open.
-      // Only for DIVs — buttons (thumbs up/down, etc.) should not trigger this.
-      // Skip expandable sections (e.g. "N files changed") — they expand inline.
-      if (clickId.startsWith('chat:') && !result?.navigatedToFile) {
-        const elClass = (el.className || '').toString();
-        const isExpandable = /\d+\s+files?\s+changed/i.test(label);
-        if (el.tagName === 'DIV' && elClass.includes('cursor-pointer') && !isExpandable) {
-          openRightSidebar();
-        }
+      // Deferred detection: if the CDP 300ms wasn't enough to detect the tab
+      // change, record the click time so updateActiveArtifact() can catch it
+      // when the next snapshot arrives with the new activeArtifactUri/activeFileUri.
+      if (clickId.startsWith('chat:') && result?.ok && !result?.navigatedToFile) {
+        lastChatClickAt = Date.now();
       }
 
       // Re-fetch right sidebar after right-sidebar clicks (tab switches, etc.)
@@ -2426,6 +2432,7 @@ function hasActiveSelectionInRightSidebar() {
 
 let activeArtifactUri = null;
 let activeFileUri = null;
+let lastChatClickAt = 0; // Timestamp of last chat click for deferred sidebar detection
 let pendingCommentSelection = '';
 let pendingCommentUri = '';
 let queuedComments = JSON.parse(localStorage.getItem('ag2r_queued_comments') || '[]');
@@ -2436,6 +2443,9 @@ function saveComments() {
 
 // Track active artifact URI from snapshots
 function updateActiveArtifact(data) {
+  const prevArtifact = activeArtifactUri;
+  const prevFile = activeFileUri;
+
   if (data.activeArtifactUri) {
     // Track artifact views — deduplicate by checking if URI changed
     if (data.activeArtifactUri !== activeArtifactUri) {
@@ -2455,6 +2465,17 @@ function updateActiveArtifact(data) {
     }
     activeFileUri = data.activeFileUri;
     activeArtifactUri = null;
+  }
+
+  // Deferred sidebar open: if a chat click happened recently and the
+  // active artifact/file just changed, open the sidebar. This catches
+  // cases where AG's tab change took longer than the CDP 300ms wait.
+  if (lastChatClickAt && (Date.now() - lastChatClickAt < 3000)) {
+    const uriChanged = (activeArtifactUri !== prevArtifact) || (activeFileUri !== prevFile);
+    if (uriChanged && !rightSidebar.classList.contains('open')) {
+      openRightSidebar();
+      lastChatClickAt = 0; // Consume the flag
+    }
   }
 }
 

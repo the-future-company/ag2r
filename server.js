@@ -45,6 +45,7 @@ import { buildCopyResponseScript } from './src/cdp-scripts/copy-response.js';
 import { DISMISS_SCHEDULED_TASKS_SCRIPT } from './src/cdp-scripts/dismiss-scheduled-tasks.js';
 import { DISMISS_SETTINGS_SCRIPT } from './src/cdp-scripts/dismiss-settings.js';
 import { OPEN_RIGHT_SIDEBAR_SCRIPT } from './src/cdp-scripts/open-right-sidebar.js';
+import { CLOSE_RIGHT_SIDEBAR_SCRIPT } from './src/cdp-scripts/close-right-sidebar.js';
 import { SELECT_OVERVIEW_TAB_SCRIPT } from './src/cdp-scripts/select-overview-tab.js';
 import { buildProxyImageScript } from './src/cdp-scripts/proxy-image.js';
 import { HAS_VISIBLE_EDITOR_SCRIPT } from './src/cdp-scripts/has-visible-editor.js';
@@ -937,6 +938,21 @@ app.get('/right-sidebar', async (req, res) => {
   } catch (e) {
     console.debug('[RightSidebar] Error:', e.message);
     res.json({ html: null, error: e.message });
+  }
+});
+
+// --- Close Right Sidebar (sync AG2R close with AG) ---
+app.post('/close-sidebar', async (req, res) => {
+  if (!cdpClient) {
+    return res.status(503).json({ error: 'CDP not connected' });
+  }
+  try {
+    const result = await evaluateInBrowser(CLOSE_RIGHT_SIDEBAR_SCRIPT);
+    log('CloseSidebar', result || 'already_closed');
+    res.json({ ok: true, result });
+  } catch (e) {
+    console.debug('[CloseSidebar] Error:', e.message);
+    res.json({ ok: false, error: e.message });
   }
 });
 
