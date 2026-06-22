@@ -919,6 +919,32 @@ app.post('/close-sidebar', async (req, res) => {
   }
 });
 
+app.post('/toggle-sidebar', async (req, res) => {
+  if (!cdpClient) {
+    return res.status(503).json({ error: 'CDP not connected' });
+  }
+  try {
+    // Check if sidebar is currently open
+    const isOpen = await evaluateInBrowser(`
+      (() => {
+        const btn = document.querySelector('[data-testid="close-aux-pane"]');
+        return btn ? btn.offsetParent !== null && btn.getBoundingClientRect().width > 0 : false;
+      })()
+    `);
+    if (isOpen) {
+      await evaluateInBrowser(CLOSE_RIGHT_SIDEBAR_SCRIPT);
+      log('ToggleSidebar', 'closed');
+    } else {
+      await evaluateInBrowser(OPEN_RIGHT_SIDEBAR_SCRIPT);
+      log('ToggleSidebar', 'opened');
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.debug('[ToggleSidebar] Error:', e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // --- Image Proxy Endpoint (on-demand, for right sidebar images) ---
 // Proxies images that use blob:/file:/vscode-file: URLs (unresolvable from remote client).
 // Finds the <img> in AG's DOM, draws to canvas, returns base64 data URL.

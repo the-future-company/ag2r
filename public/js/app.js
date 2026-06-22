@@ -1772,8 +1772,10 @@ function closeRightSidebar() {
 }
 
 function toggleRightSidebar() {
-  if (rightSidebar.classList.contains('open')) closeRightSidebar();
-  else openRightSidebar();
+  // Proxy to AG — snapshot mirroring handles AG2R's UI
+  fetchAPI('/toggle-sidebar', { method: 'POST' })
+    .then(() => setTimeout(loadSnapshot, 300))
+    .catch(() => {});
 }
 
 reviewToggle.addEventListener('click', toggleRightSidebar);
