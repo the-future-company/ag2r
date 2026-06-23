@@ -5,7 +5,7 @@ export const DISMISS_SETTINGS_SCRIPT = `
   (async () => {
     // Click the backdrop overlay behind the settings card to close entirely.
     // Don't use 'Go Back' — it navigates through tab history instead of closing.
-    const overlay = document.querySelector('.fixed.inset-0[class*="z-[2550]"]');
+    const overlay = document.querySelector('.fixed.inset-0[class*="z-[5000]"]');
     if (overlay) {
       // The backdrop is the overlay itself; clicking outside the card closes settings.
       // Dispatch click at the overlay edges (not on the card).

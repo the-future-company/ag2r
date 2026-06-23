@@ -262,7 +262,7 @@ export const CAPTURE_SCRIPT = `
   // -- 8b. Capture Settings modal (rendered inside #root, not body) --
   let settingsHtml = null;
   try {
-    const settingsOverlay = document.querySelector('#root .fixed.inset-0[class*="z-[2550]"]');
+    const settingsOverlay = document.querySelector('#root .fixed.inset-0[class*="z-[5000]"]');
     if (settingsOverlay && settingsOverlay.getBoundingClientRect().width > 0) {
       // Find the settings content container inside the overlay
       const settingsCard = settingsOverlay.querySelector('[class*="max-w-5xl"]') ||

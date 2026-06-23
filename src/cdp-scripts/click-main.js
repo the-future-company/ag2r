@@ -63,7 +63,7 @@ export function buildMainClickScript(safeClickId, safeLabel) {
         }
       } else if (source === 'settings') {
         // Settings overlay: same selector as capture
-        const settingsOverlay = document.querySelector('#root .fixed.inset-0[class*="z-[2550]"]');
+        const settingsOverlay = document.querySelector('#root .fixed.inset-0[class*="z-[5000]"]');
         if (settingsOverlay) {
           root = settingsOverlay.querySelector('[class*="max-w-5xl"]') ||
                  settingsOverlay.querySelector('[class*="rounded-2xl"]') ||
