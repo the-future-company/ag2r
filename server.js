@@ -173,8 +173,9 @@ async function sendPushToAll(payload) {
 // Check attention state and send push notifications
 function checkAttentionState(snapshot) {
   // Notification URL: prefer TUNNEL_URL (stable, configured by user) over
-  // publicOrigin (fragile, lost on server restart, set from last subscribe request)
-  const url = (TUNNEL_ENABLED && TUNNEL_URL) ? TUNNEL_URL : publicOrigin || `https://localhost:${PORT}`;
+  // publicOrigin (fragile, lost on server restart, set from last subscribe request).
+  // TUNNEL_URL is used whenever configured — TUNNEL_ENABLED only controls proxy trust.
+  const url = TUNNEL_URL || publicOrigin || `https://localhost:${PORT}`;
   const sidebarUrl = url + (url.includes('?') ? '&' : '?') + 'sidebar=open';
 
   // 1. Active conversation permission banner (existing behavior)
@@ -1674,7 +1675,7 @@ async function start() {
 
   server.listen(PORT, () => {
     log('Server', `AG2R running on https://localhost:${PORT}`);
-    if (TUNNEL_ENABLED && TUNNEL_URL) {
+    if (TUNNEL_URL) {
       log('Server', `Tunnel URL: ${TUNNEL_URL}`);
     }
     startSession();
