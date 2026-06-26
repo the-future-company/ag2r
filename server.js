@@ -93,6 +93,8 @@ const LEGACY_VAPID_KEYS_PATH = path.join(__dirname, 'vapid-keys.json');
 const PUSH_SUBS_PATH = getConfigPath('push-subscriptions.json');
 const pushSubscriptions = new Map(); // endpoint → PushSubscription
 let lastPermissionState = false; // tracks whether permission banner was showing
+let lastPermissionNotifyTime = 0; // timestamp of last permission push (for cooldown)
+const PERMISSION_COOLDOWN_MS = 2 * 60 * 1000; // 2 min — collapses rapid-fire command sequences
 const notifiedAttentionIds = new Set(); // conversation IDs we've already notified about
 let lastAttentionReminderTime = Date.now(); // for 2-hour reminder reset
 const ATTENTION_REMINDER_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -177,22 +179,32 @@ function checkAttentionState(snapshot) {
   // TUNNEL_URL is used whenever configured — TUNNEL_ENABLED only controls proxy trust.
   const url = TUNNEL_URL || publicOrigin || `https://localhost:${PORT}`;
   const sidebarUrl = url + (url.includes('?') ? '&' : '?') + 'sidebar=open';
+  const now = Date.now();
 
-  // 1. Active conversation permission banner (existing behavior)
+  // 1. Active conversation permission banner
   const hasPermission = !!snapshot.permissionHtml;
   if (hasPermission && !lastPermissionState) {
-    sendPushToAll({
-      title: 'AG2R — Permission needed',
-      body: 'Session is waiting for your approval',
-      url,
-      tag: 'ag2r-permission',
-    });
-    track('push_notification_sent', { reason: 'permission' });
+    if (now - lastPermissionNotifyTime >= PERMISSION_COOLDOWN_MS) {
+      sendPushToAll({
+        title: 'AG2R',
+        body: 'A command needs your approval',
+        url,
+        tag: 'ag2r-permission',
+      });
+      lastPermissionNotifyTime = now;
+      track('push_notification_sent', { reason: 'permission' });
+    } else {
+      console.debug('[Push] Permission notification suppressed (cooldown)');
+    }
   }
   lastPermissionState = hasPermission;
 
   // 2. Sidebar-based attention detection (covers ALL conversations)
-  const currentAttentionIds = new Set(snapshot.sidebarAttentionIds || []);
+  // capture.js returns sidebarAttentionItems: [{id, type}] where type is
+  // 'permission' (SVG icon = agent blocked) or 'completed' (just finished).
+  const items = snapshot.sidebarAttentionItems || [];
+  const actionableItems = items.filter(item => item.type !== 'completed');
+  const currentAttentionIds = new Set(actionableItems.map(item => item.id));
   const userIsActive = wsClients.size > 0;
 
   // 2a. Remove notified IDs that are no longer needing attention (user attended to them)
@@ -201,9 +213,9 @@ function checkAttentionState(snapshot) {
   }
 
   // 2b. 2-hour reminder: clear notified set so forgotten conversations re-trigger
-  if (Date.now() - lastAttentionReminderTime > ATTENTION_REMINDER_INTERVAL_MS) {
+  if (now - lastAttentionReminderTime > ATTENTION_REMINDER_INTERVAL_MS) {
     notifiedAttentionIds.clear();
-    lastAttentionReminderTime = Date.now();
+    lastAttentionReminderTime = now;
   }
 
   // 2c. Find new attention IDs we haven't notified about yet
@@ -212,16 +224,23 @@ function checkAttentionState(snapshot) {
     if (!notifiedAttentionIds.has(id)) newIds.push(id);
   }
 
-  // 2d. If user is away and there are new attention items, notify
+  // 2d. If user is away and there are new actionable items, notify (with cooldown)
   if (!userIsActive && newIds.length > 0) {
-    for (const id of newIds) notifiedAttentionIds.add(id);
-    sendPushToAll({
-      title: 'AG2R',
-      body: 'An agent needs your attention',
-      url: sidebarUrl,
-      tag: 'ag2r-attention',
-    });
-    track('push_notification_sent', { reason: 'sidebar_attention', newCount: newIds.length });
+    if (now - lastPermissionNotifyTime >= PERMISSION_COOLDOWN_MS) {
+      for (const id of newIds) notifiedAttentionIds.add(id);
+      sendPushToAll({
+        title: 'AG2R',
+        body: 'A command needs your approval',
+        url: sidebarUrl,
+        tag: 'ag2r-attention',
+      });
+      lastPermissionNotifyTime = now;
+      track('push_notification_sent', { reason: 'sidebar_attention', newCount: newIds.length });
+    } else {
+      // Still mark as notified to avoid re-checking on next poll
+      for (const id of newIds) notifiedAttentionIds.add(id);
+      console.debug('[Push] Sidebar attention notification suppressed (cooldown)');
+    }
   }
 }
 

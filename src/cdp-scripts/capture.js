@@ -165,7 +165,7 @@ export const CAPTURE_SCRIPT = `
 
   // -- 14. Capture LEFT sidebar (bg-sidebar) --
   let leftSidebarHtml = null;
-  let sidebarAttentionIds = [];
+  let sidebarAttentionItems = [];
   try {
     const leftRoot = document.querySelector('.bg-sidebar');
     if (leftRoot && leftRoot.offsetParent !== null) {
@@ -173,8 +173,12 @@ export const CAPTURE_SCRIPT = `
       const leftClone = leftRoot.cloneNode(true);
       untagAll(leftTagged);
       leftSidebarHtml = leftClone.outerHTML;
-      // Extract conversation IDs that need attention (unread/permission)
+      // Extract conversation IDs that need attention, classified by type.
+      // AG uses different status indicators in the sidebar:
+      //   - SVG icon + animate-unread-ping → agent needs intervention (e.g., command permission)
+      //   - Simple CSS dot (no SVG) → agent just finished (no intervention needed)
       // Each ping dot is inside a sidebar item whose descendant has data-testid="convo-pill-<uuid>"
+      const seenIds = new Set();
       leftRoot.querySelectorAll('.animate-unread-ping').forEach(ping => {
         // Walk up to the sidebar item (role="button"), then find the convo-pill testid
         let el = ping;
@@ -182,7 +186,19 @@ export const CAPTURE_SCRIPT = `
           const pill = el.querySelector('[data-testid^="convo-pill-"]');
           if (pill) {
             const id = pill.getAttribute('data-testid').replace('convo-pill-', '');
-            if (id && !sidebarAttentionIds.includes(id)) sidebarAttentionIds.push(id);
+            if (id && !seenIds.has(id)) {
+              seenIds.add(id);
+              // Classify attention type by checking for SVG icon near the ping.
+              // The ping lives inside a status container (group-hover:invisible div).
+              // If that container has an SVG, the agent needs intervention.
+              let statusContainer = ping;
+              for (let j = 0; j < 5 && statusContainer; j++) {
+                if ((statusContainer.getAttribute('class') || '').includes('group-hover:invisible')) break;
+                statusContainer = statusContainer.parentElement;
+              }
+              const hasSvgIcon = statusContainer ? !!statusContainer.querySelector('svg') : false;
+              sidebarAttentionItems.push({ id, type: hasSvgIcon ? 'permission' : 'completed' });
+            }
             break;
           }
           el = el.parentElement;
@@ -473,6 +489,6 @@ export const CAPTURE_SCRIPT = `
     }
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarAttentionIds, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarAttentionItems, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
 })()
 `;
