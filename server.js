@@ -44,7 +44,7 @@ import { EXPAND_LEFT_SIDEBAR_SCRIPT } from './src/cdp-scripts/expand-left-sideba
 import { buildCopyResponseScript } from './src/cdp-scripts/copy-response.js';
 import { DISMISS_SCHEDULED_TASKS_SCRIPT } from './src/cdp-scripts/dismiss-scheduled-tasks.js';
 import { DISMISS_SETTINGS_SCRIPT } from './src/cdp-scripts/dismiss-settings.js';
-import { OPEN_RIGHT_SIDEBAR_SCRIPT } from './src/cdp-scripts/open-right-sidebar.js';
+
 import { CLOSE_RIGHT_SIDEBAR_SCRIPT } from './src/cdp-scripts/close-right-sidebar.js';
 import { SELECT_OVERVIEW_TAB_SCRIPT } from './src/cdp-scripts/select-overview-tab.js';
 import { buildProxyImageScript } from './src/cdp-scripts/proxy-image.js';
@@ -984,20 +984,12 @@ app.post('/toggle-sidebar', async (req, res) => {
     return res.status(503).json({ error: 'CDP not connected' });
   }
   try {
-    // Check if sidebar is currently open
-    const isOpen = await evaluateInBrowser(`
+    await evaluateInBrowser(`
       (() => {
-        const btn = document.querySelector('[data-testid="close-aux-pane"]');
-        return btn ? btn.offsetParent !== null && btn.getBoundingClientRect().width > 0 : false;
+        const btn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+        if (btn) btn.click();
       })()
     `);
-    if (isOpen) {
-      await evaluateInBrowser(CLOSE_RIGHT_SIDEBAR_SCRIPT);
-      log('ToggleSidebar', 'closed');
-    } else {
-      await evaluateInBrowser(OPEN_RIGHT_SIDEBAR_SCRIPT);
-      log('ToggleSidebar', 'opened');
-    }
     res.json({ ok: true });
   } catch (e) {
     console.debug('[ToggleSidebar] Error:', e.message);

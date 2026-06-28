@@ -27,9 +27,9 @@ export function buildMainClickScript(safeClickId, safeLabel) {
       } else if (source === 'left') {
         root = document.querySelector('.bg-sidebar');
       } else if (source === 'right') {
-        // Anchor-based: find via tab-id buttons or close-aux-pane
+        // Anchor-based: find via tab-id buttons or toggle-aux-sidebar
         const tabBtn = document.querySelector('[data-tab-id="overview"], [data-tab-id="review"]');
-        const anchor = tabBtn || document.querySelector('[data-testid="close-aux-pane"]');
+        const anchor = tabBtn || document.querySelector('[data-testid="toggle-aux-sidebar"]');
         if (anchor) {
           let el = anchor;
           for (let i = 0; i < 10 && el; i++) {
