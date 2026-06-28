@@ -229,11 +229,11 @@ export const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Sidebar signature error:', e.message);
   }
   // Sidebar open state: true when AG's right sidebar panel is visible.
-  // AG keeps close-aux-pane in the DOM even when sidebar is hidden —
-  // check if it's actually visible (has layout dimensions).
-  const closePaneBtn = document.querySelector('[data-testid="close-aux-pane"]');
-  const isSidebarOpen = closePaneBtn ? closePaneBtn.offsetParent !== null && closePaneBtn.getBoundingClientRect().width > 0 : false;
-  console.debug('[SidebarMirror:capture] isSidebarOpen:', isSidebarOpen, 'btn:', closePaneBtn ? 'exists' : 'null', 'offsetParent:', closePaneBtn?.offsetParent?.tagName || 'null', 'width:', closePaneBtn?.getBoundingClientRect().width);
+  // AG keeps the sidebar DOM (including data-tab-id buttons) even when closed —
+  // it slides it offscreen. Detect by checking if tab buttons are within the viewport.
+  const firstTab = document.querySelector('[data-tab-id]');
+  const isSidebarOpen = firstTab ? firstTab.getBoundingClientRect().left < window.innerWidth : false;
+  console.debug('[SidebarMirror:capture] isSidebarOpen:', isSidebarOpen, 'tab:', firstTab ? 'exists' : 'null', 'left:', firstTab?.getBoundingClientRect().left, 'vw:', window.innerWidth);
   // -- 8. Capture portal elements (dropdowns, dialogs) from body --
   // AG renders these outside #root as direct body children.
   let dropdownHtml = null;

@@ -23,9 +23,9 @@ export const RIGHT_SIDEBAR_SCRIPT = `
     }
   }
 
-  // Strategy 2: Find via close-aux-pane button
+  // Strategy 2: Find via toggle-aux-sidebar button
   if (!sidebarRoot) {
-    const closeBtn = document.querySelector('[data-testid="close-aux-pane"]');
+    const closeBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
     if (closeBtn) {
       let el = closeBtn;
       for (let i = 0; i < 10 && el; i++) {
