@@ -7,16 +7,23 @@ self.addEventListener('push', (event) => {
   }
 
   const title = data.title || 'AG2R';
+  const tag = data.tag || 'ag2r-attention';
   const options = {
     body: data.body || 'Session needs your attention',
     icon: '/ag2r-icon.png',
     badge: '/ag2r-badge.png',
-    tag: data.tag,
+    tag,
     data: { url: data.url },
     requireInteraction: true,
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  // Dedup: don't show if a notification with the same tag is already visible
+  event.waitUntil(
+    self.registration.getNotifications({ tag }).then((existing) => {
+      if (existing.length > 0) return; // already showing
+      return self.registration.showNotification(title, options);
+    })
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {
@@ -26,17 +33,15 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      if (url) {
-        const existing = windowClients.find((client) => client.url === url);
-        if (existing) {
-          return existing.focus();
-        }
-        return clients.openWindow(url);
+      // If an AG2R window is already open, tell it to open the sidebar and focus it
+      if (windowClients.length > 0) {
+        const target = windowClients[0];
+        target.postMessage({ type: 'open-sidebar' });
+        return target.focus();
       }
 
-      if (windowClients.length > 0) {
-        return windowClients[0].focus();
-      }
+      // No open window — open one (with ?sidebar=open in the URL)
+      if (url) return clients.openWindow(url);
     })
   );
 });

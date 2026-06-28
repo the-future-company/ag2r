@@ -190,14 +190,25 @@ export const CAPTURE_SCRIPT = `
               seenIds.add(id);
               // Classify attention type by checking for SVG icon near the ping.
               // The ping lives inside a status container (group-hover:invisible div).
-              // If that container has an SVG, the agent needs intervention.
+              // AG uses Lucide SVG icons to indicate why the agent is blocked:
+              //   - lucide-terminal* → command needs approval
+              //   - lucide-message* → agent has a question
+              //   - other SVG       → generic attention (fallback)
+              //   - no SVG          → agent just finished (completed)
               let statusContainer = ping;
               for (let j = 0; j < 5 && statusContainer; j++) {
                 if ((statusContainer.getAttribute('class') || '').includes('group-hover:invisible')) break;
                 statusContainer = statusContainer.parentElement;
               }
-              const hasSvgIcon = statusContainer ? !!statusContainer.querySelector('svg') : false;
-              sidebarAttentionItems.push({ id, type: hasSvgIcon ? 'permission' : 'completed' });
+              const svgEl = statusContainer ? statusContainer.querySelector('svg') : null;
+              let type = 'completed';
+              if (svgEl) {
+                const svgClass = svgEl.getAttribute('class') || '';
+                if (svgClass.includes('lucide-terminal')) type = 'command';
+                else if (svgClass.includes('lucide-message')) type = 'question';
+                else type = 'permission'; // fallback for any other SVG icon
+              }
+              sidebarAttentionItems.push({ id, type });
             }
             break;
           }

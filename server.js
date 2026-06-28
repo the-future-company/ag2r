@@ -92,12 +92,8 @@ const VAPID_KEYS_PATH = getConfigPath('vapid-keys.json');
 const LEGACY_VAPID_KEYS_PATH = path.join(__dirname, 'vapid-keys.json');
 const PUSH_SUBS_PATH = getConfigPath('push-subscriptions.json');
 const pushSubscriptions = new Map(); // endpoint → PushSubscription
-let lastPermissionState = false; // tracks whether permission banner was showing
-let lastPermissionNotifyTime = 0; // timestamp of last permission push (for cooldown)
-const PERMISSION_COOLDOWN_MS = 2 * 60 * 1000; // 2 min — collapses rapid-fire command sequences
-const notifiedAttentionIds = new Set(); // conversation IDs we've already notified about
-let lastAttentionReminderTime = Date.now(); // for 2-hour reminder reset
-const ATTENTION_REMINDER_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+let lastNotifyTime = 0; // timestamp of last push (for cooldown)
+const NOTIFY_COOLDOWN_MS = 2 * 60 * 1000; // 2 min — collapses rapid-fire command sequences
 let publicOrigin = ''; // set from subscribe request's origin header
 
 // Load or generate VAPID keys on startup
@@ -172,76 +168,41 @@ async function sendPushToAll(payload) {
   log('Push', `Sent to ${pushSubscriptions.size} subscriber(s), removed ${stale.length} stale`);
 }
 
-// Check attention state and send push notifications
+// Check attention state and send push notifications.
+// Simple meta-check: needs attention + user away + cooldown → notify.
+// The service worker handles dedup (won't show if notification already visible).
 function checkAttentionState(snapshot) {
-  // Notification URL: prefer TUNNEL_URL (stable, configured by user) over
-  // publicOrigin (fragile, lost on server restart, set from last subscribe request).
-  // TUNNEL_URL is used whenever configured — TUNNEL_ENABLED only controls proxy trust.
-  const url = TUNNEL_URL || publicOrigin || `https://localhost:${PORT}`;
-  const sidebarUrl = url + (url.includes('?') ? '&' : '?') + 'sidebar=open';
-  const now = Date.now();
-
-  // 1. Active conversation permission banner
+  // 1. Does anything need attention?
   const hasPermission = !!snapshot.permissionHtml;
-  if (hasPermission && !lastPermissionState) {
-    if (now - lastPermissionNotifyTime >= PERMISSION_COOLDOWN_MS) {
-      sendPushToAll({
-        title: 'AG2R',
-        body: 'A command needs your approval',
-        url,
-        tag: 'ag2r-permission',
-      });
-      lastPermissionNotifyTime = now;
-      track('push_notification_sent', { reason: 'permission' });
-    } else {
-      console.debug('[Push] Permission notification suppressed (cooldown)');
-    }
-  }
-  lastPermissionState = hasPermission;
+  const attentionItems = (snapshot.sidebarAttentionItems || [])
+    .filter(item => item.type !== 'completed');
+  if (!hasPermission && attentionItems.length === 0) return;
 
-  // 2. Sidebar-based attention detection (covers ALL conversations)
-  // capture.js returns sidebarAttentionItems: [{id, type}] where type is
-  // 'permission' (SVG icon = agent blocked) or 'completed' (just finished).
-  const items = snapshot.sidebarAttentionItems || [];
-  const actionableItems = items.filter(item => item.type !== 'completed');
-  const currentAttentionIds = new Set(actionableItems.map(item => item.id));
-  const userIsActive = wsClients.size > 0;
+  // 2. Is the user on the app?
+  if (wsClients.size > 0) return;
 
-  // 2a. Remove notified IDs that are no longer needing attention (user attended to them)
-  for (const id of notifiedAttentionIds) {
-    if (!currentAttentionIds.has(id)) notifiedAttentionIds.delete(id);
-  }
+  // 3. Rate-limit pushes (cooldown)
+  const now = Date.now();
+  if (now - lastNotifyTime < NOTIFY_COOLDOWN_MS) return;
+  lastNotifyTime = now;
 
-  // 2b. 2-hour reminder: clear notified set so forgotten conversations re-trigger
-  if (now - lastAttentionReminderTime > ATTENTION_REMINDER_INTERVAL_MS) {
-    notifiedAttentionIds.clear();
-    lastAttentionReminderTime = now;
-  }
+  // 4. Pick notification body based on the dominant attention type.
+  // Priority: question > command > generic. If only permissionHtml, use command.
+  const types = new Set(attentionItems.map(item => item.type));
+  let body = 'A conversation needs your attention';
+  if (types.has('question')) body = 'An agent has a question for you';
+  else if (types.has('command') || hasPermission) body = 'A command needs your approval';
 
-  // 2c. Find new attention IDs we haven't notified about yet
-  const newIds = [];
-  for (const id of currentAttentionIds) {
-    if (!notifiedAttentionIds.has(id)) newIds.push(id);
-  }
-
-  // 2d. If user is away and there are new actionable items, notify (with cooldown)
-  if (!userIsActive && newIds.length > 0) {
-    if (now - lastPermissionNotifyTime >= PERMISSION_COOLDOWN_MS) {
-      for (const id of newIds) notifiedAttentionIds.add(id);
-      sendPushToAll({
-        title: 'AG2R',
-        body: 'A command needs your approval',
-        url: sidebarUrl,
-        tag: 'ag2r-attention',
-      });
-      lastPermissionNotifyTime = now;
-      track('push_notification_sent', { reason: 'sidebar_attention', newCount: newIds.length });
-    } else {
-      // Still mark as notified to avoid re-checking on next poll
-      for (const id of newIds) notifiedAttentionIds.add(id);
-      console.debug('[Push] Sidebar attention notification suppressed (cooldown)');
-    }
-  }
+  // 5. Send — SW handles dedup (won't show if notification already visible)
+  const base = TUNNEL_URL || publicOrigin || `https://localhost:${PORT}`;
+  const url = base + (base.includes('?') ? '&' : '?') + 'sidebar=open';
+  sendPushToAll({
+    title: 'AG2R',
+    body,
+    url,
+    tag: 'ag2r-attention',
+  });
+  track('push_notification_sent', {});
 }
 
 // ─────────────────────────────────────────────

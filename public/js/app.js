@@ -2895,3 +2895,12 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 initPushNotifications();
+
+// Listen for postMessage from service worker (notification click → open sidebar)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'open-sidebar') {
+      openLeftSidebar();
+    }
+  });
+}
