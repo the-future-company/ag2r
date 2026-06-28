@@ -250,6 +250,27 @@ If you have a dedicated tunnel with a stable URL, cron-based watchdog scripts ca
 
 ---
 
+## 🌿 Branches
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Stable — works with the AG version shown in the badge above |
+| `next` | Bleeding edge — being tested against an upcoming AG version |
+
+When a new Antigravity version ships, `next` is used as the integration branch to adapt AG2R. Individual fixes branch off `next` and merge back into it. Once stable, `next` gets merged into `main` and the compatibility badge is updated.
+
+**Want early access?**
+
+```bash
+git checkout next
+git pull origin next
+```
+
+> [!WARNING]
+> The `next` branch may be unstable. Use `main` for a reliable experience.
+
+---
+
 ## 🤖 For AI Agents
 
 > Start with **[ONBOARDING.md](./ONBOARDING.md)** for the full technical reference (architecture, file maps, workflows). Your behavioral rules are in **[GEMINI.md](./GEMINI.md)**.
