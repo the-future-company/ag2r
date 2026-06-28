@@ -1269,6 +1269,13 @@ body {
   display: none !important;
 }
 
+/* AG's file viewer uses container-type:size which collapses to 0px in AG2R's
+   rendering context (size containment makes intrinsic size ignore children).
+   Override to normal so content flows naturally in the scrollable sidebar. */
+#right-sidebar-content [style*="container-type"] {
+  container-type: normal !important;
+}
+
 /* Mobile copy button for code blocks */
 .mobile-copy-btn {
   position: absolute;
