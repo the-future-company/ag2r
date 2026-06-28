@@ -246,7 +246,22 @@ Useful for diagnosing mobile-specific bugs (double-submission, click failures) w
 
 ## 🔄 Keep It Running (Optional)
 
-If you have a dedicated tunnel with a stable URL, cron-based watchdog scripts can keep AG2R and the tunnel alive and auto-update from `origin/main`. See `scripts/` for the available watchdogs (`main-watchdog.sh`, `tunnel-watchdog.sh`).
+A watchdog script can keep AG2R running and auto-update from the branch you're on. It detects the current branch, pulls new commits, and restarts the server when code changes.
+
+```bash
+# Run once to start (or add to cron for auto-recovery)
+AG2R_PORT=3000 ./scripts/watchdog.sh
+```
+
+**Cron setup** (checks every 5 minutes):
+
+```bash
+crontab -e
+# Add this line:
+*/5 * * * * cd ~/ag2r && AG2R_PORT=3000 ./scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
+```
+
+The `tunnel-watchdog.sh` script can similarly keep a Cloudflare tunnel alive.
 
 ---
 

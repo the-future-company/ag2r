@@ -6,3 +6,10 @@ certs/
 .ag2r-telemetry-id
 _tools/
 vapid-keys.json
+
+# Dev-only (not user-facing)
+hub.js
+scripts/hub-watchdog.sh
+scripts/main-watchdog.sh
+scripts/next-watchdog.sh
+scripts/ag-watchdog.sh
