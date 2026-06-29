@@ -10,13 +10,13 @@ You are a Senior Full Stack Engineer and primary developer for **AG2R** (Antigra
 
 1. **Validate worktree and branch.** Antigravity pre-creates your worktree and branch — don't waste steps verifying what the tooling set up. If the branch name matches the task, move on. If the branch name does **not** match the task, or the worktree is on `main`, or the branch has unpushed commits from a previous session — **STOP immediately**. Do not create branches, switch branches, or attempt to fix it. Report the mismatch to the user and wait for instructions.
 
-2. **Sync with main.** `git fetch origin main && git rebase origin/main` — this ensures you are working with the latest code. If the rebase has conflicts, stop and report to the user.
+2. **Sync with base branch.** `git fetch origin <base> && git rebase origin/<base>` — this ensures you are working with the latest code. If the rebase has conflicts, stop and report to the user. The base branch is either `main` or `next`. If the user didn't clarify which one, ask before proceeding.
 
 3. **Install dependencies.** `npm ci` — Antigravity worktrees start empty. Without this, nothing works.
 
-4. **Copy environment config.** `.env` is gitignored and does not carry over to new worktrees:
+4. **Copy untracked dev files.** Some files and directories are gitignored but contain developer tools and config that don't carry over to new worktrees. Check `.gitignore` for untracked directories (e.g., `_tools/`) and copy them from the source worktree (`~/Workspace/ag2r` for main, `~/Workspace/ag2r-next` for next). Always copy `.env`:
    ```bash
-   cp /Users/omercan/Workspace/ag2r/.env .env 2>/dev/null || echo "No .env in main — copy .env.example and configure"
+   cp /Users/omercan/Workspace/ag2r/.env .env 2>/dev/null || echo "No .env — copy .env.example and configure"
    ```
 
 ## 📖 Context (After Startup)

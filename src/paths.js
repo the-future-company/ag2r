@@ -11,26 +11,32 @@ import os from 'os';
 export const MAIN_PORT = 3000;
 
 /**
- * Whether the current server instance is a dev/test server.
- * Production runs on MAIN_PORT (3000); dev servers use 3001–3099.
- * Reused by telemetry (isDev flag) and push notifications (skip in dev).
+ * Named environment for config namespacing and PWA identity.
+ * 'production' (default) uses ~/.config/ag2r/, others use ~/.config/ag2r-{env}/.
  */
-export function isDev() {
-  const port = parseInt(process.env.PORT || String(MAIN_PORT));
-  return port !== MAIN_PORT;
+export const AG2R_ENV = process.env.AG2R_ENV || 'production';
+
+/**
+ * Whether the given origin is a dev/test environment.
+ * Checks the actual URL the user accesses (from HTTP Origin header).
+ * Dev origins get notifications and subscription persistence skipped.
+ */
+export function isDev(origin) {
+  if (!origin) return true;
+  return /localhost|dev-ag2r/i.test(origin);
 }
 
 /**
  * Resolved path to the persistent config directory.
- * - macOS/Linux: ~/.config/ag2r/ (respects XDG_CONFIG_HOME)
- * - Windows: %APPDATA%/ag2r/
+ * Production: ~/.config/ag2r/ (backward compatible)
+ * Other envs: ~/.config/ag2r-{env}/ (e.g., ~/.config/ag2r-next/)
+ * Windows: %APPDATA%/ag2r[-env]/
  */
-export const CONFIG_DIR = path.join(
-  os.platform() === 'win32'
-    ? (process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'))
-    : (process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')),
-  'ag2r'
-);
+const configBase = os.platform() === 'win32'
+  ? (process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'))
+  : (process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'));
+const configDirName = AG2R_ENV === 'production' ? 'ag2r' : `ag2r-${AG2R_ENV}`;
+export const CONFIG_DIR = path.join(configBase, configDirName);
 
 /**
  * Returns the full path to a file within the config directory.

@@ -18,7 +18,7 @@ import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { track, startSession, endSession } from './src/telemetry.js';
 import { fetchFlags, getFlags } from './src/feature-flags.js';
-import { getConfigPath, ensureConfigDir, isDev, MAIN_PORT } from './src/paths.js';
+import { getConfigPath, ensureConfigDir, isDev, AG2R_ENV } from './src/paths.js';
 
 // CDP scripts — browser-side JS evaluated via Runtime.evaluate
 // See src/cdp-scripts/ for the actual script content
@@ -146,9 +146,9 @@ function saveSubscriptions() {
 const vapidKeys = initVapid();
 loadSubscriptions();
 
-// Send push notification to all subscribers (production only — dev servers skip)
+// Send push notification to all subscribers (dev origins skip)
 async function sendPushToAll(payload) {
-  if (isDev()) return;
+  if (isDev(publicOrigin)) return;
   if (pushSubscriptions.size === 0) return;
   const body = JSON.stringify(payload);
   const stale = [];
@@ -860,6 +860,27 @@ app.use((req, res, next) => {
   return res.status(401).json({ error: 'Unauthorized' });
 });
 
+// --- Dynamic PWA Manifest (varies by AG2R_ENV) ---
+// Served before express.static so it overrides the static manifest.json.
+const isNextEnv = AG2R_ENV === 'next';
+app.get('/manifest.json', (req, res) => {
+  res.json({
+    name: isNextEnv ? 'AG2R Next' : 'AG2R',
+    short_name: isNextEnv ? 'AG2R ⚡' : 'AG2R',
+    description: 'Mobile remote interface for Antigravity AI coding sessions',
+    start_url: '/',
+    display: 'standalone',
+    background_color: '#090e17',
+    theme_color: '#090e17',
+    icons: [{
+      src: isNextEnv ? '/ag2r-icon-next.png' : '/ag2r-icon.png',
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'any maskable',
+    }],
+  });
+});
+
 // --- Static Files (no cache during development) ---
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
@@ -1462,20 +1483,11 @@ app.post('/push/subscribe', (req, res) => {
   if (!subscription?.endpoint) {
     return res.status(400).json({ error: 'Invalid subscription' });
   }
-  // Dev servers must NOT persist subscriptions — the shared config file is read
-  // by the main server, which would then send duplicate notifications to both
-  // the prod and dev-origin service workers. Accept silently so the client
-  // doesn't error.
-  if (isDev()) {
-    log('Push', 'Dev server — skipping subscription persist');
-    return res.json({ ok: true });
-  }
-  // Reject subscriptions from dev-hub origins to prevent duplicate notifications.
-  // The dev-ag2r PWA has its own service worker + push subscription; if we accept
-  // it, the user gets one notification per origin.
+  // Dev origins (localhost, dev-ag2r) skip subscription persistence.
+  // Each environment has its own config dir, so no cross-talk risk.
   const origin = req.get('origin') || req.get('referer') || '';
-  if (/dev-ag2r/i.test(origin)) {
-    log('Push', `Rejected dev-origin subscription (origin: ${origin})`);
+  if (isDev(origin)) {
+    log('Push', `Dev origin — skipping subscription persist (${origin})`);
     return res.json({ ok: true });
   }
   pushSubscriptions.set(subscription.endpoint, subscription);

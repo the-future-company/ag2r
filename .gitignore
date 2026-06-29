@@ -1,8 +1,13 @@
+# Dependencies
 node_modules/
+
+# Dev tools & config (copy from source worktree for new worktrees)
+_tools/
 certs/
 .env
+
+# Generated / runtime
 *.log
 .DS_Store
 .ag2r-telemetry-id
-_tools/
 vapid-keys.json
