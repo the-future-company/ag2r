@@ -885,6 +885,17 @@ app.get('/manifest.json', (req, res) => {
   });
 });
 
+// --- Dynamic index.html (injects env-specific icon and app name) ---
+// Served before express.static so it overrides the static index.html.
+const indexHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
+app.get('/', (req, res) => {
+  const html = indexHtml
+    .replaceAll('/ag2r-icon.png', appIconPath)
+    .replaceAll('<title>AG2R</title>', `<title>${appName}</title>`)
+    .replace('content="AG2R"', `content="${appName}"`);
+  res.type('html').send(html);
+});
+
 // --- Static Files (no cache during development) ---
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
