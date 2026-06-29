@@ -67,9 +67,16 @@ if [ -f "$BOOT_COMMIT_FILE" ]; then
   BOOT_COMMIT=$(cat "$BOOT_COMMIT_FILE" 2>/dev/null || true)
 fi
 
-# If no boot commit recorded, record current HEAD and assume fresh
+# If no boot commit recorded but server IS running, it may be running code from
+# a different branch (user did git checkout). Restart to ensure correct code.
 if [ -z "$BOOT_COMMIT" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] No boot commit for branch $BRANCH, restarting to ensure correct code..."
+  npm ci --silent 2>&1 || true
+  kill "$SERVER_PID" 2>/dev/null || true
+  sleep 2
+  PORT="${PORT}" nohup node server.js >> "$LOG" 2>&1 &
   git rev-parse HEAD > "$BOOT_COMMIT_FILE" 2>/dev/null || true
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server restarted with PID $! on branch $BRANCH"
   exit 0
 fi
 

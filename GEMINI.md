@@ -121,7 +121,8 @@ gh issue list --label "bug" --state open
 - **Electron process detection on macOS.** `pgrep -x Antigravity` does NOT work — macOS Electron apps report the full binary path. Use `ps aux | grep "[A]ntigravity.app/Contents/MacOS/Antigravity"` instead.
 - **CDP port is auto-discovered.** AG app uses `--remote-debugging-port=0` (random port). AG2R reads the actual port from `~/Library/Application Support/Antigravity/DevToolsActivePort` at connect time, falling back to `CDP_PORT` env var.
 - **iOS push requires PWA on home screen.** Web Push on iOS only works when the user has installed the PWA via "Add to Home Screen" (iOS 16.4+). Regular Safari tabs cannot receive push notifications.
-- **Push subscriptions persist in `~/.config/ag2r/`.** Both `vapid-keys.json` and `push-subscriptions.json` live in the shared config dir (see `src/paths.js`). Notifications survive server restarts.
+- **Push config dir is namespaced by `AG2R_ENV`.** Config files (`vapid-keys.json`, `push-subscriptions.json`) live in `~/.config/ag2r/` (production) or `~/.config/ag2r-{env}/` (other envs). See `src/paths.js` → `getEnv()`.
+- **Branch switching is auto-detected by the watchdog.** After `git checkout <branch>`, the next watchdog cycle restarts the server with correct code. No manual restart needed. `.env` is gitignored and persists across switches.
 
 ## 🔄 Continuous Learning
 

@@ -18,7 +18,7 @@ import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { track, startSession, endSession } from './src/telemetry.js';
 import { fetchFlags, getFlags } from './src/feature-flags.js';
-import { getConfigPath, ensureConfigDir, isDev, AG2R_ENV } from './src/paths.js';
+import { getConfigPath, ensureConfigDir, getEnv } from './src/paths.js';
 
 // CDP scripts — browser-side JS evaluated via Runtime.evaluate
 // See src/cdp-scripts/ for the actual script content
@@ -67,6 +67,13 @@ const TUNNEL_URL = process.env.TUNNEL_URL || '';
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
 const DEBUG_MODE = process.env.AG2R_DEBUG === '1';
 
+// === PWA Identity (derived from AG2R_ENV, no hardcoded env names) ===
+const _env = getEnv();
+const appName = _env === 'production' ? 'AG2R' : `AG2R ${_env.charAt(0).toUpperCase() + _env.slice(1)}`;
+const appIconPath = _env !== 'production' && fs.existsSync(path.join(__dirname, 'public', `ag2r-icon-${_env}.png`))
+  ? `/ag2r-icon-${_env}.png`
+  : '/ag2r-icon.png';
+
 // === Multer (file upload) ===
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -91,10 +98,9 @@ const wsClients = new Set();
 const VAPID_KEYS_PATH = getConfigPath('vapid-keys.json');
 const LEGACY_VAPID_KEYS_PATH = path.join(__dirname, 'vapid-keys.json');
 const PUSH_SUBS_PATH = getConfigPath('push-subscriptions.json');
-const pushSubscriptions = new Map(); // endpoint → PushSubscription
+const pushSubscriptions = new Map(); // endpoint → { ...PushSubscription, origin }
 let lastNotifyTime = 0; // timestamp of last push (for cooldown)
 const NOTIFY_COOLDOWN_MS = 2 * 60 * 1000; // 2 min — collapses rapid-fire command sequences
-let publicOrigin = ''; // set from subscribe request's origin header
 
 // Load or generate VAPID keys on startup
 function initVapid() {
@@ -146,13 +152,15 @@ function saveSubscriptions() {
 const vapidKeys = initVapid();
 loadSubscriptions();
 
-// Send push notification to all subscribers (dev origins skip)
+// Send push notification to all subscribers
 async function sendPushToAll(payload) {
-  if (isDev(publicOrigin)) return;
   if (pushSubscriptions.size === 0) return;
-  const body = JSON.stringify(payload);
   const stale = [];
   for (const [endpoint, sub] of pushSubscriptions) {
+    // Resolve notification click URL per-subscription from stored origin
+    const base = sub.origin || TUNNEL_URL || `https://localhost:${PORT}`;
+    const url = base + (base.includes('?') ? '&' : '?') + 'sidebar=open';
+    const body = JSON.stringify({ ...payload, url, icon: appIconPath });
     try {
       await webpush.sendNotification(sub, body);
     } catch (err) {
@@ -194,12 +202,9 @@ function checkAttentionState(snapshot) {
   else if (types.has('command') || hasPermission) body = 'A command needs your approval';
 
   // 5. Send — SW handles dedup (won't show if notification already visible)
-  const base = TUNNEL_URL || publicOrigin || `https://localhost:${PORT}`;
-  const url = base + (base.includes('?') ? '&' : '?') + 'sidebar=open';
   sendPushToAll({
-    title: 'AG2R',
+    title: appName,
     body,
-    url,
     tag: 'ag2r-attention',
   });
   track('push_notification_sent', {});
@@ -862,18 +867,17 @@ app.use((req, res, next) => {
 
 // --- Dynamic PWA Manifest (varies by AG2R_ENV) ---
 // Served before express.static so it overrides the static manifest.json.
-const isNextEnv = AG2R_ENV === 'next';
 app.get('/manifest.json', (req, res) => {
   res.json({
-    name: isNextEnv ? 'AG2R Next' : 'AG2R',
-    short_name: isNextEnv ? 'AG2R ⚡' : 'AG2R',
+    name: appName,
+    short_name: appName,
     description: 'Mobile remote interface for Antigravity AI coding sessions',
     start_url: '/',
     display: 'standalone',
     background_color: '#090e17',
     theme_color: '#090e17',
     icons: [{
-      src: isNextEnv ? '/ag2r-icon-next.png' : '/ag2r-icon.png',
+      src: appIconPath,
       sizes: '512x512',
       type: 'image/png',
       purpose: 'any maskable',
@@ -1483,17 +1487,9 @@ app.post('/push/subscribe', (req, res) => {
   if (!subscription?.endpoint) {
     return res.status(400).json({ error: 'Invalid subscription' });
   }
-  // Dev origins (localhost, dev-ag2r) skip subscription persistence.
-  // Each environment has its own config dir, so no cross-talk risk.
-  const origin = req.get('origin') || req.get('referer') || '';
-  if (isDev(origin)) {
-    log('Push', `Dev origin — skipping subscription persist (${origin})`);
-    return res.json({ ok: true });
-  }
-  pushSubscriptions.set(subscription.endpoint, subscription);
+  const origin = (req.get('origin') || req.get('referer') || '').replace(/\/$/, '');
+  pushSubscriptions.set(subscription.endpoint, { ...subscription, origin });
   saveSubscriptions();
-  // Track the public origin for notification click URLs
-  if (origin) publicOrigin = origin.replace(/\/$/, '');
   log('Push', `Subscribed (${pushSubscriptions.size} total) from ${origin}`);
   res.json({ ok: true });
 });
@@ -1658,7 +1654,7 @@ async function start() {
   await flagsReady;
 
   server.listen(PORT, () => {
-    log('Server', `AG2R running on https://localhost:${PORT}`);
+    log('Server', `${appName} (env: ${getEnv()}) running on https://localhost:${PORT}`);
     if (TUNNEL_URL) {
       log('Server', `Tunnel URL: ${TUNNEL_URL}`);
     }

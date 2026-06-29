@@ -10,7 +10,7 @@ self.addEventListener('push', (event) => {
   const tag = data.tag || 'ag2r-attention';
   const options = {
     body: data.body || 'Session needs your attention',
-    icon: '/ag2r-icon.png',
+    icon: data.icon || '/ag2r-icon.png',
     badge: '/ag2r-badge.png',
     tag,
     data: { url: data.url },

@@ -1,41 +1,31 @@
-// src/paths.js — Centralized persistent config directory
-// All worktrees and server instances share ~/.config/ag2r/ (XDG convention)
-// so VAPID keys, push subscriptions, and install IDs stay consistent.
-// Shared config directory: ~/.config/ag2r/ — persists across server restarts
+// src/paths.js — Centralized environment detection and persistent config directory.
+// Config directory is namespaced by AG2R_ENV to isolate parallel deployments.
+// Default ('production') uses ~/.config/ag2r/; other envs use ~/.config/ag2r-{env}/.
 
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-/** Port reserved for the production main server. */
-export const MAIN_PORT = 3000;
-
 /**
- * Named environment for config namespacing and PWA identity.
- * 'production' (default) uses ~/.config/ag2r/, others use ~/.config/ag2r-{env}/.
+ * Returns the environment name for this AG2R instance.
+ * Controls config directory namespace and PWA identity.
+ * Defaults to 'production' — set AG2R_ENV for parallel deployments.
  */
-export const AG2R_ENV = process.env.AG2R_ENV || 'production';
-
-/**
- * Whether the given origin is a dev/test environment.
- * Checks the actual URL the user accesses (from HTTP Origin header).
- * Dev origins get notifications and subscription persistence skipped.
- */
-export function isDev(origin) {
-  if (!origin) return true;
-  return /localhost|dev-ag2r/i.test(origin);
+export function getEnv() {
+  return process.env.AG2R_ENV || 'production';
 }
 
 /**
  * Resolved path to the persistent config directory.
- * Production: ~/.config/ag2r/ (backward compatible)
- * Other envs: ~/.config/ag2r-{env}/ (e.g., ~/.config/ag2r-next/)
- * Windows: %APPDATA%/ag2r[-env]/
+ * Production: ~/.config/ag2r/
+ * Other envs: ~/.config/ag2r-{env}/
+ * Respects XDG_CONFIG_HOME on Linux/macOS, %APPDATA% on Windows.
  */
 const configBase = os.platform() === 'win32'
   ? (process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'))
   : (process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'));
-const configDirName = AG2R_ENV === 'production' ? 'ag2r' : `ag2r-${AG2R_ENV}`;
+const env = getEnv();
+const configDirName = env === 'production' ? 'ag2r' : `ag2r-${env}`;
 export const CONFIG_DIR = path.join(configBase, configDirName);
 
 /**

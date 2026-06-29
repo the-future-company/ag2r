@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { execSync } from 'child_process';
 import os from 'os';
-import { CONFIG_DIR, ensureConfigDir, AG2R_ENV } from './paths.js';
+import { CONFIG_DIR, ensureConfigDir, getEnv } from './paths.js';
 import { loadFirebaseConfig } from './firebase-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -142,7 +142,7 @@ function buildFirestoreDoc(event, payload) {
   const doc = {
     event,
     installId,
-    isDev: AG2R_ENV !== 'production',
+    isDev: getEnv() !== 'production',
     ...appMeta,
     ...payload,
     timestamp: new Date().toISOString(),

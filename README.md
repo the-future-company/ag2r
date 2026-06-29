@@ -28,7 +28,7 @@ A lightweight mobile remote interface for monitoring and interacting with [Antig
 - Node.js 18+
 - Antigravity launched with CDP enabled: `open -a Antigravity --args --remote-debugging-port=9000`
 
-### Setup
+### Quick Start
 
 ```bash
 git clone git@github.com:the-future-company/ag2r.git
@@ -60,7 +60,7 @@ No password needed for local-only use. Your phone must be on the same Wi-Fi as t
 
 ### Option 2: Remote Access (Any Network)
 
-Use a [Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to access AG2R from anywhere — no port forwarding needed.
+Use a [Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) or preferred tunneling setup to access AG2R from anywhere — no port forwarding needed.
 
 > [!WARNING]
 > **Set a strong password before exposing AG2R to the internet.** Edit `.env`:
@@ -68,7 +68,6 @@ Use a [Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/conne
 > ```bash
 > AUTH_ENABLED=true
 > APP_PASSWORD=your-strong-password-here
-> SESSION_SECRET=$(openssl rand -hex 24)
 > ```
 
 **Step 1 — Start the tunnel** (gets you a public URL):
@@ -94,8 +93,9 @@ node server.js
 ```
 
 Open the tunnel URL on your phone. The URL changes each time you restart the tunnel.
+---
 
-#### Stable URL with your own domain (optional)
+### Option 3: Stable URL with your own domain
 
 If you have a domain on Cloudflare, you can set up a permanent tunnel so the URL never changes:
 
@@ -120,8 +120,6 @@ ingress:
 ```
 
 Set `TUNNEL_URL=https://ag2r.yourdomain.com` in `.env`, then run `node server.js` and `cloudflared tunnel run ag2r` in separate terminals.
-
----
 
 ## 📱 Features
 
@@ -224,26 +222,6 @@ Get notified on your phone when the session needs permission approval — even w
 
 ---
 
-## 🐛 Debug Mode
-
-Start the server with `AG2R_DEBUG=1` to enable verbose logging:
-
-```bash
-AG2R_DEBUG=1 node server.js
-```
-
-When active, key client events (message sends, click proxying, WebSocket lifecycle) are relayed to the server and printed as a unified timestamped log stream:
-
-```
-[2026-06-14T00:30:00.000Z CLIENT] sendMessage-entry isSending=false text="fix the bug" images=0
-[2026-06-14T00:30:00.500Z SERVER] Click Proxying click id=chat:5 label="Undo"
-[2026-06-14T00:30:01.200Z CLIENT] sendMessage-exit
-```
-
-Useful for diagnosing mobile-specific bugs (double-submission, click failures) where you can't see the browser console.
-
----
-
 ## 🔄 Keep It Running (Optional)
 
 A watchdog script can keep AG2R running and auto-update from the branch you're on. It detects the current branch, pulls new commits, and restarts the server when code changes.
@@ -260,6 +238,8 @@ crontab -e
 # Add this line:
 */5 * * * * cd ~/ag2r && AG2R_PORT=3000 ./scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
 ```
+
+The watchdog auto-detects branch changes. If you switch branches (`git checkout next`), the next watchdog cycle restarts the server with the correct code — no manual restart needed. Your `.env` is gitignored and persists across branch switches.
 
 The `tunnel-watchdog.sh` script can similarly keep a Cloudflare tunnel alive.
 
@@ -305,10 +285,6 @@ git pull origin next
 > The `next` branch may be unstable. Use `main` for a reliable experience, or `prev-stable` as a fallback.
 
 ---
-
-## 🤖 For AI Agents
-
-> Your behavioral rules and technical reference are in **[GEMINI.md](./GEMINI.md)**.
 
 ## 📊 Telemetry
 
