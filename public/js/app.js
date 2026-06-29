@@ -636,165 +636,74 @@ async function loadSnapshot() {
 
     // Render permission banner if AG is asking for approval
     if (data.permissionHtml) {
-      // Skip re-render if: (a) HTML unchanged, or (b) write-in input is focused (avoids
-      // destroying the input and dismissing the keyboard when AG reflects our selection click)
-      const writeInFocused = permissionContent.querySelector('.permission-writein:focus');
-      if (data.permissionHtml === permissionContent.dataset.lastHtml || writeInFocused) {
-        // Already rendered or user is typing — don't rebuild
+      // Skip re-render if the dialog structure hasn't changed. We use a "structural
+      // signature" (sorted data-ag-click-id values) instead of exact HTML comparison
+      // because the HTML changes on every selection toggle (class changes like bg-secondary),
+      // which causes flicker. Only re-render when it's a genuinely different dialog.
+      const tempSig = document.createElement('div');
+      tempSig.innerHTML = data.permissionHtml;
+      const sig = Array.from(tempSig.querySelectorAll('[data-ag-click-id]'))
+        .map(el => el.dataset.agClickId).sort().join(',');
+      const hasFocusInside = permissionContent.contains(document.activeElement) && document.activeElement !== permissionContent;
+      if (sig === permissionContent.dataset.lastSig || hasFocusInside) {
+        // Same dialog structure or user is interacting — don't rebuild
       } else {
+      permissionContent.dataset.lastSig = sig;
       permissionContent.dataset.lastHtml = data.permissionHtml;
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = data.permissionHtml;
 
-      // Extract command text from textarea
-      const commandEl = tempDiv.querySelector('textarea[aria-label]');
-      const commandText = commandEl ? commandEl.value || commandEl.textContent : '';
-
-      // Extract title
-      const titleEl = tempDiv.querySelector('.text-foreground');
-      const title = titleEl ? titleEl.textContent.trim() : 'Permission Required';
-
-      // Extract radio options
-       const labels = tempDiv.querySelectorAll('[data-ag-click-id]');
-      const options = [];
-      const buttons = [];
-      labels.forEach(el => {
-        const clickId = el.dataset.agClickId;
-        const text = el.textContent.trim();
-        if (el.tagName === 'LABEL') {
-          const numEl = el.querySelector('.font-mono');
-          const num = numEl ? numEl.textContent.trim() : '';
-          const labelText = text.replace(/^\d+/, '').trim();
-          const isSelected = el.classList.contains('bg-secondary');
-          const hasWriteIn = !!el.querySelector('textarea');
-          // Clean up labelText for write-in (remove placeholder text)
-          const cleanLabel = hasWriteIn ? 'No' : labelText;
-          options.push({ clickId, num, labelText: cleanLabel, isSelected, hasWriteIn });
-        } else if (el.tagName === 'BUTTON') {
-          buttons.push({ clickId, text: text.replace('↵', '').trim() });
-        }
-      });
-
-      let optionsHtml = options.map(o => {
-        const writeInHtml = o.hasWriteIn
-          ? `<input type="search" class="permission-writein" placeholder="tell the agent what to do instead" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" enterkeyhint="send" />`
-          : '';
-        return `
-        <button class="permission-option${o.isSelected ? ' selected' : ''}${o.hasWriteIn ? ' has-writein' : ''}"
-                data-ag-click-id="${o.clickId}" data-ag-click-label="${o.num}${o.labelText}">
-          <span class="permission-option-num">${o.num}</span>
-          <span>${o.labelText}</span>
-          ${writeInHtml}
-        </button>
-        `;
-      }).join('');
-
-      let actionsHtml = buttons.map(b => {
-        const cls = b.text === 'Skip' ? 'perm-skip' : 'perm-submit';
-        return `<button class="${cls}" data-ag-click-id="${b.clickId}" data-ag-click-label="${b.text}">${b.text}</button>`;
-      }).join('');
-
+      // Render AG's captured HTML natively with AG's CSS — same approach as dialog native.
+      // No rebuild, no text extraction: just display exactly what AG shows, sized for mobile.
       permissionContent.innerHTML = `
-        <div class="permission-header">
-          <span class="material-symbols-rounded" style="font-size:20px;color:var(--accent)">terminal</span>
-          ${title}
-        </div>
-        <code class="permission-command">${commandText.replace(/</g, '&lt;')}</code>
-        <div class="permission-options">${optionsHtml}</div>
-        <div class="permission-actions">${actionsHtml}</div>
+        <style>${cdpStyles.textContent || ''}</style>
+        <div class="ag2r-permission-native">${data.permissionHtml}</div>
       `;
 
-      // Wire option clicks: select visually + proxy to AG
-      permissionContent.querySelectorAll('.permission-option').forEach(btn => {
-        // Remove data-ag-click-id so addClickProxyHandlers won't double-wire these
-        // Stash on DOM node so write-in click handler can proxy the selection
+      // Wire click proxying for all tagged elements (labels and buttons)
+      addClickProxyHandlers(permissionContent);
+
+      // Special handling: write-in textarea for the "Other" option.
+      // AG renders a <textarea> inside the last radio label. On Submit, we need to
+      // inject the user's text into AG's textarea before sending the click.
+      const submitBtns = permissionContent.querySelectorAll('button[data-ag-click-id]');
+      submitBtns.forEach(btn => {
+        const origHandler = btn._agClickHandler;
+        const text = (btn.textContent || '').trim();
+        // Only intercept Submit-like buttons (not Skip, not radio labels)
+        if (!/submit/i.test(text)) return;
+
         const clickId = btn.dataset.agClickId;
         const clickLabel = btn.dataset.agClickLabel;
-        btn._agClickId = clickId;
-        btn._agClickLabel = clickLabel;
-        btn.removeAttribute('data-ag-click-id');
-        btn.addEventListener('click', async (e) => {
-          // Don't trigger option select when clicking inside the write-in input
-          if (e.target.classList.contains('permission-writein')) return;
-          permissionContent.querySelectorAll('.permission-option').forEach(b => b.classList.remove('selected'));
-          btn.classList.add('selected');
-          // Focus write-in input if this is the No option
-          const writeIn = btn.querySelector('.permission-writein');
-          if (writeIn) setTimeout(() => writeIn.focus(), 100);
-          try {
-            await fetchAPI('/click', {
-              method: 'POST',
-              body: JSON.stringify({ clickId, label: clickLabel }),
-            });
-          } catch {}
-        });
-      });
+        // Remove the handler that addClickProxyHandlers wired, replace with our own
+        btn.replaceWith(btn.cloneNode(true));
+        const newBtn = permissionContent.querySelector(`[data-ag-click-id="${clickId}"]`);
+        if (!newBtn) return;
 
-      // Clicking write-in input: stop bubble but auto-select the parent "No" option
-      permissionContent.querySelectorAll('.permission-writein').forEach(input => {
-        input.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const parentOption = input.closest('.permission-option');
-          if (parentOption && !parentOption.classList.contains('selected')) {
-            // Select this option visually
-            permissionContent.querySelectorAll('.permission-option').forEach(b => b.classList.remove('selected'));
-            parentOption.classList.add('selected');
-            // Proxy the selection click to AG
-            const clickId = parentOption._agClickId;
-            const clickLabel = parentOption._agClickLabel;
-            if (clickId) {
-              fetchAPI('/click', {
+        newBtn.addEventListener('click', async () => {
+          // Check if a write-in textarea has user text
+          const writeInEl = permissionContent.querySelector('.ag2r-permission-native textarea');
+          if (writeInEl && writeInEl.value && writeInEl.value.trim()) {
+            try {
+              await fetchAPI('/eval', {
                 method: 'POST',
-                body: JSON.stringify({ clickId, label: clickLabel }),
-              }).catch(() => {});
-            }
+                body: JSON.stringify({
+                  script: `(() => {
+                    const rg = document.querySelector('[role="radiogroup"]');
+                    if (!rg) return { ok: false, reason: 'no_radiogroup' };
+                    const ta = rg.querySelector('textarea');
+                    if (!ta) return { ok: false, reason: 'no_textarea' };
+                    ta.focus();
+                    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+                    nativeSetter.call(ta, ${JSON.stringify(writeInEl.value)});
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                    ta.dispatchEvent(new Event('change', { bubbles: true }));
+                    return { ok: true, text: ta.value };
+                  })()`
+                }),
+              });
+            } catch {}
+            await new Promise(r => setTimeout(r, 200));
           }
-        });
-        // When write-in is focused (keyboard opens on mobile), ensure actions stay visible
-        input.addEventListener('focus', () => {
-          setTimeout(() => {
-            const actions = permissionContent.querySelector('.permission-actions');
-            if (actions) actions.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          }, 300);
-        });
-      });
-
-      // Wire action buttons (Submit/Skip) manually — NOT via addClickProxyHandlers
-      // so we can inject write-in text BEFORE sending the Submit click
-      permissionContent.querySelectorAll('.permission-actions button').forEach(btn => {
-        const clickId = btn.dataset.agClickId;
-        const clickLabel = btn.dataset.agClickLabel;
-        btn.addEventListener('click', async () => {
-          // If submitting with No/write-in selected, inject text first
-          if (clickLabel !== 'Skip') {
-            const selectedOption = permissionContent.querySelector('.permission-option.selected');
-            const writeIn = selectedOption?.querySelector('.permission-writein');
-            if (writeIn && writeIn.value.trim()) {
-              try {
-                await fetchAPI('/eval', {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    script: `(() => {
-                      const rg = document.querySelector('[role="radiogroup"]');
-                      if (!rg) return { ok: false, reason: 'no_radiogroup' };
-                      const ta = rg.querySelector('textarea');
-                      if (!ta) return { ok: false, reason: 'no_textarea' };
-                      ta.focus();
-                      // React-compatible: use native setter to bypass React's synthetic value tracking
-                      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-                      nativeSetter.call(ta, ${JSON.stringify(writeIn.value)});
-                      ta.dispatchEvent(new Event('input', { bubbles: true }));
-                      ta.dispatchEvent(new Event('change', { bubbles: true }));
-                      return { ok: true, text: ta.value };
-                    })()`
-                  }),
-                });
-              } catch {}
-              // Small delay to let AG process the text
-              await new Promise(r => setTimeout(r, 200));
-            }
-          }
-          // Now send the actual Submit/Skip click to AG
+          // Send the Submit click
           try {
             await fetchAPI('/click', {
               method: 'POST',
@@ -803,6 +712,7 @@ async function loadSnapshot() {
           } catch {}
           permissionOverlay.classList.add('hidden');
           permissionContent.dataset.lastHtml = '';
+          permissionContent.dataset.lastSig = '';
         });
       });
 
@@ -811,6 +721,7 @@ async function loadSnapshot() {
     } else {
       permissionOverlay.classList.add('hidden');
       permissionContent.dataset.lastHtml = '';
+      permissionContent.dataset.lastSig = '';
     }
 
     // Render running tasks strip if AG has background tasks

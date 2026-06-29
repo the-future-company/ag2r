@@ -1642,6 +1642,31 @@ body {
   animation: slideUpDropdown 250ms ease-out;
 }
 
+/* ── Native AG Permission (rendered with AG's CSS) ── */
+.permission-content:has(.ag2r-permission-native) {
+  padding: 0;
+  border: none;
+}
+
+.ag2r-permission-native {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+/* Constrain AG's max-width containers to fit mobile viewport */
+.ag2r-permission-native [style*="max-width"] {
+  max-width: 100% !important;
+}
+
+/* Ensure long text wraps properly */
+.ag2r-permission-native * {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 .permission-header {
   display: flex;
   align-items: center;
