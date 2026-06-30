@@ -2049,15 +2049,10 @@ function addClickProxyHandlers(container) {
     // Permission submit handler reads their value separately.
     if (tag === 'TEXTAREA') return;
 
-    // Prevent keyboard dismissal: stop mousedown from stealing focus.
-    // But allow textareas to receive focus (e.g. permission write-in).
-    el.addEventListener('mousedown', e => {
-      if (e.target.tagName !== 'TEXTAREA') e.preventDefault();
-    });
+    // Prevent keyboard dismissal: stop mousedown from stealing focus
+    el.addEventListener('mousedown', e => e.preventDefault());
 
     el.addEventListener('click', async (e) => {
-      // Let textarea clicks pass through (e.g. permission write-in)
-      if (e.target.tagName === 'TEXTAREA') return;
       e.preventDefault();
       e.stopPropagation();
 
