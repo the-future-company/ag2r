@@ -123,6 +123,7 @@ gh issue list --label "bug" --state open
 - **iOS push requires PWA on home screen.** Web Push on iOS only works when the user has installed the PWA via "Add to Home Screen" (iOS 16.4+). Regular Safari tabs cannot receive push notifications.
 - **Push config dir is namespaced by `AG2R_ENV`.** Config files (`vapid-keys.json`, `push-subscriptions.json`) live in `~/.config/ag2r/` (production) or `~/.config/ag2r-{env}/` (other envs). See `src/paths.js` → `getEnv()`.
 - **Branch switching is auto-detected by the watchdog.** After `git checkout <branch>`, the next watchdog cycle restarts the server with correct code. No manual restart needed. `.env` is gitignored and persists across switches.
+- **`_tools/` is gitignored but essential.** Contains dev-only tools (hub.js, icon-composer, hub-watchdog, serve.js) — copy from the source worktree for new worktrees, never look for these in git history.
 
 ## 🔄 Continuous Learning
 
