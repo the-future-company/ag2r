@@ -1613,7 +1613,7 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding: 0 12px env(safe-area-inset-bottom, 0);
 }
 
 .permission-overlay.hidden {
@@ -1632,7 +1632,7 @@ body {
   background: var(--bg-app, #0e1318);
   border: 1px solid var(--border);
   border-radius: 16px 16px 0 0;
-  padding: 20px 16px;
+  padding: 20px 20px;
   width: 100%;
   max-width: 480px;
   max-height: 80vh;
@@ -1644,7 +1644,7 @@ body {
 
 /* ── Native AG Permission (rendered with AG's CSS) ── */
 .permission-content:has(.ag2r-permission-native) {
-  padding: 0;
+  padding: 16px;
   border: none;
 }
 
@@ -1659,6 +1659,7 @@ body {
 /* Constrain AG's max-width containers to fit mobile viewport */
 .ag2r-permission-native [style*="max-width"] {
   max-width: 100% !important;
+  box-sizing: border-box;
 }
 
 /* Ensure long text wraps properly */
@@ -1786,8 +1787,8 @@ body {
 .permission-actions {
   position: sticky;
   bottom: -20px;
-  margin: 0 -16px -20px;
-  padding: 12px 16px 20px;
+  margin: 0 -20px -20px;
+  padding: 12px 20px 20px;
   background: var(--bg-app, #0e1318);
   display: flex;
   gap: 8px;

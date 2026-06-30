@@ -661,6 +661,16 @@ async function loadSnapshot() {
       // Wire click proxying for all tagged elements (labels and buttons)
       addClickProxyHandlers(permissionContent);
 
+      // Make the write-in textarea interactive: the parent label has a click proxy
+      // that calls preventDefault/stopPropagation, which blocks textarea focus.
+      // Stop events from bubbling up so the textarea remains tappable.
+      const writeInTA = permissionContent.querySelector('.ag2r-permission-native textarea');
+      if (writeInTA) {
+        writeInTA.addEventListener('mousedown', e => e.stopPropagation());
+        writeInTA.addEventListener('click', e => e.stopPropagation());
+        writeInTA.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+      }
+
       // Special handling: write-in textarea for the "Other" option.
       // AG renders a <textarea> inside the last radio label. On Submit, we need to
       // inject the user's text into AG's textarea before sending the click.
