@@ -266,7 +266,7 @@ function connectWebSocket() {
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
-    console.debug('[WS] Connected');
+    debugLog('ws', 'connected');
     debugLog('ws-open');
     wsReconnectDelay = 1000;
     updateConnectionStatus('connected');
@@ -324,12 +324,12 @@ function connectWebSocket() {
           break;
       }
     } catch (e) {
-      console.debug('[WS] Parse error:', e);
+      debugLog('ws', 'parse error: ' + e);
     }
   };
 
   ws.onclose = () => {
-    console.debug('[WS] Disconnected, reconnecting in', wsReconnectDelay, 'ms');
+    debugLog('ws', 'disconnected, reconnecting in ' + wsReconnectDelay + 'ms');
     debugLog('ws-close');
     updateConnectionStatus('disconnected');
     ws = null;
@@ -496,12 +496,12 @@ async function loadSnapshot() {
     }
     if (data.isSidebarOpen !== undefined) {
       const ag2rIsOpen = rightSidebar.classList.contains('open');
-      console.debug('[SidebarMirror] AG:', data.isSidebarOpen, 'AG2R:', ag2rIsOpen, 'sig:', data.sidebarSignature);
+      debugLog('sidebar-mirror', `AG:${data.isSidebarOpen} AG2R:${ag2rIsOpen} sig:${data.sidebarSignature}`);
       if (data.isSidebarOpen && !ag2rIsOpen) {
-        console.debug('[SidebarMirror] Opening AG2R sidebar');
+        debugLog('sidebar-mirror', 'opening');
         openRightSidebar();
       } else if (!data.isSidebarOpen && ag2rIsOpen) {
-        console.debug('[SidebarMirror] Closing AG2R sidebar');
+        debugLog('sidebar-mirror', 'closing');
         rightSidebar.classList.remove('open');
         rightSidebar.inert = true;
         rightSidebarOverlay.classList.remove('visible');
@@ -636,19 +636,12 @@ async function loadSnapshot() {
 
     // Render permission banner if AG is asking for approval
     if (data.permissionHtml) {
-      // Skip re-render if the dialog structure hasn't changed. We use a "structural
-      // signature" (sorted data-ag-click-id values) instead of exact HTML comparison
-      // because the HTML changes on every selection toggle (class changes like bg-secondary),
-      // which causes flicker. Only re-render when it's a genuinely different dialog.
-      const tempSig = document.createElement('div');
-      tempSig.innerHTML = data.permissionHtml;
-      const sig = Array.from(tempSig.querySelectorAll('[data-ag-click-id]'))
-        .map(el => el.dataset.agClickId).sort().join(',');
+      // Skip re-render if the HTML hasn't changed or the user has focus inside
+      // (e.g. typing in the write-in textarea).
       const hasFocusInside = permissionContent.contains(document.activeElement) && document.activeElement !== permissionContent;
-      if (sig === permissionContent.dataset.lastSig || hasFocusInside) {
-        // Same dialog structure or user is interacting — don't rebuild
+      if (data.permissionHtml === permissionContent.dataset.lastHtml || hasFocusInside) {
+        // Identical HTML or user is interacting — don't rebuild
       } else {
-      permissionContent.dataset.lastSig = sig;
       permissionContent.dataset.lastHtml = data.permissionHtml;
 
       // Render AG's captured HTML natively with AG's CSS — same approach as dialog native.
@@ -722,7 +715,7 @@ async function loadSnapshot() {
           } catch {}
           permissionOverlay.classList.add('hidden');
           permissionContent.dataset.lastHtml = '';
-          permissionContent.dataset.lastSig = '';
+
         });
       });
 
@@ -731,7 +724,7 @@ async function loadSnapshot() {
     } else {
       permissionOverlay.classList.add('hidden');
       permissionContent.dataset.lastHtml = '';
-      permissionContent.dataset.lastSig = '';
+
     }
 
     // Render running tasks strip if AG has background tasks
@@ -911,7 +904,7 @@ async function loadSnapshot() {
     });
 
   } catch (e) {
-    console.debug('[Snapshot] Load error:', e.message);
+    debugLog('snapshot', 'load error: ' + e.message);
   }
 }
 
@@ -1038,7 +1031,7 @@ async function sendMessage() {
   if (hasImages) {
     const uploadOk = await uploadStagedImages();
     if (!uploadOk) {
-      console.debug('[Send] Some image uploads failed');
+      debugLog('send', 'some image uploads failed');
       // Don't clear images on failure — let user retry
       isSending = false;
       messageInput.disabled = false;
@@ -1058,7 +1051,7 @@ async function sendMessage() {
       debugLog('sendMessage-images-only');
       const res = await fetchAPI('/send-images', { method: 'POST' });
       const result = await res.json();
-      console.debug('[Send] Image-only result:', result);
+      debugLog('send', 'image-only result: ' + JSON.stringify(result));
     } else if (fullMessage) {
       // Text (possibly with images): inject text and click send
       const res = await fetchAPI('/send', {
@@ -1066,13 +1059,13 @@ async function sendMessage() {
         body: JSON.stringify({ message: fullMessage, hasImages }),
       });
       const result = await res.json();
-      console.debug('[Send] Result:', result);
+      debugLog('send', 'result: ' + JSON.stringify(result));
       if (!result.ok) {
-        console.debug('[Send] Failed:', result.reason);
+        debugLog('send', 'failed: ' + result.reason);
       }
     }
   } catch (e) {
-    console.debug('[Send] Error:', e.message);
+    debugLog('send', 'error: ' + e.message);
   }
 
   // Reset scroll-away flag so AG's scroll position syncs immediately on next render
@@ -1100,14 +1093,14 @@ async function stopGeneration() {
     const result = await res.json();
 
     if (!result.ok) {
-      console.debug('[Stop] No active generation found');
+      debugLog('stop', 'no active generation found');
     }
 
     // Refresh snapshot to show updated state
     setTimeout(loadSnapshot, 300);
     setTimeout(loadSnapshot, 1000);
   } catch (e) {
-    console.debug('[Stop] Error:', e.message);
+    debugLog('stop', 'error: ' + e.message);
   }
 }
 
@@ -1251,7 +1244,7 @@ function createVoiceInput(inputEl, btnEl) {
     };
 
     recognition.onerror = (event) => {
-      console.debug('[Voice] Error:', event.error);
+      debugLog('voice', 'error: ' + event.error);
       stopRecording();
     };
 
@@ -1286,7 +1279,7 @@ function createVoiceInput(inputEl, btnEl) {
     try {
       recognition.start();
     } catch (err) {
-      console.debug('[Voice] Start error:', err);
+      debugLog('voice', 'start error: ' + err);
       stopRecording();
     }
   }
@@ -1470,17 +1463,17 @@ async function uploadStagedImages() {
       });
 
       const result = await res.json();
-      console.debug('[Upload] Result:', result);
+      debugLog('upload', 'result: ' + JSON.stringify(result));
 
       if (items[i]) items[i].classList.remove('uploading');
 
       if (!res.ok || !result.ok) {
-        console.debug('[Upload] Error:', result.error || 'Unknown');
+        debugLog('upload', 'error: ' + (result.error || 'Unknown'));
         if (items[i]) items[i].classList.add('upload-error');
         allOk = false;
       }
     } catch (e) {
-      console.debug('[Upload] Network error:', e.message);
+      debugLog('upload', 'network error: ' + e.message);
       if (items[i]) {
         items[i].classList.remove('uploading');
         items[i].classList.add('upload-error');
@@ -1686,7 +1679,7 @@ async function fetchRightSidebar() {
       `;
     }
   } catch (e) {
-    console.debug('[RightSidebar] Fetch error:', e.message);
+    debugLog('right-sidebar', 'fetch error: ' + e.message);
   } finally {
     sidebarFetchInFlight = false;
   }
@@ -1871,7 +1864,7 @@ function renderNewSessionPage(container, data) {
     if (hasImages) {
       const uploadOk = await uploadStagedImages();
       if (!uploadOk) {
-        console.debug('[NewSession] Some image uploads failed');
+        debugLog('new-session', 'some image uploads failed');
         nsIsSending = false;
         input.disabled = false;
         sendBtn.disabled = false;
@@ -1891,13 +1884,13 @@ function renderNewSessionPage(container, data) {
           body: JSON.stringify({ message: text }),
         });
         const result = await res.json();
-        console.debug('[NewSession] Send result:', result);
+        debugLog('new-session', 'send result: ' + JSON.stringify(result));
         if (result.ok) {
           input.value = '';
           // AG will navigate to the new session — next snapshot refresh will pick it up
         }
       } catch (err) {
-        console.debug('[NewSession] Send error:', err);
+        debugLog('new-session', 'send error: ' + err);
       }
     }
 
@@ -2059,7 +2052,7 @@ function addClickProxyHandlers(container) {
       const clickId = el.dataset.agClickId; // e.g. "chat:5", "right:2"
       const label = el.dataset.agClickLabel || '';
 
-      console.debug('[Click] id=' + clickId, 'label="' + label + '"', 'tag=' + el.tagName, 'class=' + (el.className || '').substring(0, 80));
+      debugLog('click-proxy', 'id=' + clickId + ' label="' + label + '"' + ' tag=' + el.tagName);
       debugLog('click-proxy', `id=${clickId} label="${label}" tag=${el.tagName}`);
 
       // Intercept "Edit task title" pencil icon — single-click name editing
@@ -2125,7 +2118,7 @@ function addClickProxyHandlers(container) {
             setTimeout(() => { el.innerHTML = origHTML; }, 1500);
           }
         } catch (err) {
-          console.debug('[Copy] Error:', err.message);
+          debugLog('copy', 'error: ' + err.message);
         }
         return;
       }
@@ -2149,7 +2142,7 @@ function addClickProxyHandlers(container) {
         result = await res.json();
 
       } catch (err) {
-        console.debug('[Click] Error:', err.message);
+        debugLog('click-proxy', 'error: ' + err.message);
       }
       el.classList.remove('ag-clicking');
 
@@ -2258,12 +2251,12 @@ async function submitTextInput() {
       body: JSON.stringify({ placeholder, text, clickId }),
     });
     const result = await res.json();
-    console.debug('[TypeText] Result:', result);
+    debugLog('type-text', 'result: ' + JSON.stringify(result));
     // Refresh snapshot to show updated value
     setTimeout(loadSnapshot, 300);
     setTimeout(loadSnapshot, 800);
   } catch (err) {
-    console.debug('[TypeText] Error:', err.message);
+    debugLog('type-text', 'error: ' + err.message);
   }
 }
 
@@ -2497,7 +2490,7 @@ commentSubmit.addEventListener('click', () => {
     comment: commentText,
   });
   saveComments();
-  console.debug('[Comment] Queued:', queuedComments[queuedComments.length - 1]);
+  debugLog('comment', 'queued');
   track('comment_added');
   closeCommentModal();
 
@@ -2574,7 +2567,7 @@ async function sendQueuedComments() {
       body: JSON.stringify({ message: fullMessage }),
     });
     const result = await resp.json();
-    console.debug('[Comment] Send result:', result);
+    debugLog('comment', 'send result: ' + JSON.stringify(result));
     track('comments_sent', { count: fullMessage.split('* >').length - 1 });
   } catch (e) {
     console.error('[Comment] Send failed:', e);
@@ -2702,7 +2695,7 @@ updateActionButton();
 // Push Notifications — Auto-Subscribe
 // ─────────────────────────────────────────────
 function pushDebug(msg) {
-  console.debug('[Push]', msg);
+  debugLog('push', msg);
 }
 async function checkVapidKeyMatch(subscription) {
   try {
