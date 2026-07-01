@@ -418,6 +418,8 @@ body {
 
 .chat-content {
   padding: 12px 16px 12px;
+  max-width: max(30vw, 40rem);
+  margin: 0 auto;
 }
 
 /* ── Empty State ── */
