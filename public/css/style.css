@@ -190,7 +190,7 @@ body {
   height: calc(100dvh - var(--header-height) - var(--safe-top));
   background: var(--bg-panel);
   border-left: 1px solid var(--border-subtle);
-  z-index: 200;
+  z-index: 2148;
   transform: translateX(100%);
   transition: transform 0.25s ease;
   display: flex;
@@ -249,11 +249,20 @@ body {
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  z-index: 2149;
   background: rgba(0, 0, 0, 0.5);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
+}
+
+/* Left overlay sits just below the left sidebar (2150) */
+#left-sidebar-overlay {
+  z-index: 2149;
+}
+
+/* Right overlay sits just below the right sidebar (2148) */
+#right-sidebar-overlay {
+  z-index: 2147;
 }
 
 .sidebar-overlay.visible {
