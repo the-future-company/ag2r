@@ -401,6 +401,7 @@ async function loadSnapshot() {
         capturedZone.innerHTML = data.html;
         processNewSessionCapture(capturedZone);
         addClickProxyHandlers(capturedZone);
+        wireNewSessionHandlers(chatContent);
 
         // Restore textarea state
         const newInput = capturedZone.querySelector('#ag2r-new-session-input');
@@ -1723,15 +1724,21 @@ function renderNewSessionPage(container, data) {
   // Add click proxy handlers for the captured buttons (project, model, env, etc.)
   addClickProxyHandlers(capturedZone);
 
-  // ── Wire form handlers ──
+  // Wire event handlers for send, mic, attach, keyboard
+  wireNewSessionHandlers(container);
+
+  // Don't auto-focus — let the user tap the input to bring up keyboard
+}
+
+/**
+ * Wire event handlers for the new session page controls (send, mic, attach).
+ * Called on initial render AND on re-render (skip path) since the DOM elements
+ * are recreated each time the captured zone is re-rendered.
+ */
+function wireNewSessionHandlers(container) {
   const input = container.querySelector('#ag2r-new-session-input');
   const sendBtn = container.querySelector('#ag2r-new-session-send');
-  if (!input || !sendBtn) return; // processNewSessionCapture couldn't find the editor
-
-  // Prevent snapshot refresh from wiping the input while user is typing
-  let userIsTyping = false;
-  input.addEventListener('input', () => { userIsTyping = true; });
-  input.addEventListener('blur', () => { userIsTyping = false; });
+  if (!input || !sendBtn) return;
 
   // Wire attach button (+ icon) to context menu with Media option
   const nsAttachBtn = container.querySelector('#ag2r-ns-attach');
@@ -1761,8 +1768,15 @@ function renderNewSessionPage(container, data) {
     });
   }
 
-  // Handle send (no <form> element — we handle it directly)
+  // Handle send
   let nsIsSending = false;
+  let stopNsMic = null;
+
+  // Wire up mic button (shared factory)
+  const nsMicBtn = container.querySelector('#ag2r-new-session-mic');
+  if (nsMicBtn) {
+    stopNsMic = createVoiceInput(input, nsMicBtn);
+  }
 
   async function handleSend() {
     const text = input.value.trim();
@@ -1829,15 +1843,6 @@ function renderNewSessionPage(container, data) {
       handleSend();
     }
   });
-
-  // Wire up mic button for new session page (shared factory)
-  const nsMicBtn = container.querySelector('#ag2r-new-session-mic');
-  let stopNsMic = null;
-  if (nsMicBtn) {
-    stopNsMic = createVoiceInput(input, nsMicBtn);
-  }
-
-  // Don't auto-focus — let the user tap the input to bring up keyboard
 }
 
 // ── Helper: process captured new session HTML for mobile display ──
