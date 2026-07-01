@@ -187,8 +187,11 @@ async function sendPushToAll(payload) {
 }
 
 // Check if any conversation needs attention and send a push notification.
-// NO FILTERS — send on every poll cycle for debugging
+// 30-second cooldown prevents hammering push services on every poll cycle.
 function checkAttentionState(snapshot) {
+  const now = Date.now();
+  if (now - lastPushSentAt < PUSH_COOLDOWN_MS) return;
+
   const hasPermission = !!snapshot.permissionHtml;
   const attentionItems = (snapshot.sidebarAttentionItems || [])
     .filter(item => item.type !== 'completed');
@@ -199,7 +202,8 @@ function checkAttentionState(snapshot) {
   if (types.has('question')) body = 'An agent has a question for you';
   else if (types.has('command') || hasPermission) body = 'A command needs your approval';
 
-  log('Push', `Attention detected — sending (NO COOLDOWN)`);
+  lastPushSentAt = now;
+  log('Push', `Attention detected — sending (cooldown ${PUSH_COOLDOWN_MS / 1000}s)`);
   sendPushToAll({
     title: appName,
     body,
