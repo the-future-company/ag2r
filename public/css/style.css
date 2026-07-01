@@ -92,7 +92,7 @@ body {
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  z-index: 300;
+  z-index: 2150;
 }
 
 .header-title {
@@ -169,7 +169,7 @@ body {
   height: calc(100dvh - var(--header-height) - var(--safe-top));
   background: var(--bg-panel);
   border-right: 1px solid var(--border-subtle);
-  z-index: 200;
+  z-index: 2150;
   transform: translateX(-100%);
   transition: transform 0.25s ease;
   display: flex;
@@ -249,7 +249,7 @@ body {
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  z-index: 199;
+  z-index: 2149;
   background: rgba(0, 0, 0, 0.5);
   opacity: 0;
   pointer-events: none;
