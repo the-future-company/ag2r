@@ -216,6 +216,9 @@ function checkAttentionState(snapshot) {
 
   // Find conversations we haven't notified about yet
   const newItems = attentionItems.filter(item => !notifiedConversations.has(item.id));
+  if (newItems.length > 0) {
+    console.debug('[Push] New attention items:', newItems.map(i => `${i.name}(${i.type})`).join(', '));
+  }
   if (newItems.length === 0 && !hasPermission) return;
 
   // Send one notification per new conversation (unique tag so they stack)
