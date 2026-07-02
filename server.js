@@ -195,8 +195,7 @@ async function sendPushToAll(payload) {
 const notifiedConversations = new Set();
 
 function truncName(name) {
-  if (!name) return '';
-  return name.length > 16 ? name.slice(0, 16) + '...' : name;
+  return (name || '').trim();
 }
 
 function checkAttentionState(snapshot) {
