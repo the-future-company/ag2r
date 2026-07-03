@@ -101,8 +101,6 @@ const VAPID_KEYS_PATH = getConfigPath('vapid-keys.json');
 const LEGACY_VAPID_KEYS_PATH = path.join(__dirname, 'vapid-keys.json');
 const PUSH_SUBS_PATH = getConfigPath('push-subscriptions.json');
 const pushSubscriptions = new Map(); // endpoint → { ...PushSubscription, origin }
-let lastPushSentAt = 0;
-const PUSH_COOLDOWN_MS = 30_000; // 30 seconds between push notifications
 
 // Load or generate VAPID keys on startup
 function initVapid() {
@@ -213,6 +211,7 @@ async function sendPushToAll(payload) {
   stale.forEach(ep => pushSubscriptions.delete(ep));
   if (stale.length > 0) saveSubscriptions();
   log('Push', `Done: ${sent} delivered, ${stale.length} removed`);
+  track('push_sent', { subscriberCount: pushSubscriptions.size, delivered: sent, staleRemoved: stale.length, body: payload.body });
 }
 
 // Check if any conversation needs attention and send a push notification.
@@ -1247,6 +1246,8 @@ app.post('/telemetry', (req, res) => {
     'quick_action_used',
     'hard_refresh',
     'coffee_link_clicked',
+    'push_clicked',
+    'push_dismissed',
   ]);
   if (!allowed.has(event)) {
     return res.status(400).json({ error: 'unknown event' });
@@ -1599,6 +1600,7 @@ app.post('/push/subscribe', (req, res) => {
   pushSubscriptions.set(subscription.endpoint, { ...subscription, origin });
   saveSubscriptions();
   log('Push', `Subscribed (${pushSubscriptions.size} total) from ${origin}`);
+  track('push_registered', { subscriberCount: pushSubscriptions.size });
   res.json({ ok: true });
 });
 
@@ -1609,6 +1611,7 @@ app.post('/push/unsubscribe', (req, res) => {
     saveSubscriptions();
   }
   log('Push', `Unsubscribed (${pushSubscriptions.size} total)`);
+  track('push_unregistered', { subscriberCount: pushSubscriptions.size });
   res.json({ ok: true });
 });
 
@@ -1627,8 +1630,6 @@ app.get('/push/status', (req, res) => {
     subscribers: pushSubscriptions.size,
     endpoints: [...pushSubscriptions.keys()].map(ep => ep.substring(0, 80) + '...'),
     vapidPublicKey: vapidKeys.publicKey,
-    lastPushSentAt: lastPushSentAt ? new Date(lastPushSentAt).toISOString() : null,
-    cooldownMs: PUSH_COOLDOWN_MS,
   });
 });
 
@@ -1641,6 +1642,7 @@ app.post('/push/pause', (req, res) => {
   pushPaused = true;
   savePauseState();
   log('Push', 'Notifications paused by user');
+  track('push_paused');
   res.json({ ok: true, paused: true });
 });
 
@@ -1648,6 +1650,7 @@ app.post('/push/resume', (req, res) => {
   pushPaused = false;
   savePauseState();
   log('Push', 'Notifications resumed by user');
+  track('push_resumed');
   res.json({ ok: true, paused: false });
 });
 

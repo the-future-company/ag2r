@@ -3032,6 +3032,10 @@ if ('serviceWorker' in navigator) {
       navigateToConversation(event.data.conversationId);
     } else if (event.data?.type === 'open-sidebar') {
       openLeftSidebar();
+    } else if (event.data?.type === 'notification-clicked') {
+      track('push_clicked', { conversationId: event.data.conversationId });
+    } else if (event.data?.type === 'notification-dismissed') {
+      track('push_dismissed', { conversationId: event.data.conversationId });
     }
   });
 }

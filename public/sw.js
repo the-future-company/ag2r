@@ -34,6 +34,11 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Notify client of click for telemetry
+      for (const client of windowClients) {
+        client.postMessage({ type: 'notification-clicked', conversationId });
+      }
+
       // If an AG2R window is already open, tell it to navigate and focus it
       if (windowClients.length > 0) {
         const target = windowClients[0];
@@ -46,6 +51,18 @@ self.addEventListener('notificationclick', (event) => {
 
       // No open window — open one (URL already has ?sidebar=open&conversationId=<id>)
       if (url) return clients.openWindow(url);
+    })
+  );
+});
+
+self.addEventListener('notificationclose', (event) => {
+  const conversationId = event.notification.data?.conversationId;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        client.postMessage({ type: 'notification-dismissed', conversationId });
+      }
     })
   );
 });
