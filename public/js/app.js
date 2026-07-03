@@ -402,34 +402,32 @@ async function loadSnapshot() {
     }
 
 
-    // Don't re-render when the new session page textarea is active — our textarea
-    // is injected INSIDE the captured zone, so replacing it would destroy the input.
-    // The captured buttons (project/model/env) may become stale if the user changes
-    // settings, but they transition to a fresh capture when the user sends a message.
-    const newSessionInput = document.getElementById('ag2r-new-session-input');
-    const skipChatRender = data.isNewSessionPage && newSessionInput;
+    // On the new session page, the input-wrapper lives inside the captured zone
+    // (replacing AG's editor). Detach it before updating, then re-insert after.
+    const capturedZone = chatContent.querySelector('.ag2r-ns-captured');
+    const skipChatRender = data.isNewSessionPage && capturedZone;
 
     if (skipChatRender) {
-      // Skip full re-render — textarea is inside the captured zone.
-      // But update the captured zone from new snapshot so project/model/env
-      // labels reflect changes and new elements (like branch picker) appear.
-      const capturedZone = chatContent.querySelector('.ag2r-ns-captured');
-      if (capturedZone) {
-        // Save textarea state before re-render
-        const input = capturedZone.querySelector('#ag2r-new-session-input');
-        const savedValue = input ? input.value : '';
-        const hadFocus = input && document.activeElement === input;
+      // Only update if captured content actually changed — avoids
+      // detach/reattach of the input-wrapper which steals keyboard focus.
+      if (data.html !== capturedZone.dataset.lastHtml) {
+        capturedZone.dataset.lastHtml = data.html;
 
-        // Re-render the captured zone with fresh HTML
+        const wrapper = capturedZone.querySelector('.input-wrapper');
+        if (wrapper) wrapper.remove();
+
         capturedZone.innerHTML = data.html;
         processNewSessionCapture(capturedZone);
         addClickProxyHandlers(capturedZone);
-        wireNewSessionHandlers(chatContent);
 
-        // Restore textarea state
-        const newInput = capturedZone.querySelector('#ag2r-new-session-input');
-        if (newInput && savedValue) newInput.value = savedValue;
-        if (newInput && hadFocus) newInput.focus();
+        // Re-insert the input-wrapper, replacing the fresh editor clone
+        if (wrapper) {
+          const editor = capturedZone.querySelector('[contenteditable]')
+            || capturedZone.querySelector('[data-lexical-editor]')
+            || capturedZone.querySelector('[role="textbox"]');
+          if (editor) editor.replaceWith(wrapper);
+          else capturedZone.appendChild(wrapper);
+        }
       }
     } else {
       // Detect conversation switch by fingerprinting the first portion of content.
@@ -449,6 +447,16 @@ async function loadSnapshot() {
         }
       }
 
+      // Rescue the input-wrapper back to the footer before wiping chatContent.
+      // It may have been moved into the captured zone by renderNewSessionPage.
+      const movedWrapper = chatContent.querySelector('.input-wrapper');
+      if (movedWrapper) {
+        // Unhide the model chip (hidden while inside captured zone)
+        const chip = movedWrapper.querySelector('#model-chip');
+        if (chip) chip.style.display = '';
+        inputBar.appendChild(movedWrapper);
+      }
+
       chatContent.innerHTML = data.html;
       hideEmptyState();
 
@@ -460,6 +468,7 @@ async function loadSnapshot() {
       }
 
       // Hide bottom input bar when AG's input box is hidden (subagent view, etc.)
+      // Also hidden on new session page — the input-wrapper is moved into the captured view.
       const hideBottomBar = data.isNewSessionPage || data.isInputBoxHidden;
       inputBar.classList.toggle('hidden', hideBottomBar);
       if (hideBottomBar) quickActions.classList.add('hidden');
@@ -1754,13 +1763,8 @@ rightSidebarOverlay.addEventListener('click', closeRightSidebar);
 // New Session Page — functional input overlay
 // ─────────────────────────────────────────────
 function renderNewSessionPage(container, data) {
-  // ── Bridge approach: render AG's captured HTML + inject AG2R's input into it ──
-  // The captured HTML already has interactive elements tagged with chat:N
-  // (project dropdown, model selector, env/branch buttons). We render it
-  // directly and replace AG's contenteditable with our own functional textarea.
-
-  // Wrap captured HTML in a zone div so we can update it independently
-  // on subsequent polls (preserves textarea state).
+  // Wrap captured HTML in a zone div so poll updates don't destroy
+  // the input-wrapper (which lives inside it, replacing AG's editor).
   const capturedHtml = container.innerHTML;
   container.innerHTML = '';
 
@@ -1769,225 +1773,36 @@ function renderNewSessionPage(container, data) {
   capturedZone.innerHTML = capturedHtml;
   container.appendChild(capturedZone);
 
-  // Process captured content: replace AG's contenteditable with our textarea+controls
   processNewSessionCapture(capturedZone);
-
-  // Add click proxy handlers for the captured buttons (project, model, env, etc.)
   addClickProxyHandlers(capturedZone);
 
-  // Wire event handlers for send, mic, attach, keyboard
-  wireNewSessionHandlers(container);
-
-  // Don't auto-focus — let the user tap the input to bring up keyboard
-}
-
-/**
- * Wire event handlers for the new session page controls (send, mic, attach).
- * Called on initial render AND on re-render (skip path) since the DOM elements
- * are recreated each time the captured zone is re-rendered.
- */
-function wireNewSessionHandlers(container) {
-  const input = container.querySelector('#ag2r-new-session-input');
-  const sendBtn = container.querySelector('#ag2r-new-session-send');
-  if (!input || !sendBtn) return;
-
-  // Wire attach button (+ icon) to context menu with Media option
-  const nsAttachBtn = container.querySelector('#ag2r-ns-attach');
-  const nsPhotoInput = container.querySelector('#ag2r-ns-photo-input');
-  const nsPreviewStrip = container.querySelector('#ag2r-ns-image-preview');
-
-  if (nsAttachBtn && nsPhotoInput) {
-    const nsAttachMenu = createAttachMenu(
-      nsAttachBtn.parentElement,
-      nsPhotoInput
-    );
-
-    nsAttachBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      nsAttachMenu.classList.toggle('hidden');
-    });
-
-    nsPhotoInput.addEventListener('change', () => {
-      const files = Array.from(nsPhotoInput.files);
-      if (!files.length) return;
-      const remaining = MAX_STAGED_IMAGES - stagedImages.length;
-      for (const file of files.slice(0, remaining)) {
-        stagedImages.push({ file, objectUrl: URL.createObjectURL(file) });
-      }
-      renderImagePreviewsInto(nsPreviewStrip, nsAttachBtn);
-      nsPhotoInput.value = '';
-    });
+  // Move the existing input-wrapper (already wired with mic, send, attach)
+  // from the footer into the captured card, replacing AG's dead editor clone.
+  // Same DOM elements, same handlers — no re-wiring. Mic stays stable.
+  const wrapper = inputBar.querySelector('.input-wrapper');
+  const editor = capturedZone.querySelector('[contenteditable]')
+    || capturedZone.querySelector('[data-lexical-editor]')
+    || capturedZone.querySelector('[role="textbox"]');
+  if (wrapper && editor) {
+    // Hide the model chip — the captured zone already shows the model selector
+    const chip = wrapper.querySelector('#model-chip');
+    if (chip) chip.style.display = 'none';
+    editor.replaceWith(wrapper);
+  } else if (wrapper) {
+    // Fallback: append if editor not found
+    const chip = wrapper.querySelector('#model-chip');
+    if (chip) chip.style.display = 'none';
+    capturedZone.appendChild(wrapper);
   }
-
-  // Handle send
-  let nsIsSending = false;
-  let stopNsMic = null;
-
-  // Wire up mic button (shared factory)
-  const nsMicBtn = container.querySelector('#ag2r-new-session-mic');
-  if (nsMicBtn) {
-    stopNsMic = createVoiceInput(input, nsMicBtn);
-  }
-
-  async function handleSend() {
-    const text = input.value.trim();
-    const hasImages = stagedImages.length > 0;
-    if ((!text && !hasImages) || nsIsSending) return;
-    nsIsSending = true;
-
-    // Stop any active voice recording so onresult doesn't refill the input
-    if (stopNsMic) stopNsMic();
-
-    // Disable input
-    input.disabled = true;
-    sendBtn.disabled = true;
-    sendBtn.classList.add('sending');
-
-    // Upload staged images first
-    if (hasImages) {
-      const uploadOk = await uploadStagedImages();
-      if (!uploadOk) {
-        debugLog('new-session', 'some image uploads failed');
-        nsIsSending = false;
-        input.disabled = false;
-        sendBtn.disabled = false;
-        sendBtn.classList.remove('sending');
-        return;
-      }
-      clearStagedImages();
-      if (nsPreviewStrip && nsAttachBtn) {
-        renderImagePreviewsInto(nsPreviewStrip, nsAttachBtn);
-      }
-      await new Promise(r => setTimeout(r, 300));
-    }
-
-    if (text) {
-      try {
-        const res = await fetchAPI('/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text }),
-        });
-        const result = await res.json();
-        debugLog('new-session', 'send result: ' + JSON.stringify(result));
-        if (result.ok) {
-          input.value = '';
-          // AG will navigate to the new session — next snapshot refresh will pick it up
-        }
-      } catch (err) {
-        debugLog('new-session', 'send error: ' + err);
-      }
-    }
-
-    nsIsSending = false;
-    input.disabled = false;
-    sendBtn.disabled = false;
-    sendBtn.classList.remove('sending');
-  }
-
-  sendBtn.addEventListener('click', handleSend);
-
-  // Desktop: Enter to submit. Mobile: Enter inserts newline.
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
-      e.preventDefault();
-      handleSend();
-    }
-  });
 }
 
 // ── Helper: process captured new session HTML for mobile display ──
-// Orchestrates three independent steps to transform AG's captured DOM
-// into a functional mobile input. Each step is isolated so individual
-// pieces can be updated if AG changes its DOM structure.
+// Hides AG's non-functional cloned elements from the captured new session zone.
+// The real input is the moved input-wrapper from the footer.
 function processNewSessionCapture(zone) {
-  replaceEditorWithTextarea(zone);
-  injectSendControls(zone);
   hideAgDuplicateControls(zone);
 }
 
-/**
- * Replace AG's contenteditable editor (a non-functional DOM clone) with
- * AG2R's textarea + attach button.
- *
- * ASSUMPTION: AG's new-session input is a contenteditable, Lexical editor,
- * or role="textbox" element. If AG changes the editor type, update the
- * selector chain below.
- */
-function replaceEditorWithTextarea(zone) {
-  const editor = zone.querySelector('[contenteditable]')
-    || zone.querySelector('[data-lexical-editor]')
-    || zone.querySelector('[role="textbox"]');
-  if (!editor) return;
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'ag2r-ns-input-wrapper';
-  wrapper.innerHTML = `
-    <div id="ag2r-ns-image-preview" class="image-preview-strip hidden"></div>
-    <textarea
-      id="ag2r-new-session-input"
-      placeholder="Ask anything..."
-      rows="3"
-    ></textarea>
-    <div class="input-controls">
-      <div class="input-left-actions">
-        <input type="file" id="ag2r-ns-photo-input" accept="image/*" multiple hidden>
-        <button type="button" id="ag2r-ns-attach" class="attach-btn" aria-label="Add context">
-          <span class="material-symbols-rounded">add</span>
-        </button>
-      </div>
-    </div>
-  `;
-  editor.replaceWith(wrapper);
-}
-
-/**
- * Inject mic + send buttons on the same row as the model selector button,
- * right-aligned. This is the only place we modify AG's captured DOM layout.
- *
- * ASSUMPTIONS (fragile — may break if AG restructures the new-session page):
- *  1. The model button is tagged chat:3 (or chat:2 as fallback). The index
- *     depends on how many interactive elements precede it in AG's DOM.
- *     If AG adds/removes buttons before the model selector, update these IDs.
- *  2. AG's ancestor divs between the model button and the captured zone are
- *     shrink-wrapped (width: fit-content). We force width:100% up the chain
- *     so flexbox space-between can push our controls to the right edge.
- *  3. The model button's direct parent can safely be made display:flex
- *     without breaking the env/branch row below it.
- */
-function injectSendControls(zone) {
-  const modelBtn = zone.querySelector(
-    '[data-ag-click-id="chat:3"], [data-ag-click-id="chat:2"]'
-  );
-  if (!modelBtn) return;
-
-  // Force full width on ancestor chain so flex space-between works
-  let el = modelBtn.parentElement;
-  while (el && el !== zone) {
-    el.style.width = '100%';
-    el = el.parentElement;
-  }
-
-  // Make the model button's container a flex row
-  const parent = modelBtn.parentElement;
-  parent.style.display = 'flex';
-  parent.style.alignItems = 'center';
-  parent.style.justifyContent = 'space-between';
-
-  const controls = document.createElement('div');
-  controls.className = 'ag2r-ns-toolbar-actions';
-  controls.innerHTML = `
-    <button type="button" id="ag2r-new-session-mic" class="mic-btn" aria-label="Voice input">
-      <span class="material-symbols-rounded mic-icon">mic</span>
-    </button>
-    <button type="button" id="ag2r-new-session-send" aria-label="Send">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor">
-        <path d="M120-160v-640l760,320-760,320Zm60-93 544-227-544-230v168l242,62-242,60v167Zm0,0v-457,457Z"/>
-      </svg>
-    </button>
-  `;
-  parent.appendChild(controls);
-}
 
 /**
  * Hide AG's send and attach buttons — they're non-functional DOM clones
