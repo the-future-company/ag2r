@@ -131,6 +131,11 @@ body {
   color: var(--text-primary);
 }
 
+/* ── Notification Bell ── */
+#notification-bell {
+  position: relative;
+}
+
 /* ── Connection Status Dot ── */
 .connection-dot {
   width: 8px;

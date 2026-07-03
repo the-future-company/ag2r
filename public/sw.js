@@ -17,7 +17,7 @@ self.addEventListener('push', (event) => {
     icon: data.icon || '/ag2r-icon.png',
     badge: '/ag2r-badge.png',
     tag,
-    data: { url: data.url },
+    data: { url: data.url, conversationId: data.conversationId },
     requireInteraction: true,
   };
 
@@ -30,17 +30,21 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const url = event.notification.data?.url;
+  const conversationId = event.notification.data?.conversationId;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // If an AG2R window is already open, tell it to open the sidebar and focus it
+      // If an AG2R window is already open, tell it to navigate and focus it
       if (windowClients.length > 0) {
         const target = windowClients[0];
-        target.postMessage({ type: 'open-sidebar' });
+        target.postMessage({
+          type: conversationId ? 'navigate-conversation' : 'open-sidebar',
+          conversationId,
+        });
         return target.focus();
       }
 
-      // No open window — open one (with ?sidebar=open in the URL)
+      // No open window — open one (URL already has ?sidebar=open&conversationId=<id>)
       if (url) return clients.openWindow(url);
     })
   );

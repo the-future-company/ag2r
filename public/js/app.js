@@ -113,20 +113,27 @@ const subagentInfo = document.getElementById('subagent-info');
 // Suppression: ignore stale dialog/dropdown snapshots for a short window after user dismisses
 let overlayDismissedAt = 0;
 
-// Handle ?sidebar=open URL param (from push notification clicks)
-// Opens the left sidebar so the user can see which conversation needs attention.
+// Handle ?sidebar=open&conversationId=<id> URL params (from push notification clicks)
+// If conversationId is present, navigate directly to that conversation.
+// Otherwise, just open the left sidebar.
 const _urlParams = new URLSearchParams(window.location.search);
 if (_urlParams.get('sidebar') === 'open') {
+  const _notifConversationId = _urlParams.get('conversationId');
   // Defer until first snapshot loads (sidebar content needs to be populated)
   let _sidebarOpenPending = true;
-  const _origLoadSnapshot = window._ag2rSidebarOpenHook = () => {
+  window._ag2rSidebarOpenHook = () => {
     if (_sidebarOpenPending) {
       _sidebarOpenPending = false;
-      openLeftSidebar();
+      if (_notifConversationId) {
+        navigateToConversation(_notifConversationId);
+      } else {
+        openLeftSidebar();
+      }
     }
   };
   // Clean URL so refresh doesn't re-trigger
   _urlParams.delete('sidebar');
+  _urlParams.delete('conversationId');
   const cleanUrl = _urlParams.toString()
     ? `${window.location.pathname}?${_urlParams.toString()}`
     : window.location.pathname;
@@ -2765,67 +2772,166 @@ updateActionButton();
 // Push Notifications — Auto-Subscribe
 // ─────────────────────────────────────────────
 
-// Visible on-screen push log (temp debug — no console access on phone)
-const _pushLogEl = (() => {
-  const panel = document.createElement('div');
-  panel.id = 'push-log-panel';
-  panel.style.cssText = 'display:none;position:fixed;bottom:0;left:0;right:0;max-height:50vh;overflow-y:auto;background:#111;color:#0f0;font:11px/1.4 monospace;padding:8px 12px;z-index:9999;border-top:2px solid #0f0;';
-  const header = document.createElement('div');
-  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;';
-  header.innerHTML = '<b style="color:#0f0">Push Debug Log</b>';
-  const testBtn = document.createElement('button');
-  testBtn.textContent = '🔔 Send Test';
-  testBtn.style.cssText = 'background:#222;color:#0f0;border:1px solid #0f0;padding:4px 10px;border-radius:4px;font:12px monospace;cursor:pointer;';
-  testBtn.onclick = async () => {
-    pushLog('Sending test notification...');
-    try {
-      const resp = await fetch('/push/test', { method: 'POST' });
-      const data = await resp.json();
-      pushLog('Test result: subs=' + data.subscribers + ' ok=' + data.ok);
-    } catch (e) {
-      pushLog('Test error: ' + e.message);
-    }
-  };
-  header.appendChild(testBtn);
-  panel.appendChild(header);
-  const log = document.createElement('div');
-  log.id = 'push-log-entries';
-  panel.appendChild(log);
-  document.body.appendChild(panel);
-  return log;
-})();
+// ─────────────────────────────────────────────
+// Notification Bell — subscribe/pause/resume
+// ─────────────────────────────────────────────
+// States: 'unsubscribed' | 'active' | 'paused'
+// Unsubscribed: gray bell + notifications_off icon
+// Active:       blue bell + notifications icon
+// Paused:       gray bell + zzz overlay via CSS
 
-function pushLog(msg) {
-  console.log('[Push]', msg);
-  const line = document.createElement('div');
-  const ts = new Date().toLocaleTimeString();
-  line.textContent = ts + ' ' + msg;
-  // Color errors red, success green
-  if (msg.includes('ERROR') || msg.includes('error') || msg.includes('denied') || msg.includes('rejected')) {
-    line.style.color = '#f44';
-  } else if (msg.includes('✓')) {
-    line.style.color = '#4f4';
+const _bellBtn = document.getElementById('notification-bell');
+const _bellIcon = document.getElementById('notification-bell-icon');
+let _bellState = 'unsubscribed'; // current state
+
+function setBellState(state) {
+  _bellState = state;
+  if (!_bellBtn || !_bellIcon) return;
+  _bellBtn.dataset.state = state;
+
+  if (state === 'unsubscribed') {
+    _bellIcon.textContent = 'notifications_off';
+    _bellBtn.title = 'Notifications off — tap to enable';
+  } else if (state === 'active') {
+    _bellIcon.textContent = 'notifications_active';
+    _bellBtn.title = 'Notifications on — tap to pause';
+  } else if (state === 'paused') {
+    _bellIcon.textContent = 'notifications';
+    _bellBtn.title = 'Notifications paused — tap to resume';
   }
-  _pushLogEl.appendChild(line);
-  _pushLogEl.scrollTop = _pushLogEl.scrollHeight;
 }
 
-function pushDebug(msg) {
-  debugLog('push', msg);
+// Detect current notification state on page load
+async function detectBellState() {
+  // 1. Browser permission check
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    setBellState('unsubscribed');
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    setBellState('unsubscribed');
+    return;
+  }
+
+  // 2. Check for existing push subscription
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      setBellState('unsubscribed');
+      return;
+    }
+
+    // Verify VAPID key matches server's current key
+    const keyMatch = await checkVapidKeyMatch(subscription);
+    if (!keyMatch) {
+      // Stale subscription — treat as unsubscribed
+      await subscription.unsubscribe();
+      setBellState('unsubscribed');
+      return;
+    }
+
+    // 3. Check server-side pause state
+    const res = await fetchAPI('/push/state');
+    const state = await res.json();
+    setBellState(state.paused ? 'paused' : 'active');
+  } catch (e) {
+    console.debug('[Bell] Detection error:', e.message);
+    setBellState('unsubscribed');
+  }
 }
 
-// Bell button toggles the push log panel
-const pushTestBtn = document.getElementById('push-test-btn');
-if (pushTestBtn) {
-  pushTestBtn.addEventListener('click', () => {
-    const panel = document.getElementById('push-log-panel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-  });
+// Bell tap handler — cycles through states
+async function handleBellTap() {
+  if (_bellState === 'unsubscribed') {
+    // Subscribe flow
+    await subscribeNotifications();
+  } else if (_bellState === 'active') {
+    // Pause
+    try {
+      await fetchAPI('/push/pause', { method: 'POST' });
+      setBellState('paused');
+    } catch (e) {
+      console.debug('[Bell] Pause error:', e.message);
+    }
+  } else if (_bellState === 'paused') {
+    // Resume
+    try {
+      await fetchAPI('/push/resume', { method: 'POST' });
+      setBellState('active');
+    } catch (e) {
+      console.debug('[Bell] Resume error:', e.message);
+    }
+  }
 }
+
+async function subscribeNotifications() {
+  try {
+    // Register SW first
+    const registration = await navigator.serviceWorker.register('/sw.js');
+
+    // Check existing subscription
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) {
+      const keyMatch = await checkVapidKeyMatch(existing);
+      if (keyMatch) {
+        // Re-sync with server
+        await sendSubscription(existing);
+        // Ensure not paused
+        await fetchAPI('/push/resume', { method: 'POST' });
+        setBellState('active');
+        return;
+      }
+      // VAPID mismatch — unsubscribe old and re-subscribe
+      await existing.unsubscribe();
+    }
+
+    // Request permission if needed
+    if (Notification.permission === 'default') {
+      const result = await Notification.requestPermission();
+      if (result !== 'granted') {
+        setBellState('unsubscribed');
+        return;
+      }
+    }
+
+    if (Notification.permission !== 'granted') {
+      setBellState('unsubscribed');
+      return;
+    }
+
+    // Subscribe with VAPID key
+    await subscribePush(registration);
+    // Ensure not paused
+    await fetchAPI('/push/resume', { method: 'POST' });
+    setBellState('active');
+  } catch (e) {
+    console.debug('[Bell] Subscribe error:', e.message);
+    setBellState('unsubscribed');
+  }
+}
+
+// Auto-detect permission revocation when user returns to app
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && _bellState !== 'unsubscribed') {
+    if ('Notification' in window && Notification.permission === 'denied') {
+      setBellState('unsubscribed');
+    }
+  }
+});
+
+if (_bellBtn) {
+  _bellBtn.addEventListener('click', handleBellTap);
+}
+
+// ─────────────────────────────────────────────
+// Push Subscription Helpers
+// ─────────────────────────────────────────────
 
 async function checkVapidKeyMatch(subscription) {
   try {
-    const res = await fetch('/push/vapid-public-key');
+    const res = await fetchAPI('/push/vapid-public-key');
     const { publicKey } = await res.json();
     const serverKey = urlBase64ToUint8Array(publicKey);
     const subKey = new Uint8Array(subscription.options.applicationServerKey);
@@ -2836,106 +2942,25 @@ async function checkVapidKeyMatch(subscription) {
     return true;
   }
 }
-async function initPushNotifications() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    pushLog('Not supported (no SW or PushManager)');
-    return;
-  }
-
-  try {
-    pushLog('Registering service worker...');
-    const registration = await navigator.serviceWorker.register('/sw.js');
-    pushLog('Service worker registered ✓');
-
-    const existing = await registration.pushManager.getSubscription();
-    if (existing) {
-      // Check if the subscription's VAPID key matches the server's current key
-      const keyMatch = await checkVapidKeyMatch(existing);
-      if (keyMatch) {
-        pushLog('Existing subscription valid — re-sending to server');
-        await sendSubscription(existing);
-        pushLog('Subscription synced ✓');
-        return;
-      }
-      // VAPID key mismatch — stale subscription from old keys
-      pushLog('VAPID key mismatch — re-subscribing with current keys');
-      await existing.unsubscribe();
-      await subscribePush(registration);
-      pushLog('Re-subscribed ✓');
-      return;
-    }
-
-    pushLog('No existing subscription. Permission=' + Notification.permission);
-    if (Notification.permission === 'denied') {
-      pushLog('Permission denied — cannot subscribe');
-      return;
-    }
-
-    if (Notification.permission === 'granted') {
-      pushLog('Permission granted — subscribing...');
-      await subscribePush(registration);
-      pushLog('Subscribed ✓');
-      return;
-    }
-
-    // Only request on genuine user gesture — capture phase fires before
-    // any inner stopPropagation() calls. Never request without gesture,
-    // as Chrome's "quiet UI" will auto-deny and permanently block the domain.
-    pushLog('Permission not yet granted — waiting for user gesture to request');
-    const handler = async () => {
-      document.removeEventListener('touchstart', handler, true);
-      document.removeEventListener('mousedown', handler, true);
-      pushLog('User gesture detected — requesting permission...');
-      const result = await Notification.requestPermission();
-      pushLog('Permission result: ' + result);
-      if (result === 'granted') {
-        await subscribePush(registration);
-        pushLog('Subscribed ✓');
-      } else if (result === 'default') {
-        document.addEventListener('touchstart', handler, { capture: true, once: true });
-        document.addEventListener('mousedown', handler, { capture: true, once: true });
-      }
-    };
-    document.addEventListener('touchstart', handler, { capture: true, once: true });
-    document.addEventListener('mousedown', handler, { capture: true, once: true });
-  } catch (e) {
-    pushLog('ERROR: ' + e.message);
-  }
-}
 
 async function subscribePush(registration) {
-  try {
-    const res = await fetch('/push/vapid-public-key');
-    const { publicKey } = await res.json();
-    pushDebug('VAPID key fetched: ' + publicKey.substring(0, 20) + '...');
+  const res = await fetchAPI('/push/vapid-public-key');
+  const { publicKey } = await res.json();
 
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
 
-    pushLog('Browser subscription created — endpoint: ' + subscription.endpoint.substring(0, 60) + '...');
-    await sendSubscription(subscription);
-  } catch (e) {
-    pushLog('Subscribe error: ' + e.message);
-  }
+  await sendSubscription(subscription);
 }
 
 async function sendSubscription(subscription) {
-  try {
-    const resp = await fetch('/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subscription),
-    });
-    if (resp.ok) {
-      pushLog('Subscription sent to server ✓');
-    } else {
-      pushLog('Server rejected subscription: ' + resp.status);
-    }
-  } catch (e) {
-    pushLog('Failed to send subscription to server: ' + e.message);
-  }
+  await fetch('/push/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(subscription),
+  });
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -2947,12 +2972,50 @@ function urlBase64ToUint8Array(base64String) {
   return arr;
 }
 
-initPushNotifications();
+// ─────────────────────────────────────────────
+// Notification Navigation (from push notification clicks)
+// ─────────────────────────────────────────────
 
-// Listen for postMessage from service worker (notification click → open sidebar)
+async function navigateToConversation(conversationId) {
+  try {
+    const res = await fetchAPI('/navigate-conversation', {
+      method: 'POST',
+      body: JSON.stringify({ conversationId }),
+    });
+    const result = await res.json();
+    console.debug('[Notification] Navigate to conversation:', conversationId, result);
+    if (!result?.ok) {
+      // Fallback: just open sidebar so user can find it manually
+      openLeftSidebar();
+    }
+  } catch (err) {
+    console.debug('[Notification] Navigate error:', err.message);
+    openLeftSidebar();
+  }
+}
+
+// ─────────────────────────────────────────────
+// Initialization
+// ─────────────────────────────────────────────
+
+// Register SW and detect bell state (replaces old auto-subscribe initPushNotifications)
+(async () => {
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+    } catch (e) {
+      console.debug('[SW] Registration failed:', e.message);
+    }
+  }
+  await detectBellState();
+})();
+
+// Listen for postMessage from service worker (notification click → navigate or open sidebar)
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data?.type === 'open-sidebar') {
+    if (event.data?.type === 'navigate-conversation' && event.data.conversationId) {
+      navigateToConversation(event.data.conversationId);
+    } else if (event.data?.type === 'open-sidebar') {
       openLeftSidebar();
     }
   });

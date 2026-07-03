@@ -41,6 +41,7 @@ import { buildTypeTextScript } from './src/cdp-scripts/type-text.js';
 import { buildUploadImageScript } from './src/cdp-scripts/upload-image.js';
 import { CLICK_SEND_BUTTON_SCRIPT } from './src/cdp-scripts/click-send-button.js';
 import { EXPAND_LEFT_SIDEBAR_SCRIPT } from './src/cdp-scripts/expand-left-sidebar.js';
+import { buildClickConversationScript } from './src/cdp-scripts/click-conversation.js';
 import { buildCopyResponseScript } from './src/cdp-scripts/copy-response.js';
 import { DISMISS_SCHEDULED_TASKS_SCRIPT } from './src/cdp-scripts/dismiss-scheduled-tasks.js';
 import { DISMISS_SETTINGS_SCRIPT } from './src/cdp-scripts/dismiss-settings.js';
@@ -153,6 +154,31 @@ function saveSubscriptions() {
 const vapidKeys = initVapid();
 loadSubscriptions();
 
+// === Push Pause State ===
+const PUSH_PAUSED_PATH = getConfigPath('push-paused.json');
+let pushPaused = false;
+
+function loadPauseState() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(PUSH_PAUSED_PATH, 'utf-8'));
+    pushPaused = !!raw.paused;
+    if (pushPaused) log('Push', 'Notifications are paused');
+  } catch {
+    // No file yet — default to not paused
+  }
+}
+
+function savePauseState() {
+  try {
+    ensureConfigDir();
+    fs.writeFileSync(PUSH_PAUSED_PATH, JSON.stringify({ paused: pushPaused }));
+  } catch (e) {
+    console.debug('[Push] Failed to save pause state:', e.message);
+  }
+}
+
+loadPauseState();
+
 // Send push notification to all subscribers
 async function sendPushToAll(payload) {
   if (pushSubscriptions.size === 0) {
@@ -165,7 +191,9 @@ async function sendPushToAll(payload) {
   for (const [endpoint, sub] of pushSubscriptions) {
     // Resolve notification click URL per-subscription from stored origin
     const base = sub.origin || TUNNEL_URL || `https://localhost:${PORT}`;
-    const url = base + (base.includes('?') ? '&' : '?') + 'sidebar=open';
+    const params = new URLSearchParams({ sidebar: 'open' });
+    if (payload.conversationId) params.set('conversationId', payload.conversationId);
+    const url = base + (base.includes('?') ? '&' : '?') + params.toString();
     const body = JSON.stringify({ ...payload, url, icon: appIconPath });
     try {
       await webpush.sendNotification(sub, body);
@@ -200,6 +228,7 @@ function truncName(name) {
 
 function checkAttentionState(snapshot) {
   if (visibleClients > 0) return; // App is in foreground — no push needed
+  if (pushPaused) return; // User paused notifications
 
   const attentionItems = (snapshot.sidebarAttentionItems || [])
     .filter(item => item.type !== 'completed');
@@ -236,6 +265,7 @@ function checkAttentionState(snapshot) {
       title: appName,
       body,
       tag: `ag2r-${item.id}`,
+      conversationId: item.id,
     });
   }
 }
@@ -1062,6 +1092,31 @@ app.post('/expand-left-sidebar', async (req, res) => {
   }
 });
 
+// --- Navigate to Conversation by UUID (from notification click) ---
+app.post('/navigate-conversation', async (req, res) => {
+  const { conversationId } = req.body;
+  if (!conversationId) {
+    return res.status(400).json({ error: 'conversationId is required' });
+  }
+  if (!cdpClient) {
+    return res.status(503).json({ error: 'CDP not connected' });
+  }
+  try {
+    const script = buildClickConversationScript(JSON.stringify(conversationId));
+    const result = await evaluateInBrowser(script);
+    log('NavigateConversation', JSON.stringify(result));
+    res.json(result || { ok: false });
+
+    // Burst re-captures to pick up the conversation switch
+    if (result?.ok) {
+      fireBurstCaptures([300, 600, 1200]);
+    }
+  } catch (e) {
+    console.debug('[NavigateConversation] Error:', e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // --- Copy Response (intercept AG's clipboard.writeText, return markdown) ---
 app.post('/copy-response', async (req, res) => {
   track('code_copied');
@@ -1569,6 +1624,25 @@ app.get('/push/status', (req, res) => {
     lastPushSentAt: lastPushSentAt ? new Date(lastPushSentAt).toISOString() : null,
     cooldownMs: PUSH_COOLDOWN_MS,
   });
+});
+
+// Push notification state (for bell icon in client)
+app.get('/push/state', (req, res) => {
+  res.json({ paused: pushPaused, subscribers: pushSubscriptions.size });
+});
+
+app.post('/push/pause', (req, res) => {
+  pushPaused = true;
+  savePauseState();
+  log('Push', 'Notifications paused by user');
+  res.json({ ok: true, paused: true });
+});
+
+app.post('/push/resume', (req, res) => {
+  pushPaused = false;
+  savePauseState();
+  log('Push', 'Notifications resumed by user');
+  res.json({ ok: true, paused: false });
 });
 
 // --- Health ---
