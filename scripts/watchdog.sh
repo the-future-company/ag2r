@@ -42,6 +42,7 @@ fi
 
 LOG="${AG2R_LOG:-/tmp/ag2r-${BRANCH}.log}"
 BOOT_COMMIT_FILE="/tmp/ag2r-${BRANCH}-boot-commit"
+ENV_HASH_FILE="/tmp/ag2r-${BRANCH}-env-hash"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog checking branch=$BRANCH port=$PORT"
 
@@ -65,6 +66,7 @@ if [ -z "$SERVER_PID" ]; then
   # Start server
   PORT="${PORT}" nohup node server.js >> "$LOG" 2>&1 &
   git rev-parse HEAD > "$BOOT_COMMIT_FILE" 2>/dev/null || true
+  md5 -q .env > "$ENV_HASH_FILE" 2>/dev/null || true
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server started with PID $! on branch $BRANCH (commit $(head -c 12 "$BOOT_COMMIT_FILE"))"
   exit 0
 fi
@@ -86,35 +88,58 @@ if [ -z "$BOOT_COMMIT" ]; then
   sleep 2
   PORT="${PORT}" nohup node server.js >> "$LOG" 2>&1 &
   git rev-parse HEAD > "$BOOT_COMMIT_FILE" 2>/dev/null || true
+  md5 -q .env > "$ENV_HASH_FILE" 2>/dev/null || true
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server restarted with PID $! on branch $BRANCH"
   exit 0
 fi
 
 REMOTE=$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo "unknown")
 
-if [ "$BOOT_COMMIT" = "$REMOTE" ]; then
-  # Server is running the latest code
+if [ "$BOOT_COMMIT" != "$REMOTE" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server is stale (${BOOT_COMMIT:0:12} → ${REMOTE:0:12}), updating..."
+
+  # Pull latest
+  git pull origin "$BRANCH" --quiet 2>&1 || { echo "[$(date '+%Y-%m-%d %H:%M:%S')] git pull failed"; exit 1; }
+
+  # Check if package-lock changed → npm ci
+  if git diff --name-only "$BOOT_COMMIT" "$REMOTE" | grep -q "package-lock.json"; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] package-lock changed, running npm ci..."
+    npm ci --silent 2>&1 || true
+  fi
+
+  # Restart the server
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restarting server on port ${PORT}..."
+  kill "$SERVER_PID" 2>/dev/null || true
+  sleep 2
+
+  PORT="${PORT}" nohup node server.js >> "$LOG" 2>&1 &
+
+  # Record the new boot commit + .env hash
+  echo "$REMOTE" > "$BOOT_COMMIT_FILE"
+  md5 -q .env > "$ENV_HASH_FILE" 2>/dev/null || true
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server restarted with PID $! on branch $BRANCH (now at ${REMOTE:0:12})"
   exit 0
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server is stale (${BOOT_COMMIT:0:12} → ${REMOTE:0:12}), updating..."
-
-# Pull latest
-git pull origin "$BRANCH" --quiet 2>&1 || { echo "[$(date '+%Y-%m-%d %H:%M:%S')] git pull failed"; exit 1; }
-
-# Check if package-lock changed → npm ci
-if git diff --name-only "$BOOT_COMMIT" "$REMOTE" | grep -q "package-lock.json"; then
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] package-lock changed, running npm ci..."
-  npm ci --silent 2>&1 || true
+# ── 3. .env change detection ──
+# Git didn't trigger a restart — check if .env was edited on disk.
+ENV_HASH_CURRENT=$(md5 -q .env 2>/dev/null || echo "unknown")
+ENV_HASH_BOOT=""
+if [ -f "$ENV_HASH_FILE" ]; then
+  ENV_HASH_BOOT=$(cat "$ENV_HASH_FILE" 2>/dev/null || true)
 fi
 
-# Restart the server
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restarting server on port ${PORT}..."
-kill "$SERVER_PID" 2>/dev/null || true
-sleep 2
+# If no boot hash recorded, record current and skip
+if [ -z "$ENV_HASH_BOOT" ]; then
+  echo "$ENV_HASH_CURRENT" > "$ENV_HASH_FILE"
+  exit 0
+fi
 
-PORT="${PORT}" nohup node server.js >> "$LOG" 2>&1 &
-
-# Record the new boot commit
-echo "$REMOTE" > "$BOOT_COMMIT_FILE"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server restarted with PID $! on branch $BRANCH (now at ${REMOTE:0:12})"
+if [ "$ENV_HASH_CURRENT" != "$ENV_HASH_BOOT" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] .env changed on disk (${ENV_HASH_BOOT:0:8} → ${ENV_HASH_CURRENT:0:8}), restarting..."
+  kill "$SERVER_PID" 2>/dev/null || true
+  sleep 2
+  PORT="${PORT}" nohup node server.js >> "$LOG" 2>&1 &
+  echo "$ENV_HASH_CURRENT" > "$ENV_HASH_FILE"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server restarted with PID $! on branch $BRANCH (.env hash ${ENV_HASH_CURRENT:0:8})"
+fi
