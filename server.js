@@ -1213,7 +1213,11 @@ app.post('/restart-antigravity', async (req, res) => {
     // Wait for process to die, then relaunch
     setTimeout(() => {
       log('Restart', 'Relaunching Antigravity...');
-      exec('open -a Antigravity --args --remote-debugging-port=9000', (err) => {
+      // Launch AG in a fresh login shell so it doesn't inherit AG2R's env vars.
+      // env -i clears all env, then bash -l rebuilds from shell configs (~/.bash_profile, etc.)
+      // — same clean environment as when cron's ag-watchdog.sh starts AG.
+      const home = process.env.HOME || '/Users/' + process.env.USER;
+      exec(`env -i HOME=${home} /bin/bash -l -c 'open -a Antigravity --args --remote-debugging-port=9000'`, (err) => {
         if (err) log('Restart', 'Relaunch error:', err.message);
         else log('Restart', 'Relaunch command sent');
       });
