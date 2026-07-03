@@ -379,6 +379,10 @@ async function loadSnapshot() {
 
     const data = await res.json();
 
+    // Skip re-render if content hasn't changed — prevents destroying text
+    // selection when polling returns identical content (e.g. agent idle).
+    if (data.hash && data.hash === lastHash) return;
+
     // Update hash
     lastHash = data.hash;
 
