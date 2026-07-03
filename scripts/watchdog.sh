@@ -20,11 +20,11 @@ export NVM_DIR="$HOME/.nvm"
 # Ensure system tools (lsof, kill) are in PATH — cron defaults to /usr/bin:/bin
 export PATH="/usr/sbin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 
-# Load .env if present (simple key=value, skip comments/blanks)
+# Load .env if present — bash natively handles comments and blank lines
 # set -a exports all sourced vars; existing env vars take precedence (same as dotenv)
 if [ -f .env ]; then
   set -a
-  source <(grep -v '^\s*#' .env | grep -v '^\s*$')
+  source .env
   set +a
 fi
 
