@@ -739,6 +739,7 @@ function fireBurstCaptures(delays) {
             (snapshot.dropdownHtml || '') +
             (snapshot.dialogHtml || '') +
             (snapshot.settingsHtml || '') +
+            (snapshot.askQuestionHtml || '') +
             (snapshot.permissionHtml || '') +
             (snapshot.runningTasksHtml || '') +
             (snapshot.scheduledTasksHtml || '') +
@@ -789,6 +790,7 @@ function startPolling() {
           (snapshot.dropdownHtml || '') +
           (snapshot.dialogHtml || '') +
           (snapshot.settingsHtml || '') +
+          (snapshot.askQuestionHtml || '') +
           (snapshot.permissionHtml || '') +
           (snapshot.runningTasksHtml || '') +
           (snapshot.scheduledTasksHtml || '') +

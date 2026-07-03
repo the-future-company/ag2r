@@ -659,21 +659,24 @@ async function loadSnapshot() {
       delete dropdownContent.dataset.lastDialogHtml;
     }
 
-    // Render permission banner if AG is asking for approval
-    if (data.permissionHtml) {
+    // Render permission banner or ask_question modal if AG is asking for approval/input.
+    // Both use the same permissionOverlay container — they're mutually exclusive
+    // (capture.js guards against both being set simultaneously).
+    const approvalHtml = data.askQuestionHtml || data.permissionHtml;
+    if (approvalHtml) {
       // Skip re-render if the HTML hasn't changed or the user has focus inside
       // (e.g. typing in the write-in textarea).
       const hasFocusInside = permissionContent.contains(document.activeElement) && document.activeElement !== permissionContent;
-      if (data.permissionHtml === permissionContent.dataset.lastHtml || hasFocusInside) {
+      if (approvalHtml === permissionContent.dataset.lastHtml || hasFocusInside) {
         // Identical HTML or user is interacting — don't rebuild
       } else {
-      permissionContent.dataset.lastHtml = data.permissionHtml;
+      permissionContent.dataset.lastHtml = approvalHtml;
 
       // Render AG's captured HTML natively with AG's CSS — same approach as dialog native.
       // No rebuild, no text extraction: just display exactly what AG shows, sized for mobile.
       permissionContent.innerHTML = `
         <style>${cdpStyles.textContent || ''}</style>
-        <div class="ag2r-permission-native">${data.permissionHtml}</div>
+        <div class="ag2r-permission-native">${approvalHtml}</div>
       `;
 
       // Wire click proxying for all tagged elements (labels and buttons)
@@ -1553,10 +1556,10 @@ dropdownBackdrop.addEventListener('click', () => {
   fetchAPI('/dismiss-portal', { method: 'POST' }).catch(() => {});
 });
 
-// Permission backdrop: click Skip when dismissing
+// Permission/ask_question backdrop: click Skip when dismissing
 permissionBackdrop.addEventListener('click', async () => {
-  // Find and click the Skip button in AG
-  const skipBtn = permissionContent.querySelector('.perm-skip');
+  // Find the Skip button by its click label (native rendering uses data-ag-click-label)
+  const skipBtn = permissionContent.querySelector('[data-ag-click-label="Skip"]');
   if (skipBtn) skipBtn.click();
   else permissionOverlay.classList.add('hidden');
 });

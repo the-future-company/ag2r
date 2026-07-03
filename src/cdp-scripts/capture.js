@@ -350,11 +350,64 @@ export const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Active tab detection error:', e.message);
   }
 
-  // -- 10. Detect and capture permission/approval banner --
+  // -- 10. Detect and capture ask_question modal --
+  // The ask_question widget is rendered inline in the chat (inside #root) as a card
+  // with a radiogroup + Submit/Skip buttons. It has no role="dialog" or fixed overlay.
+  // Detect via Submit+Skip buttons and walk up to the card wrapper.
+  let askQuestionHtml = null;
+  let askQuestionContainer = null; // Used to guard permission capture below
+  try {
+    const allBtns = Array.from(document.querySelectorAll('button'));
+    const skipBtn = allBtns.find(b => b.textContent.trim() === 'Skip');
+    const submitBtn = allBtns.find(b => /^Submit/.test(b.textContent.trim()));
+    if (skipBtn && submitBtn) {
+      // Walk up from Skip button to find the container that also has Submit
+      let container = skipBtn;
+      for (let i = 0; i < 20 && container.parentElement; i++) {
+        container = container.parentElement;
+        if (container.contains(submitBtn)) break;
+      }
+      // Walk up to the card border wrapper (rounded-2xl bg-card-border)
+      let cardRoot = container;
+      for (let i = 0; i < 5 && cardRoot.parentElement; i++) {
+        const cls = (cardRoot.className || '').toString();
+        if (cls.includes('bg-card-border')) break;
+        cardRoot = cardRoot.parentElement;
+      }
+      askQuestionContainer = cardRoot;
+      // Tag interactive elements: radio/checkbox labels and buttons
+      let askIdx = 0;
+      const askTagged = [];
+      cardRoot.querySelectorAll('[role="radiogroup"] label, [role="group"] label').forEach(el => {
+        el.setAttribute('data-ag-click-id', 'ask:' + askIdx);
+        el.setAttribute('data-ag-click-label', (el.textContent || '').trim().substring(0, 50));
+        askIdx++;
+        askTagged.push(el);
+      });
+      cardRoot.querySelectorAll('button').forEach(el => {
+        el.setAttribute('data-ag-click-id', 'ask:' + askIdx);
+        el.setAttribute('data-ag-click-label', (el.textContent || '').trim().substring(0, 50));
+        askIdx++;
+        askTagged.push(el);
+      });
+      const askClone = cardRoot.cloneNode(true);
+      askTagged.forEach(el => {
+        el.removeAttribute('data-ag-click-id');
+        el.removeAttribute('data-ag-click-label');
+      });
+      askClone.querySelectorAll('style').forEach(s => s.remove());
+      askQuestionHtml = askClone.outerHTML;
+    }
+  } catch (e) {
+    console.debug('[AG2R] Ask question capture error:', e.message);
+  }
+
+  // -- 11. Detect and capture permission/approval banner --
   let permissionHtml = null;
   try {
     const radioGroup = document.querySelector('[role="radiogroup"]');
-    if (radioGroup) {
+    // Guard: skip if the radiogroup belongs to an ask_question widget (already captured above)
+    if (radioGroup && !(askQuestionContainer && askQuestionContainer.contains(radioGroup))) {
       // Walk up to find the full banner container
       let banner = radioGroup;
       for (let i = 0; i < 10; i++) {
@@ -388,7 +441,7 @@ export const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Permission banner capture error:', e.message);
   }
 
-  // -- 11. Extract environment/worktree and branch from new session bottom bar --
+  // -- 12. Extract environment/worktree and branch from new session bottom bar --
   // The environment button (aria-label="Select Environment") shows "Local" or "New Worktree" or a worktree name.
   // The branch button (aria-label="Select Default Branch") shows the branch name and only appears in worktree mode.
   let environmentName = null;
@@ -408,7 +461,7 @@ export const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Environment/branch extraction error:', e.message);
   }
 
-  // -- 12. Extract model name from model selector button --
+  // -- 13. Extract model name from model selector button --
   let modelName = null;
   try {
     const modelBtn = document.querySelector('[aria-label*="Select model"]');
@@ -420,9 +473,9 @@ export const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Model name extraction error:', e.message);
   }
 
-  // -- 13. Detect subagent view --
+  // -- 14. Detect subagent view --
   // Two independent signals, both required to confirm subagent view:
-  // -- 13a. Subagent view detection --
+  // -- 14a. Subagent view detection --
   // Two independent heuristics:
   //   1. isInputBoxHidden: AG's input box is missing or invisible → hide AG2R's text box
   //   2. isSubagentView: "Cannot send" text found → show yellow border + subagent banner
@@ -481,7 +534,7 @@ export const CAPTURE_SCRIPT = `
     console.debug('[AG2R] Subagent detection error:', e.message);
   }
 
-  // -- 13b. Capture subagent info panel --
+  // -- 14b. Capture subagent info panel --
   // When in subagent view, AG renders a "cannot prompt subagents" message and
   // "Open overview" button somewhere in the page. Search for it and capture.
   let subagentInfoHtml = null;
@@ -522,6 +575,6 @@ export const CAPTURE_SCRIPT = `
     }
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarAttentionItems, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, permissionHtml, environmentName, branchName, modelName };
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarAttentionItems, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, askQuestionHtml, permissionHtml, environmentName, branchName, modelName };
 })()
 `;

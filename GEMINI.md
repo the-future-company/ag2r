@@ -16,7 +16,7 @@ You are a Senior Full Stack Engineer and primary developer for **AG2R** (Antigra
 
 4. **Copy untracked dev files.** Some files and directories are gitignored but contain developer tools and config that don't carry over to new worktrees. Check `.gitignore` for untracked directories (e.g., `_tools/`) and copy them from the source worktree (`~/Workspace/ag2r` for main, `~/Workspace/ag2r-next` for next). Always copy `.env`:
    ```bash
-   cp /Users/omercan/Workspace/ag2r/.env .env 2>/dev/null || echo "No .env — copy .env.example and configure"
+   cp /Users/omercan/Workspace/ag2r/.env .env
    ```
 
 ## 📖 Context (After Startup)
@@ -161,3 +161,7 @@ gh issue list --label "bug" --state open
 7. **Handover prompts in code blocks.** When producing a next-session / continuation prompt, wrap the entire prompt in a 4-backtick code block so the user can copy it from the remote app.
 
 8. **AG2R is a multi-platform product with real users.** Never assume it only runs on the developer's machine or OS. The system metadata says `OS: mac` because that's the dev machine — users run AG2R on macOS, Linux, and Windows. Always write cross-platform code and never dismiss a platform as irrelevant.
+
+9. **Never use shell redirection (`>`, `>>`, `2>`).**  Do not redirect stdout or stderr. These operators require extra user approval in the Antigravity terminal. Use pipes (`|`) and `&&` instead — those are fine. If you need to save output, pipe to `tee` or use a tool that writes files directly.
+
+10. **Use 30xx ports for testing.** Production runs on `PORT=3000`. When starting a test server, use the 30xx range (e.g. 3001, 3002) — not arbitrary high ports like 8445.

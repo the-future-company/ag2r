@@ -85,6 +85,36 @@ export function buildMainClickScript(safeClickId, safeLabel) {
                  settingsOverlay.querySelector('[class*="rounded-2xl"]') ||
                  settingsOverlay;
         }
+      } else if (source === 'ask') {
+        // Ask question modal: find Submit+Skip buttons, walk up to card wrapper,
+        // enumerate labels then buttons (same order as capture tagging)
+        const allBtns = Array.from(document.querySelectorAll('button'));
+        const skipBtn = allBtns.find(b => b.textContent.trim() === 'Skip');
+        const submitBtn = allBtns.find(b => /^Submit/.test(b.textContent.trim()));
+        if (skipBtn && submitBtn) {
+          let container = skipBtn;
+          for (let i = 0; i < 20 && container.parentElement; i++) {
+            container = container.parentElement;
+            if (container.contains(submitBtn)) break;
+          }
+          let cardRoot = container;
+          for (let i = 0; i < 5 && cardRoot.parentElement; i++) {
+            const cls = (cardRoot.className || '').toString();
+            if (cls.includes('bg-card-border')) break;
+            cardRoot = cardRoot.parentElement;
+          }
+          const askEls = [];
+          cardRoot.querySelectorAll('[role="radiogroup"] label, [role="group"] label').forEach(el => askEls.push(el));
+          cardRoot.querySelectorAll('button').forEach(el => askEls.push(el));
+          if (idx >= 0 && idx < askEls.length) {
+            const target = askEls[idx];
+            const actualLabel = (target.textContent || '').trim().substring(0, 50);
+            target.click();
+            return { ok: true, label: actualLabel, source: 'ask' };
+          }
+          return { ok: false, reason: 'ask_index_out_of_range', total: askEls.length };
+        }
+        return { ok: false, reason: 'no_ask_question_modal' };
       } else if (source === 'perm') {
         // Permission banner: find radiogroup document-wide (it's outside the scroll container)
         const radioGroup = document.querySelector('[role="radiogroup"]');
