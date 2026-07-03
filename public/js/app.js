@@ -2394,14 +2394,18 @@ function updateEmptyState(subtitle) {
 // Virtual Keyboard Handling
 // ─────────────────────────────────────────────
 if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', () => {
+  function handleViewportResize() {
+    const vh = window.visualViewport.height;
     // Adjust body height when keyboard opens/closes
-    document.body.style.height = window.visualViewport.height + 'px';
-  });
+    document.body.style.height = vh + 'px';
+    // Keep comment modals within visible area so keyboard doesn't cover actions
+    for (const modal of document.querySelectorAll('.comment-modal')) {
+      modal.style.height = vh + 'px';
+    }
+  }
 
-  window.visualViewport.addEventListener('scroll', () => {
-    document.body.style.height = window.visualViewport.height + 'px';
-  });
+  window.visualViewport.addEventListener('resize', handleViewportResize);
+  window.visualViewport.addEventListener('scroll', handleViewportResize);
 }
 
 // ─────────────────────────────────────────────
