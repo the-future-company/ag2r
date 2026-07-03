@@ -1,5 +1,8 @@
 // server.js — AG2R Server
 // CDP connection, snapshot capture, WebSocket broadcasting, Express, auth
+import 'dotenv/config'; // Side-effect import: loads .env before other modules evaluate
+
+
 import express from 'express';
 import { createServer as createHttpsServer } from 'https';
 import { createServer as createHttpServer } from 'http';
@@ -14,7 +17,6 @@ import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import selfsigned from 'selfsigned';
 import multer from 'multer';
-import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { track, startSession, endSession } from './src/telemetry.js';
 import { fetchFlags, getFlags } from './src/feature-flags.js';
@@ -50,8 +52,6 @@ import { CLOSE_RIGHT_SIDEBAR_SCRIPT } from './src/cdp-scripts/close-right-sideba
 import { SELECT_OVERVIEW_TAB_SCRIPT } from './src/cdp-scripts/select-overview-tab.js';
 import { buildProxyImageScript } from './src/cdp-scripts/proxy-image.js';
 import { HAS_VISIBLE_EDITOR_SCRIPT } from './src/cdp-scripts/has-visible-editor.js';
-
-dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

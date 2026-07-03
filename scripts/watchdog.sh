@@ -4,13 +4,13 @@
 # Designed to run as a cron job every 5 minutes.
 #
 # Usage:
-#   AG2R_PORT=3000 ./scripts/watchdog.sh
+#   ./scripts/watchdog.sh
 #
 # Cron example (every 5 minutes):
-#   */5 * * * * cd ~/ag2r && AG2R_PORT=3000 ./scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
+#   */5 * * * * cd ~/ag2r && ./scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
 #
-# Environment variables:
-#   AG2R_PORT  — Port to run the server on (default: 3000)
+# Configuration is read from .env (PORT, AG2R_ENV, etc.)
+# CLI env vars override .env values.
 
 set -euo pipefail
 
@@ -21,8 +21,16 @@ export NVM_DIR="$HOME/.nvm"
 # Ensure system tools (lsof, kill) are in PATH — cron defaults to /usr/bin:/bin
 export PATH="/usr/sbin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 
+# Load .env if present (simple key=value, skip comments/blanks)
+# set -a exports all sourced vars; existing env vars take precedence (same as dotenv)
+if [ -f .env ]; then
+  set -a
+  source <(grep -v '^\s*#' .env | grep -v '^\s*$')
+  set +a
+fi
+
 # Configuration
-PORT="${AG2R_PORT:-3000}"
+PORT="${AG2R_PORT:-${PORT:-3000}}"
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 
 if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then

@@ -228,7 +228,7 @@ A watchdog script can keep AG2R running and auto-update from the branch you're o
 
 ```bash
 # Run once to start (or add to cron for auto-recovery)
-AG2R_PORT=3000 ./scripts/watchdog.sh
+./scripts/watchdog.sh
 ```
 
 **Cron setup** (checks every 5 minutes):
@@ -236,10 +236,10 @@ AG2R_PORT=3000 ./scripts/watchdog.sh
 ```bash
 crontab -e
 # Add this line:
-*/5 * * * * cd ~/ag2r && AG2R_PORT=3000 ./scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
+*/5 * * * * cd ~/ag2r && ./scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
 ```
 
-The watchdog auto-detects branch changes. If you switch branches (`git checkout next`), the next watchdog cycle restarts the server with the correct code — no manual restart needed. Your `.env` is gitignored and persists across branch switches.
+The watchdog reads configuration from `.env` — no need to pass env vars in the crontab. It auto-detects branch changes: if you switch branches (`git checkout next`), the next watchdog cycle restarts the server with the correct code. Your `.env` is gitignored and persists across branch switches.
 
 The `tunnel-watchdog.sh` script can similarly keep a Cloudflare tunnel alive.
 
