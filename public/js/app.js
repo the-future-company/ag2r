@@ -2832,7 +2832,10 @@ async function detectBellState() {
       return;
     }
 
-    // 3. Check server-side pause state
+    // 3. Re-sync subscription to server (server may have lost it after restart/wipe)
+    await sendSubscription(subscription);
+
+    // 4. Check server-side pause state
     const res = await fetchAPI('/push/state');
     const state = await res.json();
     setBellState(state.paused ? 'paused' : 'active');
