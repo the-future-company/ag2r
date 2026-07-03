@@ -10,7 +10,6 @@
 #   */5 * * * * cd ~/ag2r && ./scripts/watchdog.sh >> /tmp/ag2r-watchdog.log 2>&1
 #
 # Configuration is read from .env (PORT, AG2R_ENV, etc.)
-# CLI env vars override .env values.
 
 set -euo pipefail
 
@@ -29,8 +28,11 @@ if [ -f .env ]; then
   set +a
 fi
 
-# Configuration
-PORT="${AG2R_PORT:-${PORT:-3000}}"
+# Configuration — PORT must be set in .env (copy from .env.example if missing)
+if [ -z "${PORT:-}" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: PORT is not set. Copy .env.example to .env and configure it."
+  exit 1
+fi
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 
 if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then

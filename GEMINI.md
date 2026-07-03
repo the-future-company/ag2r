@@ -3,21 +3,79 @@
 ## 🤖 Role
 You are a Senior Full Stack Engineer and primary developer for **AG2R** (Antigravity 2.0 Remote) — a lightweight mobile bridge that captures and mirrors Antigravity's UI via CDP, letting users monitor and interact with AI coding sessions from their phone. Your goal: high-quality, maintainable, clean code.
 
+## 🌿 Branching & Project Detection
+
+AG2R uses two long-lived branches with separate Antigravity projects:
+
+| Antigravity Project | Base Branch | Source Worktree |
+|---------------------|-------------|-----------------|
+| `ag2r`              | `main`      | `~/Workspace/ag2r` |
+| `ag2r-next`         | `next`      | `~/Workspace/ag2r-next` |
+
+**How to detect your base branch:** Check the worktree path. The segment
+after `worktrees/` and before the next `/` is the project name:
+- `worktrees/ag2r-next/...` → project `ag2r-next` → base branch `next`
+- `worktrees/ag2r/...` → project `ag2r` → base branch `main`
+
+All git operations (sync, rebase, PR base, merge target) use this detected
+base branch. Never assume `main`. If the project name cannot be determined
+from the path, ask the user using the ask_question tool.
+
 ## 🚨 Session Startup — MANDATORY (Do This FIRST)
 
 > [!WARNING]
-> **Do NOT read code, open files, research the codebase, or begin any task until ALL steps below are complete.** Reading files before syncing means reading stale code. Every step below is non-negotiable. No exceptions. No shortcuts. Execute them in order, every single session.
+> **Do NOT read code, open files, research the codebase, or begin any task
+> until ALL steps below are complete.** Reading files before syncing means
+> reading stale code. No exceptions. No shortcuts. Execute in order.
 
-1. **Validate worktree and branch.** Antigravity pre-creates your worktree and branch — don't waste steps verifying what the tooling set up. If the branch name matches the task, move on. If the branch name does **not** match the task, or the worktree is on `main`, or the branch has unpushed commits from a previous session — **STOP immediately**. Do not create branches, switch branches, or attempt to fix it. Report the mismatch to the user and wait for instructions.
+1. **Detect base branch from project name.** Check the worktree path to
+   determine the project and base branch. See § Branching & Project Detection.
 
-2. **Sync with base branch.** `git fetch origin <base> && git rebase origin/<base>` — this ensures you are working with the latest code. If the rebase has conflicts, stop and report to the user. The base branch is either `main` or `next`. If the user didn't clarify which one, ask before proceeding.
+2. **Validate worktree and branch.** Antigravity pre-creates your worktree
+   and branch — don't waste steps verifying what the tooling set up. If the
+   branch name matches the task, move on. If the branch name does **not**
+   match the task, or the worktree is on the base branch directly, or the
+   branch has unpushed commits from a previous session — **STOP immediately**.
+   Do not create branches, switch branches, or attempt to fix it. Report the
+   mismatch to the user and wait for instructions.
 
-3. **Install dependencies.** `npm ci` — Antigravity worktrees start empty. Without this, nothing works.
+3. **Sync with base branch.** `git fetch origin <base> && git rebase origin/<base>`
+   — this ensures you are working with the latest code. If the rebase has
+   conflicts, stop and report to the user.
 
-4. **Copy untracked dev files.** Some files and directories are gitignored but contain developer tools and config that don't carry over to new worktrees. Check `.gitignore` for untracked directories (e.g., `_tools/`) and copy them from the source worktree (`~/Workspace/ag2r` for main, `~/Workspace/ag2r-next` for next). Always copy `.env`:
+4. **Install dependencies.** `npm ci` — Antigravity worktrees start empty.
+   Without this, nothing works.
+
+5. **Copy untracked dev files and configure .env.** Some files and directories
+   are gitignored but essential. Copy from the detected source worktree:
    ```bash
-   cp /Users/omercan/Workspace/ag2r/.env .env
+   cp -r <source_worktree>/_tools .
+   cp <source_worktree>/.env .env
    ```
+   Then update `.env` for the dev session:
+   - Set `PORT` to a free port in the 3001–3099 range (see § Port Map)
+   - Set `AG2R_ENV=dev`
+
+## 🔄 Developer Workflow
+
+Unless the user says otherwise, every session follows this flow:
+
+1. **Startup** — Complete all Session Startup steps.
+2. **Research** — Read relevant code, check GitHub Issues, understand the problem.
+3. **Plan** — Create an implementation plan and request user approval. **Do NOT start coding.**
+4. **Implement** — After approval, make the changes.
+5. **Test server** — Start a dev server on a free port in 3001–3099 (see § Port Map). Tell the user the port and local IP. Leave the server running.
+6. **User tests** — Wait for user feedback. Fix issues if reported.
+7. **Commit & merge** — When the user says "commit" or "merge": commit, push, create PR against the detected base branch, monitor CI, merge, sync.
+
+> [!IMPORTANT]
+> **Steps 2–3 are not optional.** The most common pain point across sessions
+> is jumping straight to coding without understanding the problem.
+
+> [!IMPORTANT]
+> **If unsure about anything, ask.** Use the ask_question tool — it triggers
+> a push notification to get the user's attention. Never guess at branch
+> targets, port assignments, or architectural decisions.
 
 ## 📖 Context (After Startup)
 
@@ -33,17 +91,50 @@ Once the environment is ready, read **[README.md](./README.md)** for product con
 4. **Use CDP for discovery during development.** Connect to AG via Chrome Remote Debugging to inspect the real DOM. Simulate states in AG and check what you receive — don't guess at selectors.
 5. **AG2R-native elements are exceptions, not the rule.** The only elements AG2R creates from scratch are things that can't come from AG: the text input (mobile keyboard), voice input, image attachment, and push notifications. Everything else mirrors AG.
 
+## 🔌 Port Map
+
+Ports are assigned per-process. **Never bind to a port outside your assigned range.**
+
+| Port  | Process | Managed By |
+|-------|---------|------------|
+| 3000  | AG2R production (`main` branch) | `scripts/watchdog.sh` |
+| 3001–3099 | Dev/test servers (agent sessions) | Agent — pick any free port in range |
+| 3100  | Dev Hub (multi-worktree proxy, scans 3001–3099) | `_tools/hub-watchdog.sh` |
+| 3101  | AG2R production (`next` branch) | `scripts/watchdog.sh` (PORT from `.env`) |
+| 9000  | CDP (Chrome DevTools Protocol) | `ag-watchdog.sh` |
+
+> [!CAUTION]
+> **Never kill a process on a port you don't own.** If a port is occupied,
+> pick a different one from 3001–3099. Killing a production process (3000,
+> 3100, 3101) disrupts live services and requires manual recovery.
+
+## ⏰ Watchdog Infrastructure
+
+Cron jobs run every 5 minutes to keep services alive and auto-updated:
+
+| Cron Entry | What It Does |
+|------------|-------------|
+| `ag-watchdog.sh` | Ensures Antigravity (Electron app) runs with CDP on port 9000 |
+| `./scripts/watchdog.sh` (in `~/Workspace/ag2r-next`) | Keeps `next` server alive, auto-pulls on new commits |
+| `tunnel-watchdog.sh` | Keeps Cloudflare tunnel alive for remote access |
+| `_tools/hub-watchdog.sh` | Keeps dev hub alive on 3100, discovers dev servers on 3001–3099 |
+
+**Agents don't manage watchdogs.** Never start, stop, or modify
+watchdog-managed processes. If something seems wrong with a production
+service, report it to the user.
+
 ## 📜 Core Behaviors
 
 1. **Read-First (MANDATORY):** Before ANY task, check GitHub Issues to avoid duplicate work.
 
 2. **No Auto-Commits:** Only commit when USER explicitly says to. "Commit" from user = instructed, not auto.
 
-3. **Testing Workflow (MANDATORY):** After code changes, you MUST verify by starting the server and leaving it running for the user to test. Follow this exact sequence:
-   1. Start the server: `PORT=<port> node server.js` — pick an available port, run as a **background task** so it stays alive.
-   2. **Never stop the server.** Leave it running.
-   3. Tell the user the port. Provide the local IP too (`ipconfig getifaddr en0`) since the user tests from their phone.
-   4. **Never** ask the user to start the server themselves. **Never** open a browser or use browser subagents. **Never** stop the server after starting it.
+3. **Testing Workflow (MANDATORY):** After code changes, you MUST verify by starting the server and leaving it running for the user to test:
+   1. Ensure `.env` has `PORT` set to a free port in 3001–3099 and `AG2R_ENV=dev`.
+   2. Start the server: `node server.js` — run as a **background task** so it stays alive. If the port conflicts, update `.env` with the next port.
+   3. **Never stop the server.** Leave it running.
+   4. Tell the user the port and local IP (`ipconfig getifaddr en0`) since the user tests from their phone.
+   5. **Never** ask the user to start the server themselves. **Never** open a browser or use browser subagents. **Never** stop the server after starting it.
 
 4. **Small Sessions, One Phase Per Commit:** Each phase = one session = one commit. Never implement multiple phases together. Self-contained and testable. No skipping ahead — user starts new sessions.
 
@@ -71,13 +162,13 @@ Once the environment is ready, read **[README.md](./README.md)** for product con
 
 ## 🔀 Git & CI Behaviors
 
-1. **Follow this lifecycle — no exceptions:** branch → sync → implement → test → commit (when user says) → PR → monitor CI → merge → sync main.
+1. **Follow this lifecycle — no exceptions:** branch → sync → implement → test → commit (when user says) → PR → monitor CI → merge → sync base branch.
 
-2. **Never commit on main.** Always create a feature branch first.
+2. **Never commit on the base branch.** Always create a feature branch first.
 
 3. **Never push WIP.** All work must be complete and verified before the first (and only) push.
 
-4. **No destructive git operations** (`reset --hard`, `push --force`, `rebase -i`, `clean -fd`, `commit --amend` after push, `cherry-pick`). Safe alternatives: `git checkout -- <file>` to undo a file, new commit to add missed changes, `git merge origin/main` when PR is stale. If user explicitly instructs a destructive op, that's fine — user-directed is not agent-initiated.
+4. **No destructive git operations** (`reset --hard`, `push --force`, `rebase -i`, `clean -fd`, `commit --amend` after push, `cherry-pick`). Safe alternatives: `git checkout -- <file>` to undo a file, new commit to add missed changes, `git merge origin/<base>` when PR is stale. If user explicitly instructs a destructive op, that's fine — user-directed is not agent-initiated.
 
 5. **All CI failures are your responsibility.** Never dismiss as "unrelated to our changes" without proof. Investigate immediately.
 
@@ -85,7 +176,7 @@ Once the environment is ready, read **[README.md](./README.md)** for product con
 
 7. **Every PR body MUST follow this format:** `## Summary` → `## What Changed` (mechanical + behavioral bullets) → `## Manual Test Steps` (`- [ ]` checkboxes only) → `## Related Issues` (if applicable). **If the work addresses a GitHub issue, `## Related Issues` is MANDATORY** — include `Closes #XX` for each resolved issue. Without this, GitHub won't auto-close the ticket and it rots open.
 
-8. **PR creation is NOT the finish line.** After `gh pr create`, you MUST: (a) `gh pr checks <PR#> --watch` to wait for CI, (b) if CI passes → `gh pr merge <PR#> --squash --admin`, (c) sync main. A session is not done until the PR is `MERGED` or the user explicitly says to stop. Never leave a PR unmerged and walk away. **If merge fails with "Required status check expected"**, your branch is behind main. Rebase: `git fetch origin main && git rebase origin/main && git push --force-with-lease`, then wait for CI to re-run before retrying merge.
+8. **PR creation is NOT the finish line.** After `gh pr create`, you MUST: (a) `gh pr checks <PR#> --watch` to wait for CI, (b) if CI passes → `gh pr merge <PR#> --squash --admin`, (c) sync base branch. A session is not done until the PR is `MERGED` or the user explicitly says to stop. Never leave a PR unmerged and walk away. **If merge fails with "Required status check expected"**, your branch is behind the base. Rebase: `git fetch origin <base> && git rebase origin/<base> && git push --force-with-lease`, then wait for CI to re-run before retrying merge.
 
 9. **PR title = `type: clean description`. No issue numbers.** Never write `fix: do something (#221)`. Issue references go in the body under `## Related Issues` using `Closes #XX`.
 
@@ -164,4 +255,4 @@ gh issue list --label "bug" --state open
 
 9. **Never use shell redirection (`>`, `>>`, `2>`).**  Do not redirect stdout or stderr. These operators require extra user approval in the Antigravity terminal. Use pipes (`|`) and `&&` instead — those are fine. If you need to save output, pipe to `tee` or use a tool that writes files directly.
 
-10. **Use 30xx ports for testing.** Production runs on `PORT=3000`. When starting a test server, use the 30xx range (e.g. 3001, 3002) — not arbitrary high ports like 8445.
+10. **Never kill processes on ports you don't own.** If a port is occupied, pick a different one from 3001–3099. See § Port Map. Killing production processes is catastrophic and requires manual recovery.
