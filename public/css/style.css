@@ -101,6 +101,7 @@ body {
   letter-spacing: -0.02em;
   color: var(--text-primary);
   flex: 1;
+  min-width: 0;
 }
 
 .header-icon {

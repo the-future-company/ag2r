@@ -527,6 +527,7 @@ async function loadSnapshot() {
         rightSidebar.classList.remove('open');
         rightSidebar.inert = true;
         rightSidebarOverlay.classList.remove('visible');
+        updateReviewToggleIcon();
       }
     }
 
@@ -1709,10 +1710,17 @@ async function fetchRightSidebar() {
   }
 }
 
+function updateReviewToggleIcon() {
+  const icon = reviewToggle.querySelector('.material-symbols-rounded');
+  if (!icon) return;
+  icon.textContent = rightSidebar.classList.contains('open') ? 'right_panel_close' : 'right_panel_open';
+}
+
 function openRightSidebar() {
   rightSidebar.classList.add('open');
   rightSidebar.inert = false;
   rightSidebarOverlay.classList.add('visible');
+  updateReviewToggleIcon();
   // Fetch sidebar content on-demand
   fetchRightSidebar();
 }
@@ -1721,6 +1729,7 @@ function closeRightSidebar() {
   rightSidebar.classList.remove('open');
   rightSidebar.inert = true;
   rightSidebarOverlay.classList.remove('visible');
+  updateReviewToggleIcon();
   // Sync: close AG's sidebar too so re-clicks produce a detectable tab change
   fetchAPI('/close-sidebar', { method: 'POST' }).catch(() => {});
 }
