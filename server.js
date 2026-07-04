@@ -217,7 +217,8 @@ async function sendPushToAll(payload) {
 }
 
 // Check if any conversation needs attention and send a push notification.
-// Skips when app is in foreground (visibleClients > 0).
+// Dedup tracking always runs (even when app is foregrounded) so that items
+// seen in-app aren't re-notified when the user backgrounds the app.
 // SW-side dedup (getNotifications) prevents spamming unread notifications.
 // Server-side dedup: tracks notified conversation IDs to avoid re-notifying
 // until the conversation leaves the attention list (user attended to it).
@@ -228,7 +229,6 @@ function truncName(name) {
 }
 
 function checkAttentionState(snapshot) {
-  if (visibleClients > 0) return; // App is in foreground — no push needed
   if (pushPaused) return; // User paused notifications
 
   const attentionItems = (snapshot.sidebarAttentionItems || [])
@@ -252,6 +252,11 @@ function checkAttentionState(snapshot) {
 
   // Send one notification per new conversation (unique tag so they stack)
   for (const item of newItems) {
+    notifiedConversations.add(item.id);
+
+    console.debug('[Push] Decision:', item.id.slice(0, 8), 'visibleClients:', visibleClients, visibleClients > 0 ? '→ SKIP' : '→ SEND');
+    if (visibleClients > 0) continue; // Track but don't send while user is looking
+
     const name = truncName(item.name);
     let body;
     if (item.type === 'question') {
@@ -260,7 +265,6 @@ function checkAttentionState(snapshot) {
       body = name ? `Command approval | ${name}` : 'Command approval';
     }
 
-    notifiedConversations.add(item.id);
     log('Push', `Attention detected — sending for ${name || item.id}`);
     sendPushToAll({
       title: appName,
