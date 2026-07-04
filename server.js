@@ -903,7 +903,7 @@ if (TUNNEL_ENABLED) {
 }
 
 // --- Auth Middleware ---
-const PUBLIC_PATHS = ['/login', '/login.html', '/favicon.ico'];
+const PUBLIC_PATHS = ['/login', '/login.html', '/favicon.ico', '/manifest.json'];
 
 app.use((req, res, next) => {
   // Auth disabled — skip entirely (feature branch testing)
