@@ -122,10 +122,14 @@ Unless the user says otherwise, every session follows this flow:
 10. **No `alert()` or `confirm()`.** Use inline errors or styled modals instead.
 
 > [!CAUTION]
-> **🚫 NEVER use `>`, `>>`, or `2>` shell redirection.** These operators
+> **🚫 NEVER use `>`, `>>`, `2>`, or `2>&1` shell redirection.** These operators
 > trigger a blocking permission modal that breaks the development flow.
 > Use `tee` to save output, pipes (`|`) for chaining, and `write_to_file`
 > for creating files. There are ZERO exceptions to this rule.
+>
+> **`2>&1` is the #1 most common violation.** The `run_command` tool already
+> captures both stdout AND stderr — `2>&1` does NOTHING useful. It is
+> banned AND completely pointless. If you are about to type `2>&1`, STOP.
 
 ## 🔀 Git & CI
 
@@ -174,5 +178,5 @@ git push --force-with-lease
 - **New conversation page has different DOM structure.** AG removes/hides the chat scroll container and renders a separate `animate-fade-in` root with the input box, project selector, model picker, and environment bar. The capture script detects this (via `container.clientHeight === 0` or missing container) and switches to the new session root.
 - **Never kill/restart Antigravity.** Killing Antigravity kills you. You are only accessible from within Antigravity.
 - **Nested code blocks.** When writing markdown with inner code blocks, use different backtick counts for each nesting level so rendering properly understands the structure.
-- **🚫 Shell redirection (`>`, `>>`, `2>`) is BANNED.** Every use triggers a permission modal that blocks development. Use `tee`, pipes, or `write_to_file`. No exceptions. No workarounds. No "just this once."
+- **🚫 Shell redirection (`>`, `>>`, `2>`, `2>&1`) is BANNED.** Every use triggers a permission modal that blocks development. Use `tee`, pipes, or `write_to_file`. No exceptions. No workarounds. No "just this once." **`2>&1` is the most common violation — and it's USELESS because `run_command` already captures stderr.**
 - **Don't stop the dev server.** It reserves your assigned port. If you lose the port, re-run `setup-dev.sh` and start `node server.js` again.
