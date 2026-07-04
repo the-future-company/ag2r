@@ -55,13 +55,15 @@ import { HAS_VISIBLE_EDITOR_SCRIPT } from './src/cdp-scripts/has-visible-editor.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// === Configuration (SSoT: .env.example) ===
+// === Configuration ===
+// Primary config is in .env (see .env.example for user-facing vars).
+// Advanced vars below have sensible defaults and are documented here only.
 const PORT = parseInt(process.env.PORT || '3000');
-const CDP_HOST = process.env.CDP_HOST || '127.0.0.1';
-const CDP_PORT = parseInt(process.env.CDP_PORT || '9000');
-const APP_PASSWORD = process.env.APP_PASSWORD;
-const SESSION_SECRET = process.env.SESSION_SECRET;
-const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS || '500');
+const CDP_HOST = process.env.CDP_HOST || '127.0.0.1';       // Chrome DevTools Protocol host
+const CDP_PORT = parseInt(process.env.CDP_PORT || '9000');   // Chrome DevTools Protocol port
+const APP_PASSWORD = process.env.APP_PASSWORD;               // Required when AUTH_ENABLED=true
+const SESSION_SECRET = process.env.SESSION_SECRET;           // Required when AUTH_ENABLED=true
+const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS || '500'); // AG polling interval (ms)
 const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 const TUNNEL_ENABLED = process.env.TUNNEL_ENABLED === 'true';
 const TUNNEL_URL = process.env.TUNNEL_URL || '';

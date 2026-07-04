@@ -241,7 +241,7 @@ crontab -e
 
 The watchdog reads configuration from `.env` — no need to pass env vars in the crontab. It auto-detects branch changes: if you switch branches (`git checkout next`), the next watchdog cycle restarts the server with the correct code. Your `.env` is gitignored and persists across branch switches.
 
-The `tunnel-watchdog.sh` script can similarly keep a Cloudflare tunnel alive.
+The `tunnel-watchdog.sh` script can similarly keep a Cloudflare tunnel alive, and `ag-watchdog.sh` keeps Antigravity itself running with Chrome DevTools Protocol enabled.
 
 ---
 

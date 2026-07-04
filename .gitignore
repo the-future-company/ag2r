@@ -5,6 +5,7 @@ node_modules/
 _tools/
 certs/
 .env
+.zsh_session_env
 
 # Generated / runtime
 *.log

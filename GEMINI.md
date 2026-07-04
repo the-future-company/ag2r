@@ -12,61 +12,43 @@ AG2R uses two long-lived branches with separate Antigravity projects:
 | `ag2r`              | `main`      | `~/Workspace/ag2r` |
 | `ag2r-next`         | `next`      | `~/Workspace/ag2r-next` |
 
-**How to detect your base branch:** Check the worktree path. The segment
-after `worktrees/` and before the next `/` is the project name:
-- `worktrees/ag2r-next/...` → project `ag2r-next` → base branch `next`
-- `worktrees/ag2r/...` → project `ag2r` → base branch `main`
-
-All git operations (sync, rebase, PR base, merge target) use this detected
-base branch. Never assume `main`. If the project name cannot be determined
-from the path, ask the user using the ask_question tool.
+`setup-dev.sh` detects the base branch automatically from the worktree
+path. After setup, `$TARGET_BRANCH` is available in all commands. Use it
+for PRs, rebases, and post-merge sync — never hardcode `main` or `next`.
 
 ## 🚨 Session Startup — MANDATORY (Do This FIRST)
 
 > [!WARNING]
 > **Do NOT read code, open files, research the codebase, or begin any task
-> until ALL steps below are complete.** Reading files before syncing means
-> reading stale code. No exceptions. No shortcuts. Execute in order.
+> until startup is complete.** Reading files before syncing means reading
+> stale code. No exceptions.
 
-1. **Detect base branch from project name.** Check the worktree path to
-   determine the project and base branch. See § Branching & Project Detection.
+Run the dev setup script:
 
-2. **Validate worktree and branch.** Antigravity pre-creates your worktree
-   and branch — don't waste steps verifying what the tooling set up. If the
-   branch name matches the task, move on. If the branch name does **not**
-   match the task, or the worktree is on the base branch directly, or the
-   branch has unpushed commits from a previous session — **STOP immediately**.
-   Do not create branches, switch branches, or attempt to fix it. Report the
-   mismatch to the user and wait for instructions.
+    ~/Workspace/ag2r/_tools/setup-dev.sh
 
-3. **Sync with base branch.** `git fetch origin <base> && git rebase origin/<base>`
-   — this ensures you are working with the latest code. If the rebase has
-   conflicts, stop and report to the user.
+This handles everything: base branch detection, sync, dependency install,
+`_tools/` copy, and `.env` creation with a free port.
 
-4. **Install dependencies.** `npm ci` — Antigravity worktrees start empty.
-   Without this, nothing works.
+After it completes, `$TARGET_BRANCH` is available in all commands (via
+`.zsh_session_env`). Use it for PRs:
 
-5. **Copy untracked dev files and configure .env.** Some files and directories
-   are gitignored but essential. Copy from the detected source worktree:
-   ```bash
-   cp -r <source_worktree>/_tools .
-   cp <source_worktree>/.env .env
-   ```
-   Then update `.env` for the dev session:
-   - Set `PORT` to a free port in the 3001–3099 range (see § Port Map)
-   - Set `AG2R_ENV=dev`
+    gh pr create --base $TARGET_BRANCH
+
+If the script fails, read the error and report to the user.
+Do not attempt manual recovery.
 
 ## 🔄 Developer Workflow
 
 Unless the user says otherwise, every session follows this flow:
 
-1. **Startup** — Complete all Session Startup steps.
+1. **Startup** — Run `setup-dev.sh` (see § Session Startup).
 2. **Research** — Read relevant code, check GitHub Issues, understand the problem.
 3. **Plan** — Create an implementation plan and request user approval. **Do NOT start coding.**
 4. **Implement** — After approval, make the changes.
-5. **Test server** — Start a dev server on a free port in 3001–3099 (see § Port Map). Tell the user the port and local IP. Leave the server running.
+5. **Test server** — Start `node server.js` as a background task. Tell the user the port (from `.env`) and local IP. Leave it running.
 6. **User tests** — Wait for user feedback. Fix issues if reported.
-7. **Commit & merge** — When the user says "commit" or "merge": commit, push, create PR against the detected base branch, monitor CI, merge, sync.
+7. **Commit & merge** — When the user says "commit" or "merge": commit, push, create PR against `$TARGET_BRANCH`, monitor CI, merge, sync.
 
 > [!IMPORTANT]
 > **Steps 2–3 are not optional.** The most common pain point across sessions
@@ -130,11 +112,10 @@ service, report it to the user.
 2. **No Auto-Commits:** Only commit when USER explicitly says to. "Commit" from user = instructed, not auto.
 
 3. **Testing Workflow (MANDATORY):** After code changes, you MUST verify by starting the server and leaving it running for the user to test:
-   1. Ensure `.env` has `PORT` set to a free port in 3001–3099 and `AG2R_ENV=dev`.
-   2. Start the server: `node server.js` — run as a **background task** so it stays alive. If the port conflicts, update `.env` with the next port.
-   3. **Never stop the server.** Leave it running.
-   4. Tell the user the port and local IP (`ipconfig getifaddr en0`) since the user tests from their phone.
-   5. **Never** ask the user to start the server themselves. **Never** open a browser or use browser subagents. **Never** stop the server after starting it.
+   1. Start the server: `node server.js` — run as a **background task** so it stays alive. If the port conflicts, update `PORT` in `.env` with the next free port.
+   2. **Never stop the server.** Leave it running.
+   3. Tell the user the port and local IP (`ipconfig getifaddr en0`) since the user tests from their phone.
+   4. **Never** ask the user to start the server themselves. **Never** open a browser or use browser subagents. **Never** stop the server after starting it.
 
 4. **Small Sessions, One Phase Per Commit:** Each phase = one session = one commit. Never implement multiple phases together. Self-contained and testable. No skipping ahead — user starts new sessions.
 
@@ -176,7 +157,7 @@ service, report it to the user.
 
 7. **Every PR body MUST follow this format:** `## Summary` → `## What Changed` (mechanical + behavioral bullets) → `## Manual Test Steps` (`- [ ]` checkboxes only) → `## Related Issues` (if applicable). **If the work addresses a GitHub issue, `## Related Issues` is MANDATORY** — include `Closes #XX` for each resolved issue. Without this, GitHub won't auto-close the ticket and it rots open.
 
-8. **PR creation is NOT the finish line.** After `gh pr create`, you MUST: (a) `gh pr checks <PR#> --watch` to wait for CI, (b) if CI passes → `gh pr merge <PR#> --squash --admin`, (c) sync your worktree's base branch, (d) pull the base branch on the **source worktree** (`git -C <source_worktree> pull origin <base>`) so the watchdog picks up the change immediately. A session is not done until the PR is `MERGED` or the user explicitly says to stop. Never leave a PR unmerged and walk away. **If merge fails with "Required status check expected"**, your branch is behind the base. Rebase: `git fetch origin <base> && git rebase origin/<base> && git push --force-with-lease`, then wait for CI to re-run before retrying merge.
+8. **PR creation is NOT the finish line.** After `gh pr create --base $TARGET_BRANCH`, you MUST: (a) `gh pr checks <PR#> --watch` to wait for CI, (b) if CI passes → `gh pr merge <PR#> --squash --admin`, (c) `git fetch origin $TARGET_BRANCH && git rebase origin/$TARGET_BRANCH`, (d) pull on the source worktree (`git -C ~/Workspace/ag2r pull origin $TARGET_BRANCH` or `ag2r-next` as appropriate) so the watchdog picks up the change immediately. A session is not done until the PR is `MERGED` or the user explicitly says to stop. Never leave a PR unmerged and walk away. **If merge fails with "Required status check expected"**, your branch is behind the base. Rebase: `git fetch origin $TARGET_BRANCH && git rebase origin/$TARGET_BRANCH && git push --force-with-lease`, then wait for CI to re-run before retrying merge.
 
 9. **PR title = `type: clean description`. No issue numbers.** Never write `fix: do something (#221)`. Issue references go in the body under `## Related Issues` using `Closes #XX`.
 
@@ -224,7 +205,8 @@ gh issue list --label "bug" --state open
 - **iOS push requires PWA on home screen.** Web Push on iOS only works when the user has installed the PWA via "Add to Home Screen" (iOS 16.4+). Regular Safari tabs cannot receive push notifications.
 - **Push config dir is namespaced by `AG2R_ENV`.** Config files (`vapid-keys.json`, `push-subscriptions.json`) live in `~/.config/ag2r/` (production) or `~/.config/ag2r-{env}/` (other envs). See `src/paths.js` → `getEnv()`.
 - **Branch switching is auto-detected by the watchdog.** After `git checkout <branch>`, the next watchdog cycle restarts the server with correct code. No manual restart needed. `.env` is gitignored and persists across switches.
-- **`_tools/` is gitignored but essential.** Contains dev-only tools (hub.js, icon-composer, hub-watchdog, serve.js) — copy from the source worktree for new worktrees, never look for these in git history.
+- **`_tools/` is gitignored but essential.** Contains dev-only tools (hub.js, icon-composer, hub-watchdog, setup-dev.sh, serve.js) — `setup-dev.sh` copies these automatically, never look for them in git history.
+- **`.env.example` and `README.md` are end-user documents.** Dev-only vars (`AG2R_ENV`, `AG2R_DEBUG`, `TARGET_BRANCH`) are not exposed there — they're managed by `_tools/setup-dev.sh`.
 - **New conversation page has different DOM structure.** AG removes/hides the chat scroll container and renders a separate `animate-fade-in` root with the input box, project selector, model picker, and environment bar. The capture script detects this (via `container.clientHeight === 0` or missing container) and switches to the new session root.
 
 ## 🔄 Continuous Learning
