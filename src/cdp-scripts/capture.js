@@ -250,12 +250,41 @@ export const CAPTURE_SCRIPT = `
   } catch (e) {
     console.debug('[AG2R] Sidebar signature error:', e.message);
   }
-  // Sidebar open state: true when AG's right sidebar panel is visible.
-  // AG keeps the sidebar DOM (including data-tab-id buttons) even when closed —
-  // it slides it offscreen. Detect by checking if tab buttons are within the viewport.
+  // Sidebar open state: AG wraps the sidebar in a collapse container with inline styles:
+  //   closed: style="width: 0%; visibility: hidden; overflow: hidden"
+  //   open:   style="width: ~47%; visibility: visible; overflow: hidden"
+  // Check the collapse container's inline style.width (instant, not affected by
+  // CSS transitions) instead of getBoundingClientRect (which reflects animated
+  // position and is fragile across different window sizes).
   const firstTab = document.querySelector('[data-tab-id]');
-  const isSidebarOpen = firstTab ? firstTab.getBoundingClientRect().left < window.innerWidth : false;
-  console.debug('[SidebarMirror:capture] isSidebarOpen:', isSidebarOpen, 'tab:', firstTab ? 'exists' : 'null', 'left:', firstTab?.getBoundingClientRect().left, 'vw:', window.innerWidth);
+  let isSidebarOpen = false;
+  if (firstTab) {
+    let el = firstTab;
+    let foundCollapse = false;
+    for (let i = 0; i < 20 && el; i++) {
+      el = el.parentElement;
+      if (!el) break;
+      const s = getComputedStyle(el);
+      if (s.overflow === 'hidden' || s.overflowX === 'hidden') {
+        const r = el.getBoundingClientRect();
+        // Skip small containers (e.g. the tab button itself has overflow:hidden)
+        if (r.height > 100) {
+          // Found the collapse container — check inline style, not computed.
+          // Inline style.width changes instantly on toggle; computed style
+          // reflects the animated/transitioning value.
+          const inlineWidth = el.style.width;
+          isSidebarOpen = inlineWidth !== '0%' && inlineWidth !== '0px' && inlineWidth !== '';
+          foundCollapse = true;
+          break;
+        }
+      }
+    }
+    if (!foundCollapse) {
+      // No collapse container = sidebar is fully visible (no wrapper)
+      isSidebarOpen = true;
+    }
+  }
+  console.debug('[SidebarMirror:capture] isSidebarOpen:', isSidebarOpen, 'tab:', firstTab ? 'exists' : 'null');
   // -- 8. Capture portal elements (dropdowns, dialogs) from body --
   // AG renders these outside #root as direct body children.
   let dropdownHtml = null;
