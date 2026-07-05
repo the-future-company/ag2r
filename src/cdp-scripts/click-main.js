@@ -180,6 +180,24 @@ export function buildMainClickScript(safeClickId, safeLabel) {
           return { ok: false, reason: 'subinfo_index_out_of_range', total: btns.length };
         }
         return { ok: false, reason: 'no_subinfo_panel' };
+      } else if (source === 'model') {
+        // Model selector button — opens AG's model picker dialog
+        const target = document.querySelector('[aria-label*="Select model"]');
+        if (target) {
+          const actualLabel = (target.textContent || '').trim().substring(0, 50);
+          target.click();
+          return { ok: true, label: actualLabel, source: 'model' };
+        }
+        return { ok: false, reason: 'model_button_not_found' };
+      } else if (source === 'project') {
+        // Project dropdown button — opens AG's project picker dialog
+        const target = document.querySelector('[aria-haspopup="dialog"]');
+        if (target) {
+          const actualLabel = (target.textContent || '').trim().substring(0, 50);
+          target.click();
+          return { ok: true, label: actualLabel, source: 'project' };
+        }
+        return { ok: false, reason: 'project_button_not_found' };
       }
 
       if (!root) return { ok: false, reason: 'no_root_for_' + source };

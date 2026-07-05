@@ -1385,7 +1385,7 @@ app.post('/click', async (req, res) => {
     // dialog/dropdown DOM appearing (React render takes 50-200ms)
     if (result?.ok) {
       const source = result.source || '';
-      if (['chat', 'dropdown', 'dialog', 'left'].includes(source)) {
+      if (['chat', 'dropdown', 'dialog', 'left', 'model', 'project'].includes(source)) {
         // Fire 3 rapid captures at 150ms, 400ms, 700ms
         fireBurstCaptures([150, 400, 700]);
       }
