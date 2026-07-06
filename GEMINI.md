@@ -137,6 +137,8 @@ Unless the user says otherwise, every session follows this flow:
 
 ## 🔀 Git & CI
 
+### Feature Branch → `$TARGET_BRANCH`
+
 **Committing** (only when user says "commit"):
 ```bash
 git add -A && git commit -m "type: description"
@@ -167,7 +169,37 @@ git add -A && git commit --amend --no-edit
 git push --force-with-lease
 ```
 
-**Rules:**
+---
+
+### Production Release: `next` → `main`
+
+When `next` is stable and ready for production:
+
+```bash
+gh pr create --base main --head next --title "chore: merge next into main"
+gh pr merge <PR#> --merge --admin
+```
+
+After merge, GitHub may auto-delete `next`. Recreate it immediately:
+
+```bash
+git push origin origin/main:refs/heads/next
+```
+
+Then sync both source worktrees:
+
+```bash
+cd ~/Workspace/ag2r && git pull --rebase origin main
+cd ~/Workspace/ag2r-next && git pull --rebase origin next
+```
+
+> [!IMPORTANT]
+> Use `--merge` (not `--squash`) for next→main so commit history is
+> preserved. Always verify `next` still exists on the remote after merge.
+
+---
+
+### Rules
 - Never commit on `$TARGET_BRANCH` directly.
 - All CI failures are your responsibility. Debug first, never deflect.
 - PR title = `type: clean description`. No issue numbers in title.
