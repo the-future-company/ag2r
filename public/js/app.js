@@ -573,15 +573,22 @@ async function loadSnapshot() {
       if (allBtns.length > 0) {
         // Options to hide from dropdown menus (e.g., Rename triggers inline sidebar edit, unusable in AG2R)
         const HIDDEN_DROPDOWN_OPTIONS = /^rename$/i;
+        // Detect typeahead (items have role="option") vs kebab/context menus
+        const isTypeahead = tempDiv.querySelector('[role="option"]') !== null;
         let buttonsHtml = '';
         allBtns.forEach(btn => {
           const text = btn.textContent.trim();
           if (HIDDEN_DROPDOWN_OPTIONS.test(text)) return;
           const id = btn.dataset.agClickId;
           const label = btn.dataset.agClickLabel || text;
-          const isDestructive = /delete|remove/i.test(text);
-          const cls = isDestructive ? 'destructive' : '';
-          buttonsHtml += `<button class="${cls}" data-ag-click-id="${id}" data-ag-click-label="${label}">${text}</button>`;
+          if (isTypeahead) {
+            // Preserve inner HTML structure for typeahead items (icon + name + description spans)
+            buttonsHtml += `<div role="option" data-ag-click-id="${id}" data-ag-click-label="${label}">${btn.innerHTML}</div>`;
+          } else {
+            const isDestructive = /delete|remove/i.test(text);
+            const cls = isDestructive ? 'destructive' : '';
+            buttonsHtml += `<button class="${cls}" data-ag-click-id="${id}" data-ag-click-label="${label}">${text}</button>`;
+          }
         });
         dropdownContent.innerHTML = buttonsHtml;
         addClickProxyHandlers(dropdownContent);
@@ -1420,9 +1427,12 @@ function renderMacroChip() {
 
   const chip = document.createElement('div');
   chip.className = 'macro-chip';
+  // Use the captured icon SVG from the typeahead item, or fall back to a lightning bolt
+  const iconHtml = stagedMacro.iconHtml
+    || '<span class="material-symbols-rounded">bolt</span>';
   chip.innerHTML = `
-    <span class="material-symbols-rounded">bolt</span>
-    <span>/${stagedMacro.name}</span>
+    <span class="macro-chip-icon">${iconHtml}</span>
+    <span class="macro-chip-name">/${stagedMacro.name}</span>
     <button class="macro-remove" aria-label="Remove macro">×</button>
   `;
 
@@ -2177,7 +2187,13 @@ function addClickProxyHandlers(container) {
             const knownCommands = ['btw','goal','schedule','browser','grill-me','teamwork-preview','learn'];
             console.debug('[MacroDetect] cmdName="' + cmdName + '" known=' + knownCommands.includes(cmdName));
             if (knownCommands.includes(cmdName)) {
-              stagedMacro = { name: cmdName };
+              // Grab the icon SVG from the clicked typeahead item
+              let iconHtml = '';
+              const iconSvg = el.querySelector('svg');
+              if (iconSvg) {
+                iconHtml = iconSvg.outerHTML;
+              }
+              stagedMacro = { name: cmdName, iconHtml };
               renderMacroChip();
             }
           }
