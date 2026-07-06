@@ -43,6 +43,10 @@ AG2R uses two long-lived branches with separate Antigravity projects:
 path. After setup, `$TARGET_BRANCH` is available in all commands. Use it
 for PRs, rebases, and post-merge sync — never hardcode `main` or `next`.
 
+Both branches are **permanent**. `next` is the development branch where
+new features land first. When `next` is stable, it is merged into `main`
+for production. Never delete either branch.
+
 ## 📖 Context (After Startup)
 
 Once the environment is ready, read **[README.md](./README.md)** for product context and setup. The codebase is small — read the source files directly for implementation details.
