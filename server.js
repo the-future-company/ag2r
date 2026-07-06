@@ -31,9 +31,10 @@ import { SCHEDULED_TASKS_SCRIPT } from './src/cdp-scripts/scheduled-tasks.js';
 import { SCHEDULED_TASKS_DIALOG_SCRIPT } from './src/cdp-scripts/scheduled-tasks-dialog.js';
 import { STOP_SCRIPT } from './src/cdp-scripts/stop.js';
 import { DISCOVER_SCRIPT } from './src/cdp-scripts/discover.js';
-import { buildInjectScript } from './src/cdp-scripts/inject-message.js';
 import { CHECK_EDITOR_IMAGE_SCRIPT } from './src/cdp-scripts/check-editor-image.js';
 import { buildCaptureListboxScript, buildCaptureKebabMenuScript } from './src/cdp-scripts/capture-dropdown.js';
+
+import { buildInjectScript } from './src/cdp-scripts/inject-message.js';
 import { buildTaskClickScript } from './src/cdp-scripts/click-task.js';
 import { buildSchedClickScript } from './src/cdp-scripts/click-sched.js';
 import { buildSchedPortalClickScript } from './src/cdp-scripts/click-sched-portal.js';
@@ -750,6 +751,7 @@ function fireBurstCaptures(delays) {
             (snapshot.scheduledTasksHtml || '') +
             (snapshot.scheduledTasksDialogHtml || '') +
             (snapshot.subagentInfoHtml || '') +
+            (snapshot.btwHtml || '') +
             (snapshot.modelName || '') +
             (snapshot.environmentName || '') +
             (snapshot.branchName || '')
@@ -801,6 +803,7 @@ function startPolling() {
           (snapshot.scheduledTasksHtml || '') +
           (snapshot.scheduledTasksDialogHtml || '') +
           (snapshot.subagentInfoHtml || '') +
+          (snapshot.btwHtml || '') +
           (snapshot.modelName || '') +
           (snapshot.environmentName || '') +
           (snapshot.branchName || '')
@@ -1385,7 +1388,7 @@ app.post('/click', async (req, res) => {
     // dialog/dropdown DOM appearing (React render takes 50-200ms)
     if (result?.ok) {
       const source = result.source || '';
-      if (['chat', 'dropdown', 'dialog', 'left', 'model', 'project'].includes(source)) {
+      if (['chat', 'dropdown', 'dialog', 'left', 'model', 'project', 'btw'].includes(source)) {
         // Fire 3 rapid captures at 150ms, 400ms, 700ms
         fireBurstCaptures([150, 400, 700]);
       }
@@ -1447,9 +1450,79 @@ app.post('/submit-dialog', async (req, res) => {
 // --- Temp eval for debugging ---
 app.post('/eval', async (req, res) => {
   try {
+    log('Eval', `Executing script: ${String(req.body.script).substring(0, 150)}...`);
     const result = await evaluateInBrowser(`${req.body.script}`);
+    log('Eval', `Result: ${JSON.stringify(result)}`);
     res.json({ result });
-  } catch (e) { res.json({ error: e.message }); }
+  } catch (e) {
+    log('Eval', `Error: ${e.message}`);
+    res.json({ error: e.message });
+  }
+});
+
+// --- Clear AG's Lexical editor content ---
+// Uses findEditorContext() to target the Main World context where Lexical runs.
+// Uses Lexical's editor.update() + root.clear() to properly clear decorator nodes.
+// Note: $getRoot() is a module-scoped import unavailable via CDP, so we access
+// the root node directly via the editor state's internal _nodeMap.
+app.post('/clear-editor', async (req, res) => {
+  try {
+    const ctxId = await findEditorContext();
+    if (!ctxId) return res.status(503).json({ error: 'No editor context found' });
+    const result = await evaluateInContext(ctxId, `
+      (() => {
+        const el = document.querySelector('[data-lexical-editor="true"]');
+        if (!el) return { ok: false, reason: 'no_editor' };
+        const lex = el.__lexicalEditor;
+        if (!lex) return { ok: false, reason: 'no_lexical' };
+        lex.update(() => {
+          const root = lex.getEditorState()._nodeMap.get('root');
+          if (root) root.clear();
+        });
+        return { ok: true };
+      })()
+    `);
+    log('ClearEditor', `Result: ${JSON.stringify(result)}`);
+    res.json(result || { ok: true });
+  } catch (e) {
+    log('ClearEditor', `Error: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Type slash (/) into AG's editor to open command typeahead ---
+// Clears existing content first via Lexical API, then pastes '/' via clipboard event.
+app.post('/type-slash', async (req, res) => {
+  try {
+    const ctxId = await findEditorContext();
+    if (!ctxId) return res.status(503).json({ error: 'No editor context found' });
+    const result = await evaluateInContext(ctxId, `
+      (async () => {
+        const el = document.querySelector('[data-lexical-editor="true"]');
+        if (!el) return { ok: false, reason: 'no_editor' };
+        const lex = el.__lexicalEditor;
+        if (!lex) return { ok: false, reason: 'no_lexical' };
+        lex.update(() => {
+          const root = lex.getEditorState()._nodeMap.get('root');
+          if (root) root.clear();
+        });
+        el.focus();
+        // Wait for Lexical to reconcile the cleared state
+        await new Promise(r => setTimeout(r, 80));
+        const dt = new DataTransfer();
+        dt.setData('text/plain', '/');
+        el.dispatchEvent(new ClipboardEvent('paste', {
+          clipboardData: dt, bubbles: true, cancelable: true,
+        }));
+        return { ok: true };
+      })()
+    `);
+    log('TypeSlash', `Result: ${JSON.stringify(result)}`);
+    res.json(result || { ok: true });
+  } catch (e) {
+    log('TypeSlash', `Error: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // --- Type Text into input/textarea (React-compatible) ---
@@ -1541,8 +1614,8 @@ app.use((err, req, res, next) => {
 let lastSentMessage = { text: '', time: 0 };
 
 app.post('/send', async (req, res) => {
-  const { message, hasImages } = req.body;
-  log('Send', `Received: "${message?.substring(0, 50)}"${hasImages ? ' (with images)' : ''}`);
+  const { message, hasImages, hasMacro } = req.body;
+  log('Send', `Received: "${message?.substring(0, 50)}"${hasImages ? ' (with images)' : ''}${hasMacro ? ' (with macro)' : ''}`);
 
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'Message is required' });
@@ -1568,8 +1641,8 @@ app.post('/send', async (req, res) => {
     }
 
     log('Send', 'Injecting via CDP...');
-    // When images were just uploaded, use append mode to preserve them in the editor
-    const result = await injectMessage(message, { appendMode: !!hasImages });
+    // Use append mode to preserve existing editor content (images or macros)
+    const result = await injectMessage(message, { appendMode: !!(hasImages || hasMacro) });
     log('Send', `Injection result: ${JSON.stringify(result)}`);
     track('message_sent');
     res.json(result || { ok: true });

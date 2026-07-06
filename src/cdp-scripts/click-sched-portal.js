@@ -18,7 +18,30 @@ export function buildSchedPortalClickScript(optIdx) {
             const idx = ${optIdx};
             if (idx < 0 || idx >= options.length) return { ok: false, reason: 'option_index_out_of_range', total: options.length };
             const target = options[idx];
-            target.click();
+            const rect = target.getBoundingClientRect();
+            const x = rect.left + 5;
+            const y = rect.top + rect.height / 2;
+            const hit = document.elementFromPoint(x, y) || target;
+
+            const clickOpts = {
+              bubbles: true,
+              cancelable: true,
+              clientX: x,
+              clientY: y
+            };
+            hit.dispatchEvent(new PointerEvent('pointerdown', clickOpts));
+            hit.dispatchEvent(new MouseEvent('mousedown', clickOpts));
+            hit.dispatchEvent(new PointerEvent('pointerup', clickOpts));
+            hit.dispatchEvent(new MouseEvent('mouseup', clickOpts));
+            
+            let clickTarget = hit;
+            while (clickTarget && typeof clickTarget.click !== 'function') {
+              clickTarget = clickTarget.parentElement;
+            }
+            if (clickTarget) {
+              clickTarget.click();
+            }
+
             return { ok: true, label: target.textContent.trim().substring(0, 50), source: 'scheddlg_portal' };
           }
           return null;

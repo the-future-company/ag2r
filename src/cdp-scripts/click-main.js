@@ -58,11 +58,19 @@ export function buildMainClickScript(safeClickId, safeLabel) {
           }
         }
       } else if (source === 'dropdown') {
-        // Portal dropdown: body > div[role="listbox"]
+        // Portal dropdown: body > div[role="listbox"] or nested inside Radix container
         for (const child of document.body.children) {
           if (child.getAttribute('role') === 'listbox' && child.textContent.trim()) {
             root = child;
             break;
+          }
+          // Radix wraps portals in ID'd divs — look inside them (matches capture.js logic)
+          if (child.id) {
+            const nested = child.querySelector('[role="listbox"]');
+            if (nested && nested.textContent.trim()) {
+              root = nested;
+              break;
+            }
           }
         }
       } else if (source === 'dialog') {
@@ -180,6 +188,57 @@ export function buildMainClickScript(safeClickId, safeLabel) {
           return { ok: false, reason: 'subinfo_index_out_of_range', total: btns.length };
         }
         return { ok: false, reason: 'no_subinfo_panel' };
+      } else if (source === 'btw') {
+        const span = Array.from(document.querySelectorAll('span')).find(s => s.textContent.trim().startsWith('Side Question'));
+        if (span) {
+          let container = span;
+          for (let i = 0; i < 5 && container; i++) {
+            const cls = (container.className || '').toString();
+            if (cls.includes('border-border') && cls.includes('rounded-md')) {
+              break;
+            }
+            container = container.parentElement;
+          }
+          if (container) {
+            const btns = [];
+            container.querySelectorAll('button, a, [role="button"]').forEach(el => {
+              if (el.closest('#antigravity\\.agentSidePanelInputBox') || el.closest('[class*="bg-card-border"]')) return;
+              btns.push(el);
+            });
+            if (idx >= 0 && idx < btns.length) {
+              const target = btns[idx];
+              const actualLabel = (target.textContent || '').trim().substring(0, 50);
+
+              const rect = target.getBoundingClientRect();
+              const x = rect.left + 5;
+              const y = rect.top + rect.height / 2;
+              const hit = document.elementFromPoint(x, y) || target;
+
+              const clickOpts = {
+                bubbles: true,
+                cancelable: true,
+                clientX: x,
+                clientY: y
+              };
+              hit.dispatchEvent(new PointerEvent('pointerdown', clickOpts));
+              hit.dispatchEvent(new MouseEvent('mousedown', clickOpts));
+              hit.dispatchEvent(new PointerEvent('pointerup', clickOpts));
+              hit.dispatchEvent(new MouseEvent('mouseup', clickOpts));
+              
+              let clickTarget = hit;
+              while (clickTarget && typeof clickTarget.click !== 'function') {
+                clickTarget = clickTarget.parentElement;
+              }
+              if (clickTarget) {
+                clickTarget.click();
+              }
+
+              return { ok: true, label: actualLabel, source: 'btw' };
+            }
+            return { ok: false, reason: 'btw_index_out_of_range', total: btns.length };
+          }
+        }
+        return { ok: false, reason: 'no_btw_container' };
       } else if (source === 'model') {
         // Model selector button — opens AG's model picker dialog
         const target = document.querySelector('[aria-label*="Select model"]');
@@ -263,7 +322,40 @@ export function buildMainClickScript(safeClickId, safeLabel) {
         return { ok: false, reason: 'label_mismatch', expected: expectedLabel, actual: actualLabel, total: visible.length, debugNearby };
       }
 
-      target.click();
+      // Dropdown clicks need Lexical editor focus and hit-testing for Radix typeahead items.
+      // All other sources (left, right, chat, etc.) use simple target.click().
+      if (source === 'dropdown') {
+        const lexicalEditor = document.querySelector('[data-lexical-editor="true"]');
+        if (lexicalEditor) {
+          lexicalEditor.focus();
+        }
+
+        const rect = target.getBoundingClientRect();
+        const x = rect.left + 5;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y) || target;
+
+        const clickOpts = {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y
+        };
+        hit.dispatchEvent(new PointerEvent('pointerdown', clickOpts));
+        hit.dispatchEvent(new MouseEvent('mousedown', clickOpts));
+        hit.dispatchEvent(new PointerEvent('pointerup', clickOpts));
+        hit.dispatchEvent(new MouseEvent('mouseup', clickOpts));
+        
+        let clickTarget = hit;
+        while (clickTarget && typeof clickTarget.click !== 'function') {
+          clickTarget = clickTarget.parentElement;
+        }
+        if (clickTarget) {
+          clickTarget.click();
+        }
+      } else {
+        target.click();
+      }
 
       return { ok: true, label: actualLabel, source, debugNearby };
     })()

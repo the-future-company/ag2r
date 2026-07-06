@@ -107,6 +107,9 @@ let isInputBoxHidden = false;   // Synced from server-side detection (AG's input
 
 // Subagent info panel (cannot prompt message + overview button)
 const subagentInfo = document.getElementById('subagent-info');
+
+// Side Question (BTW) panel
+const btwPanel = document.getElementById('btw-panel');
 // Deferred sidebar open: set true when user clicks a task name.
 // loadSnapshot checks this flag after detecting subagent vs command view.
 
@@ -146,13 +149,16 @@ if (_urlParams.get('sidebar') === 'open') {
 // Updates --input-bar-height CSS variable so quick-actions and scroll-fab
 // float above the input bar regardless of its height (future: thumbnails, tasks bar).
 if (typeof ResizeObserver !== 'undefined') {
-  const inputBarObserver = new ResizeObserver(entries => {
-    for (const entry of entries) {
-      const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight;
-      document.documentElement.style.setProperty('--input-bar-height', h + 'px');
-    }
-  });
-  inputBarObserver.observe(inputBar);
+  const bottomBarWrapper = document.getElementById('bottom-bar-wrapper');
+  if (bottomBarWrapper) {
+    const inputBarObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight;
+        document.documentElement.style.setProperty('--input-bar-height', h + 'px');
+      }
+    });
+    inputBarObserver.observe(bottomBarWrapper);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -499,6 +505,19 @@ async function loadSnapshot() {
         chatArea.classList.remove('subagent-view');
         subagentInfo.classList.add('hidden');
         subagentInfo.dataset.lastHtml = '';
+      }
+
+      // Render captured Side Question (BTW) panel
+      if (btwPanel) {
+        if (data.btwHtml && data.btwHtml !== btwPanel.dataset.lastHtml) {
+          btwPanel.dataset.lastHtml = data.btwHtml;
+          btwPanel.innerHTML = data.btwHtml;
+          addClickProxyHandlers(btwPanel);
+        }
+        btwPanel.classList.toggle('hidden', !data.btwHtml);
+        if (!data.btwHtml) {
+          btwPanel.dataset.lastHtml = '';
+        }
       }
 
 
@@ -1078,10 +1097,11 @@ async function sendMessage() {
       const result = await res.json();
       debugLog('send', 'image-only result: ' + JSON.stringify(result));
     } else if (fullMessage) {
-      // Text (possibly with images): inject text and click send
+      // Text (possibly with images/macros): inject text and click send
+      const hasMacro = !!stagedMacro;
       const res = await fetchAPI('/send', {
         method: 'POST',
-        body: JSON.stringify({ message: fullMessage, hasImages }),
+        body: JSON.stringify({ message: fullMessage, hasImages, hasMacro }),
       });
       const result = await res.json();
       debugLog('send', 'result: ' + JSON.stringify(result));
@@ -1104,6 +1124,11 @@ async function sendMessage() {
   isSending = false;
   messageInput.disabled = false;
   actionBtn.disabled = false;
+  // Clear macro chip after send — AG's editor already has the macro applied
+  if (stagedMacro) {
+    stagedMacro = null;
+    renderMacroChip();
+  }
   debugLog('sendMessage-exit');
 }
 
@@ -1358,6 +1383,65 @@ const imagePreviewStrip = document.getElementById('image-preview-strip');
 const MAX_STAGED_IMAGES = 3;
 let stagedImages = []; // { file: File, objectUrl: string }
 
+// ── Macro Chip State (slash commands) ──
+let macroChipStrip = null;
+let stagedMacro = null; // { name: string } — only one macro at a time
+
+function getMacroChipStrip() {
+  if (!macroChipStrip) {
+    macroChipStrip = document.getElementById('macro-chip-strip');
+    if (!macroChipStrip) {
+      const wrapper = document.querySelector('.input-wrapper');
+      if (wrapper) {
+        macroChipStrip = document.createElement('div');
+        macroChipStrip.id = 'macro-chip-strip';
+        macroChipStrip.className = 'macro-chip-strip hidden';
+        const txt = document.getElementById('message-input');
+        wrapper.insertBefore(macroChipStrip, txt);
+        console.debug('[MacroChip] Strip element auto-created dynamically');
+      }
+    }
+  }
+  return macroChipStrip;
+}
+
+function renderMacroChip() {
+  const strip = getMacroChipStrip();
+  if (!strip) {
+    console.debug('[MacroChip] No macro-chip-strip element found');
+    return;
+  }
+  strip.innerHTML = '';
+  if (!stagedMacro) {
+    strip.classList.add('hidden');
+    return;
+  }
+  strip.classList.remove('hidden');
+
+  const chip = document.createElement('div');
+  chip.className = 'macro-chip';
+  chip.innerHTML = `
+    <span class="material-symbols-rounded">bolt</span>
+    <span>/${stagedMacro.name}</span>
+    <button class="macro-remove" aria-label="Remove macro">×</button>
+  `;
+
+  chip.querySelector('.macro-remove').addEventListener('click', async () => {
+    stagedMacro = null;
+    renderMacroChip();
+    // Clear AG's editor since the macro was the only content there
+    try {
+      const res = await fetchAPI('/clear-editor', { method: 'POST' });
+      const result = await res.json();
+      console.debug('[MacroChip] Clear result:', JSON.stringify(result));
+    } catch (err) {
+      console.debug('[MacroChip] Clear error:', err);
+    }
+  });
+
+  strip.appendChild(chip);
+}
+
 function renderImagePreviewsInto(strip, btn) {
   strip.innerHTML = '';
   if (stagedImages.length === 0) {
@@ -1417,6 +1501,10 @@ function createAttachMenu(parentEl, fileInput) {
       <span class="material-symbols-rounded">image</span>
       <span>Media</span>
     </button>
+    <button type="button" class="attach-menu-item" data-action="actions">
+      <span class="material-symbols-rounded">bolt</span>
+      <span>Actions</span>
+    </button>
   `;
   parentEl.appendChild(menu);
 
@@ -1425,6 +1513,20 @@ function createAttachMenu(parentEl, fileInput) {
     menu.classList.add('hidden');
     if (stagedImages.length >= MAX_STAGED_IMAGES) return;
     fileInput.click();
+  });
+
+  menu.querySelector('[data-action="actions"]').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    menu.classList.add('hidden');
+    console.debug('[Actions] Tapped — typing / into AG');
+    // Type "/" into AG's input to trigger slash command dropdown (without sending)
+    try {
+      const res = await fetchAPI('/type-slash', { method: 'POST' });
+      const result = await res.json();
+      console.debug('[Actions] Result:', JSON.stringify(result));
+    } catch (err) {
+      console.debug('[Actions] Error typing / into AG:', err);
+    }
   });
 
   return menu;
@@ -2032,6 +2134,9 @@ function addClickProxyHandlers(container) {
           body: JSON.stringify({ clickId, label }),
         });
         result = await res.json();
+        if (clickId.startsWith('dropdown:')) {
+          console.debug('[ClickProxy] dropdown result:', JSON.stringify(result));
+        }
 
       } catch (err) {
         debugLog('click-proxy', 'error: ' + err.message);
@@ -2060,6 +2165,23 @@ function addClickProxyHandlers(container) {
       if (clickId.startsWith('dropdown:') || clickId.startsWith('dialog:') || (clickId.startsWith('scheddlg:') && parseInt(clickId.split(':')[1], 10) >= 100)) {
         overlayDismissedAt = Date.now();
         dropdownOverlay.classList.add('hidden');
+
+        // Detect slash command selection from the overlay
+        if (label) {
+          console.debug('[MacroDetect] clickId=' + clickId + ' label="' + label + '"');
+          // Slash command labels from AG are like "grill-meInterview me to align..."
+          // The command name is lowercase+hyphens, description starts with uppercase
+          const cmdMatch = label.match(/^([a-z][a-z0-9-]*)/);
+          if (cmdMatch) {
+            const cmdName = cmdMatch[1];
+            const knownCommands = ['btw','goal','schedule','browser','grill-me','teamwork-preview','learn'];
+            console.debug('[MacroDetect] cmdName="' + cmdName + '" known=' + knownCommands.includes(cmdName));
+            if (knownCommands.includes(cmdName)) {
+              stagedMacro = { name: cmdName };
+              renderMacroChip();
+            }
+          }
+        }
       }
 
       // All sidebar open/close is handled by snapshot mirroring.

@@ -763,6 +763,16 @@ body {
   border-color: rgba(234, 179, 8, 0.5);
 }
 
+/* BTW (Side Question) Panel */
+.btw-panel {
+  flex-shrink: 0;
+  padding: 8px 12px 0 12px;
+  background: var(--bg-panel);
+}
+.btw-panel.hidden {
+  display: none;
+}
+
 /* ── Input Bar ── */
 .input-bar {
   flex-shrink: 0;
@@ -933,6 +943,50 @@ body {
 
 .image-preview-item.upload-error {
   border-color: var(--red, #ef4444);
+}
+
+/* ── Macro Chip Strip (slash commands above input) ── */
+.macro-chip-strip {
+  display: flex;
+  gap: 6px;
+  padding: 6px 4px 2px;
+  flex-wrap: wrap;
+}
+
+.macro-chip-strip.hidden {
+  display: none;
+}
+
+.macro-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 16px;
+  background: var(--surface-elevated, #2a2a2e);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+}
+
+.macro-chip .material-symbols-rounded {
+  font-size: 14px;
+  color: var(--accent, #7c9cff);
+}
+
+.macro-chip .macro-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 0 0 0 2px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.macro-chip .macro-remove:active {
+  color: var(--text-primary);
 }
 
 /* ── Input Controls Row (below textarea) ── */

@@ -604,6 +604,46 @@ export const CAPTURE_SCRIPT = `
     }
   }
 
-  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarAttentionItems, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, askQuestionHtml, permissionHtml, environmentName, branchName, modelName };
+  // -- 12. Detect and capture /btw side question box --
+  let btwHtml = null;
+  try {
+    const span = Array.from(document.querySelectorAll('span')).find(s => s.textContent.trim().startsWith('Side Question'));
+    if (span) {
+      let container = span;
+      for (let i = 0; i < 5 && container; i++) {
+        const cls = (container.className || '').toString();
+        if (cls.includes('border-border') && cls.includes('rounded-md')) {
+          break;
+        }
+        container = container.parentElement;
+      }
+      if (container) {
+        let btwIdx = 0;
+        const btwTagged = [];
+        container.querySelectorAll('button, a, [role="button"]').forEach(el => {
+          if (el.closest('#antigravity\\.agentSidePanelInputBox') || el.closest('[class*="bg-card-border"]')) return;
+          el.setAttribute('data-ag-click-id', 'btw:' + btwIdx);
+          el.setAttribute('data-ag-click-label', (el.textContent || '').trim().substring(0, 50));
+          btwIdx++;
+          btwTagged.push(el);
+        });
+        const btwClone = container.cloneNode(true);
+        const inputWrapper = btwClone.querySelector('#antigravity\\.agentSidePanelInputBox') || btwClone.querySelector('[class*="bg-card-border"]');
+        if (inputWrapper) {
+          inputWrapper.remove();
+        }
+        btwTagged.forEach(el => {
+          el.removeAttribute('data-ag-click-id');
+          el.removeAttribute('data-ag-click-label');
+        });
+        btwClone.querySelectorAll('style').forEach(s => s.remove());
+        btwHtml = btwClone.outerHTML;
+      }
+    }
+  } catch (e) {
+    console.debug('[AG2R] BTW capture error:', e.message);
+  }
+
+  return { html, css, agentRunning, scrollInfo, leftSidebarHtml, sidebarAttentionItems, sidebarSignature, isSidebarOpen, isNewSessionPage, isInputBoxHidden, isSubagentView, parentConversationName, subagentInfoHtml, dropdownHtml, dialogHtml, settingsHtml, activeArtifactUri, activeFileUri, askQuestionHtml, permissionHtml, environmentName, branchName, modelName, btwHtml };
 })()
 `;

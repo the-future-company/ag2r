@@ -24,7 +24,8 @@ export function buildInjectScript(safeText, appendMode) {
     sel.collapseToEnd();
   } else {
     // Normal mode: clear editor first
-    document.execCommand('selectAll', false, null);
+    const sel = window.getSelection();
+    sel.selectAllChildren(editor);
     document.execCommand('delete', false, null);
   }
 

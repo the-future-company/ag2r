@@ -85,53 +85,60 @@
       <button class="quick-action-chip" data-message="Proceed">Proceed</button>
     </div>
 
-    <!-- Subagent info panel (shown when viewing a subagent — "cannot prompt" + "Open Overview") -->
-    <div id="subagent-info" class="subagent-info hidden"></div>
+    <!-- Wrapper for all bottom elements to track their combined height -->
+    <div id="bottom-bar-wrapper" class="bottom-bar-wrapper">
+      <!-- Subagent info panel (shown when viewing a subagent — "cannot prompt" + "Open Overview") -->
+      <div id="subagent-info" class="subagent-info hidden"></div>
 
-    <!-- Input Bar -->
-    <footer id="input-bar" class="input-bar">
-      <!-- Running tasks strip (inside input bar so ResizeObserver tracks its height) -->
-      <div id="running-tasks" class="running-tasks hidden">
-        <button id="running-tasks-header" class="running-tasks-header">
-          <span id="running-tasks-count" class="running-tasks-count"></span>
-          <span class="material-symbols-rounded running-tasks-arrow">expand_less</span>
-        </button>
-        <div id="running-tasks-list" class="running-tasks-list"></div>
-      </div>
-      <div class="input-wrapper">
-        <div id="image-preview-strip" class="image-preview-strip hidden"></div>
-        <textarea
-          id="message-input"
-          class="message-input"
-          placeholder="Ask anything..."
-          rows="3"
-          autocomplete="off"
-          autocorrect="on"
-          autocapitalize="sentences"
-          enterkeyhint="enter"
-        ></textarea>
-        <div class="input-controls">
-          <div class="input-left-actions">
-            <input type="file" id="photo-input" accept="image/*" multiple hidden>
-            <button id="attach-btn" class="attach-btn" type="button" aria-label="Add context">
-              <span class="material-symbols-rounded">add</span>
-            </button>
-            <button id="model-chip" class="model-chip" type="button" data-ag-click-id="model:0" data-ag-click-label="">
-              <span class="model-chip-text"></span>
-              <span class="material-symbols-rounded model-chip-chevron">expand_more</span>
-            </button>
-          </div>
-          <div class="input-right-actions">
-            <button id="mic-btn" class="mic-btn" aria-label="Voice input" type="button">
-              <span class="material-symbols-rounded mic-icon">mic</span>
-            </button>
-            <button id="action-btn" class="action-btn" data-action="send" aria-label="Send message">
-              <span class="material-symbols-rounded action-icon" id="action-icon">arrow_upward</span>
-            </button>
+      <!-- Side Question (BTW) panel -->
+      <div id="btw-panel" class="btw-panel hidden"></div>
+
+      <!-- Input Bar -->
+      <footer id="input-bar" class="input-bar">
+        <!-- Running tasks strip (inside input bar so ResizeObserver tracks its height) -->
+        <div id="running-tasks" class="running-tasks hidden">
+          <button id="running-tasks-header" class="running-tasks-header">
+            <span id="running-tasks-count" class="running-tasks-count"></span>
+            <span class="material-symbols-rounded running-tasks-arrow">expand_less</span>
+          </button>
+          <div id="running-tasks-list" class="running-tasks-list"></div>
+        </div>
+        <div class="input-wrapper">
+          <div id="image-preview-strip" class="image-preview-strip hidden"></div>
+          <div id="macro-chip-strip" class="macro-chip-strip hidden"></div>
+          <textarea
+            id="message-input"
+            class="message-input"
+            placeholder="Ask anything..."
+            rows="3"
+            autocomplete="off"
+            autocorrect="on"
+            autocapitalize="sentences"
+            enterkeyhint="enter"
+          ></textarea>
+          <div class="input-controls">
+            <div class="input-left-actions">
+              <input type="file" id="photo-input" accept="image/*" multiple hidden>
+              <button id="attach-btn" class="attach-btn" type="button" aria-label="Add context">
+                <span class="material-symbols-rounded">add</span>
+              </button>
+              <button id="model-chip" class="model-chip" type="button" data-ag-click-id="model:0" data-ag-click-label="">
+                <span class="model-chip-text"></span>
+                <span class="material-symbols-rounded model-chip-chevron">expand_more</span>
+              </button>
+            </div>
+            <div class="input-right-actions">
+              <button id="mic-btn" class="mic-btn" aria-label="Voice input" type="button">
+                <span class="material-symbols-rounded mic-icon">mic</span>
+              </button>
+              <button id="action-btn" class="action-btn" data-action="send" aria-label="Send message">
+                <span class="material-symbols-rounded action-icon" id="action-icon">arrow_upward</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </footer>
+      </footer>
+    </div>
 
     <!-- Dropdown overlay for AG portal menus (conversation options etc.) -->
     <div id="dropdown-overlay" class="dropdown-overlay hidden">

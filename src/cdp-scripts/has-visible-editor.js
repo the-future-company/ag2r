@@ -8,8 +8,12 @@ export const HAS_VISIBLE_EDITOR_SCRIPT = `
     const candidates = document.querySelectorAll(
       '[data-lexical-editor="true"], [contenteditable="true"][role="textbox"], [contenteditable="true"]'
     );
+    const hasLexicalNode = !!document.querySelector('[data-lexical-editor="true"]');
     for (const el of candidates) {
-      if (el.offsetParent !== null) return true;
+      if (el.offsetParent !== null) {
+        if (hasLexicalNode && !el.__lexicalEditor) continue;
+        return true;
+      }
     }
     return false;
   })()
