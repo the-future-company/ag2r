@@ -1447,6 +1447,48 @@ body {
   background: var(--border);
 }
 
+/* Typeahead dropdown items (slash command picker) — AG renders each item as
+   a flex container with icon + name span + description span. We replicate the
+   layout since AG's Tailwind classes aren't available here. */
+.dropdown-content [role="option"] > .flex {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.dropdown-content [role="option"] > .flex:active {
+  background: var(--border);
+}
+/* Icon span */
+.dropdown-content [role="option"] .shrink-0:first-child {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+}
+.dropdown-content [role="option"] .shrink-0:first-child svg {
+  width: 16px;
+  height: 16px;
+}
+/* Command name */
+.dropdown-content [role="option"] span.shrink-0:nth-child(2) {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+/* Description */
+.dropdown-content [role="option"] .truncate,
+.dropdown-content [role="option"] .opacity-50 {
+  opacity: 0.5;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .dropdown-content:not(:has(.ag2r-dialog-native)) button.destructive {
   color: #ef4444;
 }

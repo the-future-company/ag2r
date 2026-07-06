@@ -17,6 +17,11 @@ A lightweight mobile remote interface for monitoring and interacting with [Antig
     <td align="center"><img src="docs/notification-push.jpg" alt="AG2R Push Notifications" width="180" /><br><sub>Notifications</sub></td>
     <td align="center"><img src="docs/subagent-view.jpg" alt="AG2R Subagent View" width="180" /><br><sub>Subagents</sub></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/actions-btw-pill.jpg" alt="AG2R Actions Pill" width="180" /><br><sub>Actions</sub></td>
+    <td align="center"><img src="docs/actions-btw-response.jpg" alt="AG2R Side Question" width="180" /><br><sub>Side Questions</sub></td>
+    <td align="center"><img src="docs/actions-btw-collapsed.jpg" alt="AG2R BTW Collapsed" width="180" /><br><sub>BTW Panel</sub></td>
+  </tr>
 </table>
 
 ---
@@ -128,7 +133,9 @@ Set `TUNNEL_URL=https://ag2r.yourdomain.com` in `.env`, then run `node server.js
 See Antigravity's responses as they stream in real time. Code blocks, markdown, and all formatting render on your phone exactly as they appear on desktop.
 
 <p align="center">
-  <img src="docs/hero-mobile.png" alt="Real-time chat monitoring" width="320" />
+  <img src="docs/hero-mobile.png" alt="Real-time chat monitoring" width="280" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/subagent-view.jpg" alt="Subagent tracking" width="280" />
 </p>
 
 ---
@@ -202,13 +209,29 @@ Switch between conversations, browse files changed, artifacts, and background ta
 Get notified on your phone when the session needs permission approval — even with the app in the background. Tap the notification to jump straight to the pending request.
 
 <p align="center">
-  <img src="docs/notification-push.jpg" alt="Push notification on Android" width="320" />
+  <img src="docs/notification-push.jpg" alt="Push notification on Android" width="280" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/permission-banner.png" alt="Permission banner" width="280" />
 </p>
 
 > [!NOTE]
 > **iOS:** Push notifications require the PWA to be installed to your home screen (iOS 16.4+). Open AG2R in Safari, tap Share → "Add to Home Screen."
 >
 > **Android:** If Chrome doesn't prompt for notifications, go to Chrome **Settings → Site settings → Notifications** and set "How to show requests" to **"Expand all requests"**. Then reload the page and tap anywhere to trigger the prompt.
+
+---
+
+### Actions & Slash Commands
+
+Trigger Antigravity's slash commands directly from your phone. Tap **+** → **Actions** to open the command picker — use `/btw` for side questions, `/grill-me` for interactive planning, `/teamwork-preview` for multi-agent tasks, and more. Selected commands appear as removable macro pills in the input bar.
+
+<p align="center">
+  <img src="docs/actions-btw-pill.jpg" alt="BTW macro pill in input" width="220" />
+  &nbsp;&nbsp;
+  <img src="docs/actions-btw-response.jpg" alt="Side Question response" width="220" />
+  &nbsp;&nbsp;
+  <img src="docs/actions-btw-collapsed.jpg" alt="BTW panel collapsed" width="220" />
+</p>
 
 ---
 
@@ -219,6 +242,33 @@ Get notified on your phone when the session needs permission approval — even w
 - **Stop generation** — cancel a running generation with the stop button
 - **Auto-reconnect** — seamless reconnection when connection drops
 - **Cookie-based auth** — enter passcode once, stays logged in for 30 days
+
+---
+
+### 📸 Gallery
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/hero-mobile.png" width="220" /><br><sub>Live Chat</sub></td>
+    <td align="center"><img src="docs/review-diff.png" width="220" /><br><sub>Code Diff</sub></td>
+    <td align="center"><img src="docs/comment-queued.png" width="220" /><br><sub>Queued Comments</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/overview-panel.png" width="220" /><br><sub>Overview Panel</sub></td>
+    <td align="center"><img src="docs/notification-push.jpg" width="220" /><br><sub>Push Notifications</sub></td>
+    <td align="center"><img src="docs/subagent-view.jpg" width="220" /><br><sub>Subagent View</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/actions-btw-pill.jpg" width="220" /><br><sub>Actions Pill</sub></td>
+    <td align="center"><img src="docs/actions-btw-response.jpg" width="220" /><br><sub>Side Question</sub></td>
+    <td align="center"><img src="docs/actions-btw-collapsed.jpg" width="220" /><br><sub>BTW Panel</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/permission-banner.png" width="220" /><br><sub>Permission Banner</sub></td>
+    <td align="center"><img src="docs/sidebar-conversations.png" width="220" /><br><sub>Sidebar</sub></td>
+    <td align="center"><img src="docs/review-file-list.png" width="220" /><br><sub>Review Files</sub></td>
+  </tr>
+</table>
 
 ---
 
