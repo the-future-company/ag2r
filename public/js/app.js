@@ -677,12 +677,16 @@ async function loadSnapshot() {
     // (capture.js guards against both being set simultaneously).
     const approvalHtml = data.askQuestionHtml || data.permissionHtml;
     if (approvalHtml) {
-      // Skip re-render if the HTML hasn't changed or the user has focus inside
-      // (e.g. typing in the write-in textarea).
-      const hasFocusInside = permissionContent.contains(document.activeElement) && document.activeElement !== permissionContent;
-      if (approvalHtml === permissionContent.dataset.lastHtml || hasFocusInside) {
-        // Identical HTML or user is interacting — don't rebuild
+      if (approvalHtml === permissionContent.dataset.lastHtml) {
+        // Skip: identical HTML
       } else {
+      // Only save/restore textarea state when the SAME dialog is re-rendering
+      // (AG oscillation). For brand new dialogs, don't carry over old text.
+      const isUpdate = !!permissionContent.dataset.lastHtml;
+      const prevTA = isUpdate ? permissionContent.querySelector('.ag2r-permission-native label textarea') : null;
+      const savedValue = prevTA ? prevTA.value : '';
+      const wasFocused = prevTA && document.activeElement === prevTA;
+
       permissionContent.dataset.lastHtml = approvalHtml;
 
       // Render AG's captured HTML natively with AG's CSS — same approach as dialog native.
@@ -692,27 +696,24 @@ async function loadSnapshot() {
         <div class="ag2r-permission-native">${approvalHtml}</div>
       `;
 
+      // Restore textarea value and focus if same dialog re-rendered while user was typing
+      const writeInTA = permissionContent.querySelector('.ag2r-permission-native label textarea');
+      if (writeInTA) {
+        if (savedValue) writeInTA.value = savedValue;
+        // Auto-focus write-in textarea if its radio option is selected
+        const writeInLabel = writeInTA.closest('label');
+        const isChecked = writeInLabel?.querySelector('[data-state="checked"]');
+        if (wasFocused || isChecked) writeInTA.focus();
+      }
+
       // Wire click proxying for all tagged elements (labels and buttons)
       addClickProxyHandlers(permissionContent);
 
-      // Make the write-in textarea interactive: the parent label has a click proxy
-      // that calls preventDefault/stopPropagation, which blocks textarea focus.
-      // Stop events from bubbling up so the textarea remains tappable.
-      const writeInTA = permissionContent.querySelector('.ag2r-permission-native textarea');
-      if (writeInTA) {
-        writeInTA.addEventListener('mousedown', e => e.stopPropagation());
-        writeInTA.addEventListener('click', e => e.stopPropagation());
-        writeInTA.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
-      }
-
-      // Special handling: write-in textarea for the "Other" option.
-      // AG renders a <textarea> inside the last radio label. On Submit, we need to
-      // inject the user's text into AG's textarea before sending the click.
+      // Replace Submit button handler: use POST /submit-dialog for atomic inject+click.
+      // Skip button and radio labels keep their normal click proxy handlers.
       const submitBtns = permissionContent.querySelectorAll('button[data-ag-click-id]');
       submitBtns.forEach(btn => {
-        const origHandler = btn._agClickHandler;
         const text = (btn.textContent || '').trim();
-        // Only intercept Submit-like buttons (not Skip, not radio labels)
         if (!/submit/i.test(text)) return;
 
         const clickId = btn.dataset.agClickId;
@@ -722,41 +723,24 @@ async function loadSnapshot() {
         const newBtn = permissionContent.querySelector(`[data-ag-click-id="${clickId}"]`);
         if (!newBtn) return;
 
+        // Force Submit button to always look enabled (AG may show it disabled
+        // because its textarea is empty — we inject text server-side on submit)
+        newBtn.style.opacity = '1';
+        newBtn.style.pointerEvents = 'auto';
+        newBtn.removeAttribute('disabled');
+
         newBtn.addEventListener('click', async () => {
-          // Check if a write-in textarea has user text
-          const writeInEl = permissionContent.querySelector('.ag2r-permission-native textarea');
-          if (writeInEl && writeInEl.value && writeInEl.value.trim()) {
-            try {
-              await fetchAPI('/eval', {
-                method: 'POST',
-                body: JSON.stringify({
-                  script: `(() => {
-                    const rg = document.querySelector('[role="radiogroup"]');
-                    if (!rg) return { ok: false, reason: 'no_radiogroup' };
-                    const ta = rg.querySelector('textarea');
-                    if (!ta) return { ok: false, reason: 'no_textarea' };
-                    ta.focus();
-                    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-                    nativeSetter.call(ta, ${JSON.stringify(writeInEl.value)});
-                    ta.dispatchEvent(new Event('input', { bubbles: true }));
-                    ta.dispatchEvent(new Event('change', { bubbles: true }));
-                    return { ok: true, text: ta.value };
-                  })()`
-                }),
-              });
-            } catch {}
-            await new Promise(r => setTimeout(r, 200));
-          }
-          // Send the Submit click
+          // Read only the write-in textarea (inside label), not command display textareas
+          const writeInEl = permissionContent.querySelector('.ag2r-permission-native label textarea');
+          const writeInText = writeInEl?.value?.trim() || '';
           try {
-            await fetchAPI('/click', {
+            await fetchAPI('/submit-dialog', {
               method: 'POST',
-              body: JSON.stringify({ clickId, label: clickLabel }),
+              body: JSON.stringify({ text: writeInText, clickId, label: clickLabel }),
             });
           } catch {}
           permissionOverlay.classList.add('hidden');
           permissionContent.dataset.lastHtml = '';
-
         });
       });
 

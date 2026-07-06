@@ -1396,6 +1396,54 @@ app.post('/click', async (req, res) => {
   }
 });
 
+// --- Submit Dialog (Permission / Ask Question) ---
+// Atomically injects write-in text into AG's textarea and clicks Submit.
+// Body: { text?: string, clickId: string, label: string }
+app.post('/submit-dialog', async (req, res) => {
+  const { text, clickId, label } = req.body;
+  log('SubmitDialog', `clickId=${clickId} label="${label}" text="${text || ''}"`);
+
+  if (!clickId && clickId !== 0) {
+    return res.status(400).json({ error: 'clickId is required' });
+  }
+  if (!cdpClient) {
+    return res.status(503).json({ error: 'CDP not connected' });
+  }
+
+  try {
+    // Step 1: If write-in text provided, inject it into AG's textarea
+    if (text && text.trim()) {
+      const safeText = JSON.stringify(text);
+      const injectScript = `(() => {
+        const rg = document.querySelector('[role="radiogroup"]') || document.querySelector('[role="group"]');
+        if (!rg) return { ok: false, reason: 'no_radiogroup' };
+        const ta = rg.querySelector('textarea');
+        if (!ta) return { ok: false, reason: 'no_textarea' };
+        ta.focus();
+        const ns = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+        ns.call(ta, ${safeText});
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.dispatchEvent(new Event('change', { bubbles: true }));
+        return { ok: true, text: ta.value };
+      })()`;
+      const injectResult = await evaluateInBrowser(injectScript);
+      log('SubmitDialog', `Inject result: ${JSON.stringify(injectResult)}`);
+
+      // Wait for React to process the text change
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    // Step 2: Click the Submit button
+    const clickScript = buildMainClickScript(JSON.stringify(String(clickId)), JSON.stringify(label || ''));
+    const result = await evaluateInBrowser(clickScript);
+    log('SubmitDialog', `Click result: ${JSON.stringify(result)}`);
+    res.json(result || { ok: false, reason: 'null_result' });
+  } catch (e) {
+    log('SubmitDialog', `Error: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- Temp eval for debugging ---
 app.post('/eval', async (req, res) => {
   try {
