@@ -467,9 +467,17 @@ async function loadSnapshot() {
         inputBar.appendChild(movedWrapper);
       }
 
-      const savedScrollPositions = saveInnerScrollPositions(chatContent);
+      // Skip innerHTML replacement while user is actively scrolling an inner
+      // container (touch + momentum). Missing a 1-2s update is fine; destroying
+      // the DOM mid-scroll kills momentum and feels glitchy.
+      if (_innerScrollTouchActive) {
+        console.debug('[InnerScroll] skipping render — touch active');
+        return;
+      }
+
+      saveInnerScrollPositions(chatContent);
       chatContent.innerHTML = data.html;
-      restoreInnerScrollPositions(chatContent, savedScrollPositions);
+      restoreInnerScrollPositions(chatContent);
       hideEmptyState();
 
       // If this is the new session page, process captured HTML and overlay AG2R's input form
@@ -962,58 +970,98 @@ async function loadSnapshot() {
 // ─────────────────────────────────────────────
 // AG renders scrollable containers inside chat messages (e.g. the browser
 // preview box with max-h-[20vh] overflow-y-auto). When chatContent.innerHTML
-// is replaced, their scrollTop resets to 0. These helpers save and restore
-// inner scroll positions using DOM index paths as stable identifiers.
+// is replaced, their scrollTop resets to 0. This mirrors the parent chat's
+// wasAtBottom/userScrolledAway pattern for nested scrollable containers.
+//
+// Approach: before innerHTML replacement, snapshot the scroll state of each
+// inner scrollable container. After replacement, find the same containers
+// in the new DOM and either auto-scroll to bottom (default) or restore the
+// user's scroll position (if they scrolled away from bottom).
 
-function saveInnerScrollPositions(container) {
-  const positions = [];
-  container.querySelectorAll('*').forEach(el => {
+// Persistent state: tracks whether the user scrolled away in each container.
+// Keyed by a class-based signature so it survives innerHTML replacement.
+const _innerScrollState = new Map(); // key → { scrollTop, userScrolledAway }
+
+// Touch tracking: skip scroll restoration while user is actively scrolling
+// (touchstart → touchend + momentum settle), preventing innerHTML replacement
+// from killing momentum/inertia scroll.
+let _innerScrollTouchActive = false;
+let _innerScrollSettleTimer = null;
+const INNER_SCROLL_SETTLE_MS = 1200; // momentum settle time after touchend
+
+chatContent.addEventListener('touchstart', (e) => {
+  // Only track if touch started on/inside a scrollable inner container
+  const scrollable = e.target.closest('[class*="overflow-y-auto"], [class*="overflow-y-scroll"]');
+  if (scrollable && scrollable !== chatArea && chatContent.contains(scrollable)) {
+    _innerScrollTouchActive = true;
+    if (_innerScrollSettleTimer) {
+      clearTimeout(_innerScrollSettleTimer);
+      _innerScrollSettleTimer = null;
+    }
+    console.debug('[InnerScroll] touch start — pausing restore');
+  }
+}, { passive: true });
+
+chatContent.addEventListener('touchend', () => {
+  if (_innerScrollTouchActive) {
+    // Wait for momentum to settle before resuming scroll restoration
+    _innerScrollSettleTimer = setTimeout(() => {
+      _innerScrollTouchActive = false;
+      _innerScrollSettleTimer = null;
+      console.debug('[InnerScroll] momentum settled — resuming restore');
+    }, INNER_SCROLL_SETTLE_MS);
+  }
+}, { passive: true });
+
+function getScrollableContainers(root) {
+  // Find containers with AG's overflow-y-auto pattern and constrained height
+  const results = [];
+  root.querySelectorAll('[class*="overflow-y-auto"], [class*="overflow-y-scroll"]').forEach(el => {
     if (el.scrollHeight > el.clientHeight) {
-      const path = [];
-      let node = el;
-      while (node && node !== container) {
-        const parent = node.parentElement;
-        if (!parent) break;
-        path.unshift(Array.from(parent.children).indexOf(node));
-        node = parent;
-      }
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-      positions.push({ path, scrollTop: el.scrollTop, nearBottom });
+      results.push(el);
     }
   });
-  return positions;
+  return results;
 }
 
-function restoreInnerScrollPositions(container, positions) {
-  // Build lookup of saved positions by path key
-  const savedByPath = new Map();
-  for (const pos of positions) {
-    savedByPath.set(pos.path.join(','), pos);
-  }
-
-  // Single pass: auto-scroll all scrollable containers to bottom,
-  // unless the user had explicitly scrolled away (like parent chat's wasAtBottom).
-  container.querySelectorAll('*').forEach(el => {
-    if (el.scrollHeight <= el.clientHeight) return;
-
-    const path = [];
-    let node = el;
-    while (node && node !== container) {
-      const parent = node.parentElement;
-      if (!parent) break;
-      path.unshift(Array.from(parent.children).indexOf(node));
-      node = parent;
+function getContainerKey(el) {
+  // Build a key from the element's class list (stable across innerHTML swaps)
+  // plus its position index among siblings with the same classes (for duplicates)
+  const cls = (el.className || '').toString().trim();
+  let idx = 0;
+  if (el.parentElement) {
+    for (const sib of el.parentElement.children) {
+      if (sib === el) break;
+      if ((sib.className || '').toString().trim() === cls) idx++;
     }
+  }
+  return cls + '#' + idx;
+}
 
-    const saved = savedByPath.get(path.join(','));
-    if (saved && !saved.nearBottom) {
+function saveInnerScrollPositions(container) {
+  for (const el of getScrollableContainers(container)) {
+    const key = getContainerKey(el);
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    _innerScrollState.set(key, {
+      scrollTop: el.scrollTop,
+      userScrolledAway: !nearBottom && el.scrollTop > 0,
+    });
+  }
+}
+
+function restoreInnerScrollPositions(container) {
+  for (const el of getScrollableContainers(container)) {
+    const key = getContainerKey(el);
+    const saved = _innerScrollState.get(key);
+    if (saved && saved.userScrolledAway) {
       // User scrolled away from bottom — preserve their position
       el.scrollTop = saved.scrollTop;
+      console.debug('[InnerScroll] restore:', key.substring(0, 40), 'scrollTop=', saved.scrollTop);
     } else {
-      // Was at/near bottom OR new container — follow new content
+      // Default: auto-scroll to bottom to show latest content
       el.scrollTop = el.scrollHeight;
     }
-  });
+  }
 }
 
 // ─────────────────────────────────────────────
