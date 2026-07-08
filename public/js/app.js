@@ -467,7 +467,11 @@ async function loadSnapshot() {
         inputBar.appendChild(movedWrapper);
       }
 
+      const savedScrollPositions = saveInnerScrollPositions(chatContent);
       chatContent.innerHTML = data.html;
+      if (savedScrollPositions.length > 0) {
+        restoreInnerScrollPositions(chatContent, savedScrollPositions);
+      }
       hideEmptyState();
 
       // If this is the new session page, process captured HTML and overlay AG2R's input form
@@ -952,6 +956,45 @@ async function loadSnapshot() {
 
   } catch (e) {
     debugLog('snapshot', 'load error: ' + e.message);
+  }
+}
+
+// ─────────────────────────────────────────────
+// Inner Scroll Preservation
+// ─────────────────────────────────────────────
+// AG renders scrollable containers inside chat messages (e.g. the browser
+// preview box with max-h-[20vh] overflow-y-auto). When chatContent.innerHTML
+// is replaced, their scrollTop resets to 0. These helpers save and restore
+// inner scroll positions using DOM index paths as stable identifiers.
+
+function saveInnerScrollPositions(container) {
+  const positions = [];
+  container.querySelectorAll('*').forEach(el => {
+    if (el.scrollTop > 0 && el.scrollHeight > el.clientHeight) {
+      const path = [];
+      let node = el;
+      while (node && node !== container) {
+        const parent = node.parentElement;
+        if (!parent) break;
+        path.unshift(Array.from(parent.children).indexOf(node));
+        node = parent;
+      }
+      positions.push({ path, scrollTop: el.scrollTop });
+    }
+  });
+  return positions;
+}
+
+function restoreInnerScrollPositions(container, positions) {
+  for (const { path, scrollTop } of positions) {
+    let el = container;
+    for (const idx of path) {
+      if (!el || !el.children[idx]) { el = null; break; }
+      el = el.children[idx];
+    }
+    if (el && el.scrollHeight > el.clientHeight) {
+      el.scrollTop = scrollTop;
+    }
   }
 }
 
