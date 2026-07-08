@@ -469,9 +469,7 @@ async function loadSnapshot() {
 
       const savedScrollPositions = saveInnerScrollPositions(chatContent);
       chatContent.innerHTML = data.html;
-      if (savedScrollPositions.length > 0) {
-        restoreInnerScrollPositions(chatContent, savedScrollPositions);
-      }
+      restoreInnerScrollPositions(chatContent, savedScrollPositions);
       hideEmptyState();
 
       // If this is the new session page, process captured HTML and overlay AG2R's input form
@@ -970,7 +968,7 @@ async function loadSnapshot() {
 function saveInnerScrollPositions(container) {
   const positions = [];
   container.querySelectorAll('*').forEach(el => {
-    if (el.scrollTop > 0 && el.scrollHeight > el.clientHeight) {
+    if (el.scrollHeight > el.clientHeight) {
       const path = [];
       let node = el;
       while (node && node !== container) {
@@ -979,23 +977,43 @@ function saveInnerScrollPositions(container) {
         path.unshift(Array.from(parent.children).indexOf(node));
         node = parent;
       }
-      positions.push({ path, scrollTop: el.scrollTop });
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+      positions.push({ path, scrollTop: el.scrollTop, nearBottom });
     }
   });
   return positions;
 }
 
 function restoreInnerScrollPositions(container, positions) {
-  for (const { path, scrollTop } of positions) {
-    let el = container;
-    for (const idx of path) {
-      if (!el || !el.children[idx]) { el = null; break; }
-      el = el.children[idx];
-    }
-    if (el && el.scrollHeight > el.clientHeight) {
-      el.scrollTop = scrollTop;
-    }
+  // Build lookup of saved positions by path key
+  const savedByPath = new Map();
+  for (const pos of positions) {
+    savedByPath.set(pos.path.join(','), pos);
   }
+
+  // Single pass: auto-scroll all scrollable containers to bottom,
+  // unless the user had explicitly scrolled away (like parent chat's wasAtBottom).
+  container.querySelectorAll('*').forEach(el => {
+    if (el.scrollHeight <= el.clientHeight) return;
+
+    const path = [];
+    let node = el;
+    while (node && node !== container) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      path.unshift(Array.from(parent.children).indexOf(node));
+      node = parent;
+    }
+
+    const saved = savedByPath.get(path.join(','));
+    if (saved && !saved.nearBottom) {
+      // User scrolled away from bottom — preserve their position
+      el.scrollTop = saved.scrollTop;
+    } else {
+      // Was at/near bottom OR new container — follow new content
+      el.scrollTop = el.scrollHeight;
+    }
+  });
 }
 
 // ─────────────────────────────────────────────
