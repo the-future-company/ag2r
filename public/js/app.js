@@ -84,6 +84,10 @@ const scheduledTasksOverlay = document.getElementById('scheduled-tasks-overlay')
 const scheduledTasksContent = document.getElementById('scheduled-tasks-content');
 const scheduledTasksDialog = document.getElementById('scheduled-tasks-dialog');
 const scheduledTasksBack = document.getElementById('scheduled-tasks-back');
+// Conversation History overlay
+const conversationHistoryOverlay = document.getElementById('conversation-history-overlay');
+const conversationHistoryContent = document.getElementById('conversation-history-content');
+const conversationHistoryBack = document.getElementById('conversation-history-back');
 // Text input modal (for scheduled tasks form fields)
 const textInputModal = document.getElementById('text-input-modal');
 const textInputBackdrop = document.getElementById('text-input-backdrop');
@@ -922,6 +926,19 @@ async function loadSnapshot() {
     } else {
       scheduledTasksDialog.classList.add('hidden');
       scheduledTasksDialog._lastHtml = '';
+    }
+
+    // Render Conversation History overlay if AG's history page is open
+    if (data.conversationHistoryHtml) {
+      if (conversationHistoryContent._lastHtml !== data.conversationHistoryHtml) {
+        conversationHistoryContent._lastHtml = data.conversationHistoryHtml;
+        conversationHistoryContent.innerHTML = data.conversationHistoryHtml;
+        addClickProxyHandlers(conversationHistoryContent);
+      }
+      conversationHistoryOverlay.classList.remove('hidden');
+    } else {
+      conversationHistoryOverlay.classList.add('hidden');
+      conversationHistoryContent._lastHtml = '';
     }
 
     // Track active artifact URI for commenting
@@ -1850,6 +1867,19 @@ scheduledTasksBack.addEventListener('click', async () => {
   scheduledTasksContent._lastHtml = '';
 });
 
+// Conversation History back button — navigate AG back (browser history back)
+conversationHistoryBack.addEventListener('click', async () => {
+  try {
+    // Send AG a history-back navigation via CDP
+    await fetchAPI('/history-back', { method: 'POST' });
+  } catch (e) {
+    // ignore
+  }
+  // Optimistically hide overlay; the next snapshot cycle will confirm
+  conversationHistoryOverlay.classList.add('hidden');
+  conversationHistoryContent._lastHtml = '';
+});
+
 // ─────────────────────────────────────────────
 // Right Sidebar (on-demand fetch from AG)
 // ─────────────────────────────────────────────
@@ -2060,9 +2090,7 @@ function renderSidebar(container, html) {
     const topBar = container.querySelector('[style*="app-region: drag"]');
     if (topBar) topBar.remove();
 
-    // Remove Conversation History button (redundant — sidebar already shows conversations).
-    // New Conversation and Scheduled Tasks stay visible.
-    container.querySelectorAll('[data-ag-click-label="Conversation History"]').forEach(el => el.remove());
+    // All three base menu items stay visible: New Conversation, Conversation History, Scheduled Tasks.
 
     // The separator line between actions and project list
     // It's a div with mt-3 mx-2 h-px (transparent background divider)
@@ -2265,12 +2293,13 @@ function addClickProxyHandlers(container) {
       // Close sidebar only for conversation row clicks (navigates away).
       // Conversation rows have min-h-[32px] in their class; project headers,
       // "See all/less", and "Settings" do not.
-      // Also close for "Scheduled Tasks" since it opens a full-screen overlay.
+      // Also close for "Scheduled Tasks" and "Conversation History" since they navigate away.
       if (clickId.startsWith('left:')) {
         const elClass = (el.className || '').toString();
         const isConversationRow = elClass.includes('min-h-[32px]');
         const isScheduledTasks = label === 'Scheduled Tasks';
-        if (isConversationRow || isScheduledTasks) {
+        const isConversationHistory = label === 'Conversation History';
+        if (isConversationRow || isScheduledTasks || isConversationHistory) {
           closeLeftSidebar();
           // Reset subagent view when navigating to a different conversation
           if (isConversationRow) {

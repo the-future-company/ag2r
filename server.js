@@ -29,6 +29,7 @@ import { RIGHT_SIDEBAR_SCRIPT } from './src/cdp-scripts/right-sidebar.js';
 import { RUNNING_TASKS_SCRIPT } from './src/cdp-scripts/running-tasks.js';
 import { SCHEDULED_TASKS_SCRIPT } from './src/cdp-scripts/scheduled-tasks.js';
 import { SCHEDULED_TASKS_DIALOG_SCRIPT } from './src/cdp-scripts/scheduled-tasks-dialog.js';
+import { CONVERSATION_HISTORY_SCRIPT } from './src/cdp-scripts/conversation-history.js';
 import { STOP_SCRIPT } from './src/cdp-scripts/stop.js';
 import { DISCOVER_SCRIPT } from './src/cdp-scripts/discover.js';
 import { CHECK_EDITOR_IMAGE_SCRIPT } from './src/cdp-scripts/check-editor-image.js';
@@ -45,6 +46,7 @@ import { buildUploadImageScript } from './src/cdp-scripts/upload-image.js';
 import { CLICK_SEND_BUTTON_SCRIPT } from './src/cdp-scripts/click-send-button.js';
 import { EXPAND_LEFT_SIDEBAR_SCRIPT } from './src/cdp-scripts/expand-left-sidebar.js';
 import { buildClickConversationScript } from './src/cdp-scripts/click-conversation.js';
+import { buildHistoryClickScript } from './src/cdp-scripts/click-history.js';
 import { buildCopyResponseScript } from './src/cdp-scripts/copy-response.js';
 import { DISMISS_SCHEDULED_TASKS_SCRIPT } from './src/cdp-scripts/dismiss-scheduled-tasks.js';
 import { DISMISS_SETTINGS_SCRIPT } from './src/cdp-scripts/dismiss-settings.js';
@@ -626,6 +628,13 @@ async function captureSnapshot() {
       console.debug('[Snapshot] Scheduled tasks eval failed:', e.message);
     }
 
+    // Conversation History page: at AG route /history
+    try {
+      result.conversationHistoryHtml = await evaluateAcrossContexts(CONVERSATION_HISTORY_SCRIPT);
+    } catch (e) {
+      console.debug('[Snapshot] Conversation history eval failed:', e.message);
+    }
+
     // Scheduled Tasks dialog (New Scheduled Task form): may be in a DIFFERENT
     // context than the page, so we run a separate capture independently.
     // Only runs when the page is detected (to avoid false positives from settings dialog).
@@ -750,6 +759,7 @@ function fireBurstCaptures(delays) {
             (snapshot.runningTasksHtml || '') +
             (snapshot.scheduledTasksHtml || '') +
             (snapshot.scheduledTasksDialogHtml || '') +
+            (snapshot.conversationHistoryHtml || '') +
             (snapshot.subagentInfoHtml || '') +
             (snapshot.btwHtml || '') +
             (snapshot.modelName || '') +
@@ -802,6 +812,7 @@ function startPolling() {
           (snapshot.runningTasksHtml || '') +
           (snapshot.scheduledTasksHtml || '') +
           (snapshot.scheduledTasksDialogHtml || '') +
+          (snapshot.conversationHistoryHtml || '') +
           (snapshot.subagentInfoHtml || '') +
           (snapshot.btwHtml || '') +
           (snapshot.modelName || '') +
@@ -1170,6 +1181,24 @@ app.post('/dismiss-scheduled-tasks', async (req, res) => {
   }
 });
 
+// --- Navigate back from Conversation History ---
+app.post('/history-back', async (req, res) => {
+  if (!cdpClient) return res.status(503).json({ error: 'CDP not connected' });
+  try {
+    // Use CDP Page.getNavigationHistory then go back one entry
+    const history = await cdpClient.send('Page.getNavigationHistory');
+    const { currentIndex, entries } = history;
+    if (currentIndex > 0) {
+      const prevEntry = entries[currentIndex - 1];
+      await cdpClient.send('Page.navigateToHistoryEntry', { entryId: prevEntry.id });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.debug('[HistoryBack] Error:', e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // --- Dismiss Settings (click AG's Go Back button) ---
 app.post('/dismiss-settings', async (req, res) => {
   if (!cdpClient) {
@@ -1335,6 +1364,16 @@ app.post('/click', async (req, res) => {
         fireBurstCaptures([150, 400, 700]);
       }
       return;
+    }
+
+    // Conversation History page clicks — index-based, same pattern as sched:
+    if (String(clickId).startsWith('history:')) {
+      const histIdx = parseInt(String(clickId).split(':')[1], 10);
+      const histClickScript = buildHistoryClickScript(histIdx);
+      const result = await evaluateAcrossContexts(histClickScript);
+      log('Click', `History result: ${JSON.stringify(result)}`);
+      fireBurstCaptures([200, 500]);
+      return res.json(result || { ok: false, reason: 'null_result' });
     }
 
     // Scheduled Tasks dialog clicks (New Scheduled Task form) — different context from page
