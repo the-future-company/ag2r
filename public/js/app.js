@@ -806,47 +806,66 @@ async function loadSnapshot() {
         const allButtons = tempDiv.querySelectorAll('[data-ag-click-id]');
         const buttonArray = Array.from(allButtons);
 
-        // Defense-in-depth: real task sections have >= 3 tagged buttons
-        // (1 header toggle + N name/stop pairs). If AG sends a structural
-        // wrapper with no real tasks, treat as "no tasks".
-        if (buttonArray.length < 3) {
+        // Defense-in-depth: real task/goal sections have >= 2 tagged buttons
+        // (1 header toggle + at least 1 name button). If AG sends a structural
+        // wrapper with no real items, treat as empty.
+        if (buttonArray.length < 2) {
           runningTasks.classList.add('hidden');
           runningTasks.dataset.lastHtml = '';
         } else {
-          // Extract header text (e.g., "1 task running")
+          // Extract header text (e.g., "1 task running", "1 active goal")
           const headerBtn = tempDiv.querySelector('button');
           const headerSpan = headerBtn?.querySelector('span');
           runningTasksCount.textContent = headerSpan ? headerSpan.textContent.trim() : 'Tasks running';
 
-          // Build a map: for each task row, find its name button click ID and stop button click ID
-          // Button order in capture: header toggle (task:0), then for each task row:
-          //   task name button (task:1, task:3, ...), stop button (task:2, task:4, ...)
+          // Build rows from tagged buttons after the header (task:0).
+          // Tasks have: name button + stop button (empty label = icon-only).
+          // Goals have: name button only (no stop button).
+          // Detect by checking if the next button has an empty label (stop icon).
           let rowsHtml = '';
 
-          // Skip the first button (header toggle, task:0), then pair remaining buttons
-          for (let i = 1; i < buttonArray.length; i += 2) {
+          let i = 1; // Skip header toggle (task:0)
+          while (i < buttonArray.length) {
             const nameBtn = buttonArray[i];
-            const stopBtn = buttonArray[i + 1];
             const nameClickId = nameBtn?.dataset?.agClickId || '';
             const nameLabel = nameBtn?.dataset?.agClickLabel || '';
-            const stopClickId = stopBtn?.dataset?.agClickId || '';
-            const stopLabel = stopBtn?.dataset?.agClickLabel || '';
+
+            // Check if the next button is a stop button (empty text = icon-only)
+            const nextBtn = buttonArray[i + 1];
+            const nextIsStop = nextBtn && (nextBtn.dataset?.agClickLabel || '').trim() === '';
 
             // Extract task name from the font-mono span inside the name button
             const monoSpan = nameBtn?.querySelector('.font-mono');
             const taskName = monoSpan ? monoSpan.textContent.trim() : (nameLabel || 'Task');
 
-            rowsHtml += `
-              <div class="running-task-row">
-                <button class="running-task-name" data-ag-click-id="${nameClickId}" data-ag-click-label="${nameLabel}">
-                  <div class="running-task-spinner"></div>
-                  <span>${taskName}</span>
-                </button>
-                <button class="running-task-stop" data-ag-click-id="${stopClickId}" data-ag-click-label="${stopLabel}" aria-label="Stop task">
-                  <span class="material-symbols-rounded" style="font-size:18px">stop_circle</span>
-                </button>
-              </div>
-            `;
+            if (nextIsStop) {
+              // Task row: name + stop button pair
+              const stopClickId = nextBtn.dataset?.agClickId || '';
+              const stopLabel = nextBtn.dataset?.agClickLabel || '';
+              rowsHtml += `
+                <div class="running-task-row">
+                  <button class="running-task-name" data-ag-click-id="${nameClickId}" data-ag-click-label="${nameLabel}">
+                    <div class="running-task-spinner"></div>
+                    <span>${taskName}</span>
+                  </button>
+                  <button class="running-task-stop" data-ag-click-id="${stopClickId}" data-ag-click-label="${stopLabel}" aria-label="Stop task">
+                    <span class="material-symbols-rounded" style="font-size:18px">stop_circle</span>
+                  </button>
+                </div>
+              `;
+              i += 2;
+            } else {
+              // Goal row: name button only (no stop)
+              rowsHtml += `
+                <div class="running-task-row">
+                  <button class="running-task-name running-task-goal" data-ag-click-id="${nameClickId}" data-ag-click-label="${nameLabel}">
+                    <div class="running-task-spinner"></div>
+                    <span>${taskName}</span>
+                  </button>
+                </div>
+              `;
+              i += 1;
+            }
           }
 
           runningTasksList.innerHTML = rowsHtml;

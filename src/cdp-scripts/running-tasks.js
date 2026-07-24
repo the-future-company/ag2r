@@ -4,11 +4,11 @@ export const RUNNING_TASKS_SCRIPT = `
   if (!inputBox) return null;
   const taskSection = inputBox.querySelector('.rounded-t-2xl');
   if (!taskSection || taskSection.getBoundingClientRect().height <= 0) return null;
-  // Verify this section actually contains running tasks — not just a structural wrapper.
-  // Real task sections have: 1 header toggle button + N task name buttons + N stop buttons.
-  // If fewer than 3 buttons (header + 1 name + 1 stop), there are no real tasks.
+  // Verify this section actually contains running tasks or goals — not just a structural wrapper.
+  // Task rows have: name button + stop button. Goal rows have: name button only (no stop).
+  // Minimum viable: 1 header toggle button + 1 name button = 2 buttons.
   const allBtns = taskSection.querySelectorAll('button');
-  if (allBtns.length < 3) return null;
+  if (allBtns.length < 2) return null;
   let taskIdx = 0;
   const taskTagged = [];
   taskSection.querySelectorAll('button').forEach(btn => {
