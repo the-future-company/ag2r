@@ -175,27 +175,46 @@ git push --force-with-lease
 
 When `next` is stable and ready for production:
 
+**1. Create and merge the PR:**
+
 ```bash
 gh pr create --base main --head next --title "chore: merge next into main"
 gh pr merge <PR#> --merge --admin
 ```
 
-After merge, GitHub may auto-delete `next`. Recreate it immediately:
+**2. Sync `next` to match `main`:**
+
+GitHub may auto-delete `next` after merge. Either way, fetch main and
+push it to next (creates or force-updates the branch):
 
 ```bash
-git push origin origin/main:refs/heads/next
+git fetch origin main
+git push origin origin/main:refs/heads/next --force-with-lease
 ```
 
-Then sync both source worktrees:
+If `next` was deleted, omit `--force-with-lease` (it's a new branch).
+
+**3. Verify both branches are identical:**
 
 ```bash
-cd ~/Workspace/ag2r && git pull --rebase origin main
-cd ~/Workspace/ag2r-next && git pull --rebase origin next
+git fetch origin main next
+git rev-parse origin/main origin/next  # should print the same SHA twice
+```
+
+**4. Sync local source worktrees:**
+
+Both worktrees may have local-only changes (watchdog scripts, .env files).
+Stash before pulling:
+
+```bash
+cd ~/Workspace/ag2r && git stash && git pull --rebase origin main && git stash pop
+cd ~/Workspace/ag2r-next && git stash && git pull --rebase origin next && git stash pop
 ```
 
 > [!IMPORTANT]
 > Use `--merge` (not `--squash`) for next→main so commit history is
-> preserved. Always verify `next` still exists on the remote after merge.
+> preserved. `--force-with-lease` on step 2 is safe because all of
+> next's content was just merged into main — nothing is lost.
 
 ---
 
