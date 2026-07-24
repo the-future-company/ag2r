@@ -74,7 +74,8 @@ export function buildMainClickScript(safeClickId, safeLabel) {
           }
         }
       } else if (source === 'dialog') {
-        // Portal dialog: body > div.fixed.inset-0 (modal) or body > div[role="dialog"] (popover)
+        // Portal dialog: body > div.fixed.inset-0 (modal), body > div[role="dialog"] (popover),
+        // or Radix-nested: body > div#:rXX: > div[role="dialog"] (new AG Radix pattern)
         for (const child of document.body.children) {
           const cls = child.className || '';
           if (cls.includes('fixed') && cls.includes('inset-0')) {
@@ -83,6 +84,13 @@ export function buildMainClickScript(safeClickId, safeLabel) {
           }
           if (!root && child.getAttribute('role') === 'dialog') {
             root = child;
+          }
+          // Radix portals: dialog nested inside an ID'd wrapper div (matches capture.js logic)
+          if (!root && child.id) {
+            const nested = child.querySelector('[role="dialog"]');
+            if (nested && nested.getBoundingClientRect().width > 0) {
+              root = nested;
+            }
           }
         }
       } else if (source === 'settings') {

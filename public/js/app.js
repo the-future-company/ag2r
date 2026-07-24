@@ -574,8 +574,10 @@ async function loadSnapshot() {
     }
 
     // Render dropdown overlay if AG has a portal menu open (e.g., three-dots conversation menu)
-    // Skip if user just dismissed (prevents stale snapshots from re-opening)
-    const suppressOverlay = Date.now() - overlayDismissedAt < 2000;
+    // Skip if user just dismissed (prevents stale snapshots from re-opening within the
+    // /dismiss-portal round-trip window). 300ms covers the CDP round-trip (~100ms) safely;
+    // 2000ms was too long and caused every-other-open to be suppressed.
+    const suppressOverlay = Date.now() - overlayDismissedAt < 300;
     if (data.dropdownHtml && !suppressOverlay) {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = data.dropdownHtml;
@@ -2282,7 +2284,12 @@ function addClickProxyHandlers(container) {
 
       // Close dropdown overlay after any dropdown/dialog/scheduled-tasks-portal action
       if (clickId.startsWith('dropdown:') || clickId.startsWith('dialog:') || (clickId.startsWith('scheddlg:') && parseInt(clickId.split(':')[1], 10) >= 100)) {
-        overlayDismissedAt = Date.now();
+        // Only suppress future overlay renders if the click actually succeeded.
+        // If the click failed (e.g. no_root_for_dialog), don't start the 2s suppression
+        // window — the user needs to retry immediately without waiting 2 seconds.
+        if (result?.ok) {
+          overlayDismissedAt = Date.now();
+        }
         dropdownOverlay.classList.add('hidden');
 
         // Detect slash command selection from the overlay
