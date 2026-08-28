@@ -263,6 +263,26 @@ function debugLog(event, detail) {
   } catch {}
 }
 
+// Clipboard copy toast — brief visual feedback when text is copied to phone clipboard
+function showCopiedToast() {
+  // Reuse existing toast if still visible
+  let toast = document.getElementById('ag-copy-toast');
+  if (toast) {
+    clearTimeout(toast._hideTimer);
+  } else {
+    toast = document.createElement('div');
+    toast.id = 'ag-copy-toast';
+    toast.textContent = '✓ Copied to clipboard';
+    document.body.appendChild(toast);
+  }
+  toast.classList.remove('ag-toast-hide');
+  toast.classList.add('ag-toast-show');
+  toast._hideTimer = setTimeout(() => {
+    toast.classList.remove('ag-toast-show');
+    toast.classList.add('ag-toast-hide');
+  }, 1800);
+}
+
 // Global error tracking
 window.addEventListener('error', (e) => {
   track('client_error', { message: (e.message || '').substring(0, 200) });
@@ -589,8 +609,13 @@ async function loadSnapshot() {
       if (allBtns.length > 0) {
         // Options to hide from dropdown menus (e.g., Rename triggers inline sidebar edit, unusable in AG2R)
         const HIDDEN_DROPDOWN_OPTIONS = /^rename$/i;
-        // Detect typeahead (items have role="option") vs kebab/context menus
-        const isTypeahead = tempDiv.querySelector('[role="option"]') !== null;
+        // Detect typeahead (slash command picker) vs kebab/context menus.
+        // Both may use role="option", but typeahead items have a specific inner
+        // structure: .flex container with .shrink-0 children (icon + name spans).
+        // AG's three-dot artifact menu also uses role="option" but has simpler
+        // inner markup — rendering it as typeahead would include raw SVG icons.
+        const firstOption = tempDiv.querySelector('[role="option"]');
+        const isTypeahead = firstOption && !!firstOption.querySelector('.shrink-0');
         let buttonsHtml = '';
         allBtns.forEach(btn => {
           const text = btn.textContent.trim();
@@ -2264,26 +2289,6 @@ function addClickProxyHandlers(container) {
         }
       }
 
-      // Intercept Copy button — get markdown source from AG and copy to phone clipboard
-      if (el.getAttribute('aria-label') === 'Copy') {
-        try {
-          const res = await fetchAPI('/copy-response', {
-            method: 'POST',
-            body: JSON.stringify({ clickId }),
-          });
-          const result = await res.json();
-          if (result.ok && result.text) {
-            await navigator.clipboard.writeText(result.text);
-            // Visual feedback — green checkmark
-            const origHTML = el.innerHTML;
-            el.innerHTML = '<span style="font-size:12px;color:#4ade80">✓</span>';
-            setTimeout(() => { el.innerHTML = origHTML; }, 1500);
-          }
-        } catch (err) {
-          debugLog('copy', 'error: ' + err.message);
-        }
-        return;
-      }
 
       // Intercept external URL links — open on client device, don't proxy to AG
       if (el.tagName === 'A') {
@@ -2310,6 +2315,16 @@ function addClickProxyHandlers(container) {
         debugLog('click-proxy', 'error: ' + err.message);
       }
       el.classList.remove('ag-clicking');
+
+      // If the click captured clipboard text from AG, write it to the phone's clipboard
+      if (result?.clipboardText) {
+        try {
+          await navigator.clipboard.writeText(result.clipboardText);
+          showCopiedToast();
+        } catch (err) {
+          debugLog('clipboard', 'Failed to write to phone clipboard: ' + err.message);
+        }
+      }
 
       // Close sidebar only for conversation row clicks (navigates away).
       // Conversation rows have min-h-[32px] in their class; project headers,

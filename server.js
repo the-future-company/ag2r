@@ -47,7 +47,6 @@ import { CLICK_SEND_BUTTON_SCRIPT } from './src/cdp-scripts/click-send-button.js
 import { EXPAND_LEFT_SIDEBAR_SCRIPT } from './src/cdp-scripts/expand-left-sidebar.js';
 import { buildClickConversationScript } from './src/cdp-scripts/click-conversation.js';
 import { buildHistoryClickScript } from './src/cdp-scripts/click-history.js';
-import { buildCopyResponseScript } from './src/cdp-scripts/copy-response.js';
 import { DISMISS_SCHEDULED_TASKS_SCRIPT } from './src/cdp-scripts/dismiss-scheduled-tasks.js';
 import { DISMISS_SETTINGS_SCRIPT } from './src/cdp-scripts/dismiss-settings.js';
 
@@ -1138,29 +1137,24 @@ app.post('/navigate-conversation', async (req, res) => {
   }
 });
 
-// --- Copy Response (intercept AG's clipboard.writeText, return markdown) ---
-app.post('/copy-response', async (req, res) => {
-  track('code_copied');
-  const { clickId } = req.body || {};
-  if (!clickId || !cdpClient) {
-    return res.status(400).json({ error: 'Missing clickId or CDP not connected' });
-  }
-  try {
-    // Use the exact same element lookup as /click handler to avoid index mismatch
-    const script = buildCopyResponseScript(JSON.stringify(String(clickId)));
-    const result = await evaluateInBrowser(script);
-    log('CopyResponse', `clickId=${clickId} text=${(result?.text || '').length} chars`);
-    res.json(result || { ok: false });
-  } catch (e) {
-    log('CopyResponse', `Error: ${e.message}`);
-    res.json({ ok: false, error: e.message });
-  }
-});
+
 
 // --- Dismiss Portal (close dropdowns/dialogs in AG via Escape key) ---
 app.post('/dismiss-portal', async (req, res) => {
   try {
-    await evaluateInBrowser(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))`);
+    // Use CDP Input.dispatchKeyEvent for a real Escape keypress that all UI
+    // frameworks (Radix, base-ui, native) will process. JS dispatchEvent
+    // creates synthetic events that some components ignore.
+    if (cdpClient) {
+      await cdpClient.send('Input.dispatchKeyEvent', {
+        type: 'keyDown', key: 'Escape', code: 'Escape',
+        windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
+      });
+      await cdpClient.send('Input.dispatchKeyEvent', {
+        type: 'keyUp', key: 'Escape', code: 'Escape',
+        windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
+      });
+    }
     res.json({ ok: true });
   } catch (e) {
     console.debug('[DismissPortal] Error:', e.message);
@@ -1421,6 +1415,10 @@ app.post('/click', async (req, res) => {
     const clickScript = buildMainClickScript(JSON.stringify(String(clickId)), JSON.stringify(label || ''));
     const result = await evaluateInBrowser(clickScript);
     log('Click', `Result: ${JSON.stringify(result)}`);
+    if (result?.clipboardText) {
+      log('Click', `Clipboard captured: ${result.clipboardText.length} chars`);
+      track('code_copied');
+    }
     res.json(result || { ok: false, reason: 'null_result' });
 
     // After portal-opening clicks, schedule rapid re-captures to catch the
