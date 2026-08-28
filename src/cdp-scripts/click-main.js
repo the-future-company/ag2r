@@ -15,6 +15,20 @@ export function buildMainClickScript(safeClickId, safeLabel) {
       const source = clickId.substring(0, colonIdx);
       const idx = parseInt(clickId.substring(colonIdx + 1), 10);
 
+      // --- Clipboard interception ---
+      // Intercept navigator.clipboard.writeText before any click so that
+      // copy actions (code blocks, artifact menus, etc.) have their text
+      // captured and returned to the phone instead of only going to the
+      // laptop clipboard.
+      let clipboardText = null;
+      const origWriteText = navigator.clipboard.writeText.bind(navigator.clipboard);
+      navigator.clipboard.writeText = (text) => {
+        clipboardText = text;
+        return origWriteText(text);
+      };
+
+      async function doClick() {
+
       // Find the root element based on source
       let root = null;
       if (source === 'chat') {
@@ -368,6 +382,19 @@ export function buildMainClickScript(safeClickId, safeLabel) {
       }
 
       return { ok: true, label: actualLabel, source, debugNearby };
+
+      } // end doClick
+
+      let clickResult;
+      try {
+        clickResult = await doClick();
+        // Wait for async clipboard writes (e.g. React onClick -> clipboard.writeText)
+        if (!clipboardText) await new Promise(r => setTimeout(r, 300));
+      } finally {
+        navigator.clipboard.writeText = origWriteText;
+      }
+      if (clipboardText && clickResult?.ok) clickResult.clipboardText = clipboardText;
+      return clickResult;
     })()
 `;
 }

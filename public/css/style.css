@@ -1512,6 +1512,36 @@ body {
   color: var(--green);
 }
 
+/* ── Clipboard Copy Toast ── */
+#ag-copy-toast {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg-surface);
+  color: var(--green);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#ag-copy-toast.ag-toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+#ag-copy-toast.ag-toast-hide {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
+
 /* ── New Session Page — captured content zone ── */
 /* AG's new session DOM rendered directly via bridge approach */
 .ag2r-ns-captured {
