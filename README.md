@@ -2,6 +2,9 @@
 
 # AG2R — Antigravity 2.0 Remote
 
+> [!IMPORTANT]
+> **This project has been sunset.** Antigravity now includes a built-in [Remote Control](https://antigravity.google/remote) feature. AG2R is no longer maintained — use the official remote instead. Thank you to everyone who used it! ☕
+
 [![Antigravity Compatibility](https://img.shields.io/badge/Last_tested_with_Antigravity-v2.3.1-blue?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48dGV4dCB4PSIyIiB5PSIxMyIgZm9udC1zaXplPSIxMyI+8J+aqDwvdGV4dD48L3N2Zz4=)](https://antigravity.google/releases) <sub>Not working? See [Branching Strategy](#-branching-strategy)</sub>
 
 A lightweight mobile remote interface for monitoring and interacting with [Antigravity](https://antigravity.dev) AI coding sessions from your phone — on Wi-Fi, hotspot, or anywhere in the world.
